@@ -6,7 +6,7 @@ import { formatData, diaSemana, calcularNaixement } from '@/lib/dates'
 
 interface AssignacioVacuna {
   dosi: number
-  vacunes: { nom: string }
+  vacunes: { id: number; nom: string }
 }
 
 interface Transferencia {
@@ -88,9 +88,10 @@ export default function ImprimirFull() {
 
   function nomVacuna(a: Assignacio) {
     if (a.assignacio_vacunes.length === 0) return '—'
-    return a.assignacio_vacunes.map(av =>
-      `${av.dosi === 0.5 ? '½' : '1'} ${av.vacunes.nom.split(' ')[0]}`
-    ).join(' + ')
+    return [...a.assignacio_vacunes]
+      .sort((x, y) => x.vacunes.id - y.vacunes.id)
+      .map(av => `${av.dosi === 0.5 ? '½' : '1'} ${av.vacunes.nom.split(' ')[0]}`)
+      .join(' + ')
   }
 
   const td = { border: '1px solid #ccc', padding: '2px 4px' }

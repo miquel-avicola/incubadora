@@ -24,6 +24,7 @@ interface Expedicio {
   comandes: { clients: { nom: string } }
   destinacions: { nom_granja: string; nau: string | null }
   expedicio_lots: ExpedicioLot[]
+  expedicio_vacunes: { vacuna_id: number; vacunes: { nom: string } }[]
 }
 
 interface Assignacio {
@@ -212,6 +213,11 @@ export default function ExpedicionsNaixement() {
                   <div>{nomDestinacio(e.destinacions)}</div>
                   <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
                   {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
+                  {e.expedicio_vacunes?.length > 0 && (
+                    <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
+                      {e.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
+                    </div>
+                  )}
                 </th>
               ))}
               <th>Total assignat</th>

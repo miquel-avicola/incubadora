@@ -51,6 +51,12 @@ interface Expedicio {
   expedicio_vacunes: { vacuna_id: number; vacunes: { id: number; nom: string; via: string } }[]
 }
 
+interface Vacuna {
+  id: number
+  nom: string
+  via: string
+}
+
 interface Full {
   id: number
   num_carrega: number
@@ -69,6 +75,7 @@ export default function Expedicions() {
   const [destinacions, setDestinacions] = useState<Destinacio[]>([])
   const [transportistes, setTransportistes] = useState<Transportista[]>([])
   const [loading, setLoading] = useState(true)
+  const [vacunes, setVacunes] = useState<Vacuna[]>([])
 
   // Formulari nova expedició
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -97,6 +104,7 @@ export default function Expedicions() {
 
   useEffect(() => {
     fetch('/api/transportistes').then(r => r.json()).then(setTransportistes)
+    fetch('/api/vacunes').then(r => r.json()).then(setVacunes)
   }, [])
 
   // Carregar destinacions filtrades per client quan es selecciona comanda
@@ -142,6 +150,23 @@ export default function Expedicions() {
       carregarDades()
     }
     setCreant(false)
+  }
+
+  async function toggleVacunaExpedicio(expedicioId: number, vacunaId: number, teVacuna: boolean) {
+    if (teVacuna) {
+      await fetch(`/api/expedicions/${expedicioId}/vacunes`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacuna_id: vacunaId }),
+      })
+    } else {
+      await fetch(`/api/expedicions/${expedicioId}/vacunes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacuna_id: vacunaId }),
+      })
+    }
+    carregarDades()
   }
 
   async function eliminarExpedicio(id: number) {
@@ -357,6 +382,24 @@ export default function Expedicions() {
                         const granja = el.lots_reproductores.granges_reproductores.nom_informal || el.lots_reproductores.granges_reproductores.granja
                         return `${el.pollets.toLocaleString()} de ${granja}${el.lots_reproductores.estirp ? ` ${el.lots_reproductores.estirp}` : ''}`
                       }).join(' + ')}
+                    </div>
+                  )}
+                  {vacunes.length > 0 && (
+                    <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      {vacunes.map(v => {
+                        const activa = e.expedicio_vacunes.some(ev => ev.vacuna_id === v.id)
+                        return (
+                          <button key={v.id} onClick={() => toggleVacunaExpedicio(e.id, v.id, activa)} style={{
+                            padding: '0.2rem 0.5rem', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
+                            borderRadius: '4px', cursor: 'pointer', border: '1px solid',
+                            borderColor: activa ? 'var(--success)' : 'var(--border)',
+                            background: activa ? 'rgba(34,197,94,0.1)' : 'transparent',
+                            color: activa ? 'var(--success)' : 'var(--text-dim)',
+                          }}>
+                            {activa ? '✓ ' : ''}{v.nom}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

@@ -14,7 +14,7 @@ interface Naixedora {
 interface AssignacioVacuna {
   id: number
   dosi: number
-  vacunes: { nom: string }
+  vacunes: { id: number; nom: string }
 }
 
 interface Transferencia {
@@ -209,7 +209,7 @@ export default function Transferencia() {
                         Inc.{a.incubadores.numero} · {a.carros_estoc.posta}
                         {a.assignacio_vacunes.length > 0 && (
                           <span style={{ marginLeft: '0.5rem', color: 'var(--success)' }}>
-                            · {a.assignacio_vacunes.map(av => `${av.dosi === 0.5 ? '½' : '1'} ${av.vacunes.nom}`).join(' + ')}
+                            · {[...a.assignacio_vacunes].sort((x, y) => x.vacunes.id - y.vacunes.id).map(av => `${av.dosi === 0.5 ? '½' : '1'} ${av.vacunes.nom}`).join(' + ')}
                           </span>
                         )}
                       </div>
