@@ -20,7 +20,7 @@ export async function signSession(role: string): Promise<string> {
   const payload = btoa(JSON.stringify({ role, iat: Date.now() }))
   const key = await getKey()
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+  const sigB64 = btoa(Array.from(new Uint8Array(sig), c => String.fromCharCode(c)).join(''))
   return `${payload}.${sigB64}`
 }
 
