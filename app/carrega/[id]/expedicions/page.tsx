@@ -184,7 +184,7 @@ export default function Expedicions() {
     </main>
   )
 
-  const vacunesNaixement = vacunes.filter(v => v.via?.toLowerCase() === 'naixement')
+  const vacunesNaixement = vacunes.filter(v => v.via?.toLowerCase().startsWith('naix'))
 
   const destinacionsFiltrades = destinacions.filter(d =>
     nomDestinacio(d).toLowerCase().includes(cercaDestinacio.toLowerCase()) ||
