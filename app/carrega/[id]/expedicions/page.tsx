@@ -386,25 +386,26 @@ export default function Expedicions() {
                       }).join(' + ')}
                     </div>
                   )}
-                  <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
-                    <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
-                      Vacunes naixement
+                  <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(240,180,41,0.08)', border: '1px solid var(--accent)', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                      Vacunes naixement ({vacunesNaixement.length})
                     </div>
                     {vacunesNaixement.length === 0 ? (
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
-                        Cap vacuna de via Naixement
+                      <span style={{ fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
+                        Cap vacuna de via Naixement a la BD
                       </span>
                     ) : (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                         {vacunesNaixement.map(v => {
                           const activa = e.expedicio_vacunes.some(ev => ev.vacuna_id === v.id)
                           return (
                             <button key={v.id} onClick={() => toggleVacunaExpedicio(e.id, v.id, activa)} style={{
-                              padding: '0.2rem 0.5rem', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
-                              borderRadius: '4px', cursor: 'pointer', border: '1px solid',
+                              padding: '0.3rem 0.7rem', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono',
+                              borderRadius: '6px', cursor: 'pointer', border: '1px solid',
                               borderColor: activa ? 'var(--success)' : 'var(--border)',
-                              background: activa ? 'rgba(34,197,94,0.1)' : 'transparent',
-                              color: activa ? 'var(--success)' : 'var(--text-dim)',
+                              background: activa ? 'rgba(34,197,94,0.15)' : 'var(--bg)',
+                              color: activa ? 'var(--success)' : 'var(--text)',
+                              fontWeight: activa ? 700 : 400,
                             }}>
                               {activa ? '✓ ' : ''}{v.nom}
                             </button>
