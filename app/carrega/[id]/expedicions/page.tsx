@@ -104,7 +104,7 @@ export default function Expedicions() {
 
   useEffect(() => {
     fetch('/api/transportistes').then(r => r.json()).then(setTransportistes)
-    fetch('/api/vacunes').then(r => r.json()).then(setVacunes)
+    fetch('/api/vacunes').then(r => r.json()).then(data => setVacunes(Array.isArray(data) ? data : []))
   }, [])
 
   // Carregar destinacions filtrades per client quan es selecciona comanda
@@ -183,6 +183,8 @@ export default function Expedicions() {
       <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
     </main>
   )
+
+  const vacunesNaixement = vacunes.filter(v => v.via?.toLowerCase() === 'naixement')
 
   const destinacionsFiltrades = destinacions.filter(d =>
     nomDestinacio(d).toLowerCase().includes(cercaDestinacio.toLowerCase()) ||
@@ -388,13 +390,13 @@ export default function Expedicions() {
                     <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
                       Vacunes naixement
                     </div>
-                    {vacunes.length === 0 ? (
+                    {vacunesNaixement.length === 0 ? (
                       <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
-                        Cap vacuna disponible
+                        Cap vacuna de via Naixement
                       </span>
                     ) : (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                        {vacunes.map(v => {
+                        {vacunesNaixement.map(v => {
                           const activa = e.expedicio_vacunes.some(ev => ev.vacuna_id === v.id)
                           return (
                             <button key={v.id} onClick={() => toggleVacunaExpedicio(e.id, v.id, activa)} style={{
