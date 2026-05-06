@@ -1,0 +1,39 @@
+import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+
+export async function GET() {
+  const { data, error } = await supabase
+    .from('lots_reproductores')
+    .select(`
+      id,
+      data_naixement,
+      estirp,
+      granges_reproductores (
+        id,
+        granja,
+        nom_informal
+      )
+    `)
+    .order('data_naixement', { ascending: false })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+export async function POST(request: Request) {
+  const body = await request.json()
+  const { granja_reproductora_id, data_naixement, estirp } = body
+
+  if (!granja_reproductora_id || !data_naixement) {
+    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('lots_reproductores')
+    .insert({ granja_reproductora_id, data_naixement, estirp: estirp || null })
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data, { status: 201 })
+}
