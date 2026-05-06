@@ -73,8 +73,6 @@ export function canAccess(role: string, path: string): boolean {
   return false
 }
 
-export function roleHome(role: string): string {
-  if (role === 'recepcio') return '/recepcio'
-  if (role === 'carregues') return '/carrega'
+export function roleHome(_role: string): string {
   return '/'
 }

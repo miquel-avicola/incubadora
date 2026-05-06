@@ -25,8 +25,7 @@ export default function Login() {
       setLoading(false)
       return
     }
-    const home = data.role === 'recepcio' ? '/recepcio' : data.role === 'carregues' ? '/carrega' : '/'
-    router.push(home)
+    router.push('/')
   }
 
   const inputStyle = {

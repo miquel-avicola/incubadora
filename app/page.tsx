@@ -1,11 +1,22 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
+import { verifySession } from '@/lib/auth'
 
-export default function Home() {
+export default async function Home() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('session')?.value
+  const session = token ? await verifySession(token) : null
+  const role = session?.role ?? 'admin'
+
+  const showRecepcio = true
+  const showEstoc = true
+  const showLots = role === 'admin'
+  const showCarrega = role === 'carregues' || role === 'admin'
+
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '2rem 1.5rem' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        
-        {/* Header */}
+
         <div style={{ marginBottom: '3rem' }}>
           <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
             Miquel Avícola
@@ -15,60 +26,47 @@ export default function Home() {
           </h1>
         </div>
 
-        {/* Opcions principals */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
-          <Link href="/recepcio" style={{ textDecoration: 'none' }}>
-            <div style={{
-              background: 'var(--accent)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              cursor: 'pointer',
-              transition: 'opacity 0.15s',
-            }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📦</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f1117', marginBottom: '0.25rem' }}>
-                Recepció de carros
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#3a2e00' }}>
-                Registrar carros d&apos;ous rebuts
-              </div>
-            </div>
-          </Link>
 
-          <Link href="/lots" style={{ textDecoration: 'none' }}>
-            <div style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              cursor: 'pointer',
-            }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🐔</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>
-                Lots de reproductores
+          {showRecepcio && (
+            <Link href="/recepcio" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--accent)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📦</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f1117', marginBottom: '0.25rem' }}>Recepció de carros</div>
+                <div style={{ fontSize: '0.85rem', color: '#3a2e00' }}>Registrar carros d&apos;ous rebuts</div>
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-                Gestionar lots i granges
+            </Link>
+          )}
+
+          {showEstoc && (
+            <Link href="/estoc" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📋</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estoc de carros</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Consultar carros disponibles</div>
               </div>
-            </div>
-          </Link>
+            </Link>
+          )}
 
-          <Link href="/estoc" style={{ textDecoration: 'none' }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📋</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estoc de carros</div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Consultar carros disponibles</div>
-            </div>
-          </Link>
+          {showLots && (
+            <Link href="/lots" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🐔</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Lots de reproductores</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Gestionar lots i granges</div>
+              </div>
+            </Link>
+          )}
 
-          <Link href="/carrega" style={{ textDecoration: 'none' }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗓️</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Planificació de càrregues</div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Gestionar fulls de càrrega i assignacions</div>
-            </div>
-          </Link>
+          {showCarrega && (
+            <Link href="/carrega" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗓️</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Planificació de càrregues</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Gestionar fulls de càrrega i assignacions</div>
+              </div>
+            </Link>
+          )}
 
         </div>
       </div>

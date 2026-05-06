@@ -20,10 +20,6 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL(roleHome(session.role), request.url))
-  }
-
   if (!canAccess(session.role, pathname)) {
     return NextResponse.redirect(new URL(roleHome(session.role), request.url))
   }
