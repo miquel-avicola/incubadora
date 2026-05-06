@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import LogoutButton from './components/LogoutButton'
 
 export const metadata: Metadata = {
   title: 'Miquel Avícola — Incubadora',
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ca">
-      <body>{children}</body>
+      <body>
+        {children}
+        <LogoutButton />
+      </body>
     </html>
   )
 }
