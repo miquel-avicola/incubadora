@@ -385,7 +385,11 @@ export default function Expedicions() {
                     </div>
                   )}
                   {vacunes.length > 0 && (
-                    <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                    <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                      <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                        Vacunes nasciment
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                       {vacunes.map(v => {
                         const activa = e.expedicio_vacunes.some(ev => ev.vacuna_id === v.id)
                         return (
@@ -400,6 +404,7 @@ export default function Expedicions() {
                           </button>
                         )
                       })}
+                      </div>
                     </div>
                   )}
                 </div>
