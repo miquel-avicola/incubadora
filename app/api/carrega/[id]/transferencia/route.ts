@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Assignació no trobada' }, { status: 404 })
   }
 
-  // Validar capacitat de la naixedora (en carros, no en ous)
+  // Validar capacitat de la naixedora (només carros actius, sense resultats de naixement)
   const { data: naixedora } = await supabase
     .from('naixedores')
     .select('capacitat, numero')
@@ -37,15 +37,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (naixedora) {
     const { data: transferenciesExistents } = await supabase
       .from('transferencies')
-      .select('id')
+      .select('id, resultats_naix(id)')
       .eq('naixedora_id', naixedora_id)
 
-    const carrosExistents = transferenciesExistents?.length || 0
-    const disponible = naixedora.capacitat - carrosExistents
+    const carrosActius = transferenciesExistents?.filter(t =>
+      Array.isArray(t.resultats_naix) && t.resultats_naix.length === 0
+    ).length || 0
 
-    if (disponible <= 0) {
+    if (carrosActius >= naixedora.capacitat) {
       return NextResponse.json({
-        error: `La naixedora ${naixedora.numero} és plena. Capacitat: ${naixedora.capacitat} carros, ja ocupats: ${carrosExistents}`,
+        error: `La naixedora ${naixedora.numero} és plena. Capacitat: ${naixedora.capacitat} carros, ja ocupats: ${carrosActius}`,
       }, { status: 400 })
     }
   }
