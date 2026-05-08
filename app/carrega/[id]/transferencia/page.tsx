@@ -133,23 +133,21 @@ export default function Transferencia() {
   const transferits = assignacionsOrdenades.filter(a => a.transferencies[0]).length
   const total = assignacionsOrdenades.length
 
-  // Ous fertils ja assignats per naixedora_id (dins d'aquesta carrega)
-  const ousPernaixedora: Record<number, number> = {}
+  // Carros ja assignats per naixedora (comptem transferències, no ous)
+  const carrosPerNaixedora: Record<number, number> = {}
   for (const a of full.assignacions) {
     for (const t of a.transferencies) {
       if (t.naixedora_id) {
-        ousPernaixedora[t.naixedora_id] = (ousPernaixedora[t.naixedora_id] || 0) + t.ous_fertils_vacunats
+        carrosPerNaixedora[t.naixedora_id] = (carrosPerNaixedora[t.naixedora_id] || 0) + 1
       }
     }
   }
-
   const naixedoraSeleccionada = naixedores.find(n => n.id === parseInt(naixedoraId))
-  const ousTotalNaixedoraSeleccionada = ousPernaixedora[parseInt(naixedoraId)] || 0
-  const capacitatDisponible = naixedoraSeleccionada
-    ? naixedoraSeleccionada.capacitat - ousTotalNaixedoraSeleccionada
+  const carrosUsats = carrosPerNaixedora[parseInt(naixedoraId)] || 0
+  const carrosDisponibles = naixedoraSeleccionada
+    ? naixedoraSeleccionada.capacitat - carrosUsats
     : null
-  const maxOusFertils = capacitatDisponible !== null ? Math.min(4800, capacitatDisponible) : 4800
-  const ousFertilsExcedits = ousFertils !== '' && parseInt(ousFertils) > maxOusFertils
+  const ousFertilsExcedits = ousFertils !== '' && parseInt(ousFertils) > 4800
 
   const inputStyle = {
     background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
@@ -249,12 +247,12 @@ export default function Transferencia() {
                         <label style={labelStyle}>Ous fèrtils vacunats</label>
                         <input type="number" value={ousFertils} onChange={e => setOusFertils(e.target.value)}
                           min="0"
-                          max={capacitatDisponible !== null ? Math.min(4800, capacitatDisponible) : 4800}
+                          max={4800}
                           style={{ ...inputStyle, borderColor: ousFertilsExcedits ? 'var(--danger)' : undefined }}
                         />
                         {ousFertilsExcedits && (
                           <div style={{ marginTop: '0.3rem', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--danger)' }}>
-                            Màxim: {(capacitatDisponible !== null ? Math.min(4800, capacitatDisponible) : 4800).toLocaleString()}
+                            Màxim: 4.800 ous per carro
                           </div>
                         )}
                       </div>
@@ -274,9 +272,9 @@ export default function Transferencia() {
                           <option key={n.id} value={n.id}>Naixedora {n.numero} — {n.model} ({n.capacitat.toLocaleString()})</option>
                         ))}
                       </select>
-                      {naixedoraSeleccionada && capacitatDisponible !== null && (
-                        <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: capacitatDisponible <= 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
-                          Disponible: {capacitatDisponible.toLocaleString()} / {naixedoraSeleccionada.capacitat.toLocaleString()} ous
+                      {naixedoraSeleccionada && carrosDisponibles !== null && (
+                        <div style={{ marginTop: '0.35rem', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: carrosDisponibles <= 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
+                          Disponible: {carrosDisponibles} / {naixedoraSeleccionada.capacitat} carros
                         </div>
                       )}
                     </div>
@@ -288,12 +286,12 @@ export default function Transferencia() {
                     )}
 
                     <button onClick={() => guardarTransferencia(a)}
-                      disabled={!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits}
+                      disabled={!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits || carrosDisponibles === 0}
                       style={{
                         padding: '0.75rem', border: 'none', borderRadius: '8px', fontWeight: 700,
                         fontFamily: 'IBM Plex Sans', fontSize: '0.9rem', cursor: 'pointer',
-                        background: (!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits) ? 'var(--border)' : 'var(--accent)',
-                        color: (!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits) ? 'var(--text-dim)' : '#0f1117',
+                        background: (!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits || carrosDisponibles === 0) ? 'var(--border)' : 'var(--accent)',
+                        color: (!naixedoraId || ousFertils === '' || guardant || ousFertilsExcedits || carrosDisponibles === 0) ? 'var(--text-dim)' : '#0f1117',
                       }}>
                       {guardant ? 'Guardant...' : 'Confirmar transferència'}
                     </button>
