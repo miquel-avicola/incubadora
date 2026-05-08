@@ -15,6 +15,13 @@ interface Destinacio {
 interface Transportista {
   id: number
   nom: string
+  empresa: string | null
+  max_carros: number | null
+  tipus_carro: number | null
+  alcada_min: number | null
+  alcada_max: number | null
+  pollets_caixa_min: number | null
+  pollets_caixa_max: number | null
 }
 
 interface Comanda {
@@ -44,6 +51,7 @@ interface Expedicio {
   matricula: string | null
   hora_prevista_naixement: string | null
   observacions: string | null
+  num_viatge: number | null
   comandes: { id: number; clients: { id: number; nom: string } }
   destinacions: { id: number; nom_granja: string; nau: string | null; poblacio: string | null }
   transportistes: { id: number; nom: string } | null
@@ -64,8 +72,127 @@ interface Full {
   comandes: Comanda[]
 }
 
+interface ResultatExpedicio {
+  expedicio_id: number
+  client: string
+  carros_sencers: number
+  pico_caixes: number
+  pollets_reals: number
+  diferencia: number
+}
+
+interface CarroCompartit {
+  alcada_carro: number
+  items: Array<{ expedicio_id: number; client: string; caixes: number }>
+}
+
+interface Opcio {
+  alcada: number
+  pollets_caixa: number
+  resultats: ResultatExpedicio[]
+  carros_compartits: CarroCompartit[]
+  total_carros: number
+  score: { num_compartits: number; num_multiples_5: number; suma_diferencies: number }
+}
+
+export type DistribucioSaved = Record<string, {
+  alcada: number
+  pollets_caixa: number
+  nom_transportista: string
+  num_viatge: number
+  transportista_id: number
+  per_expedicio: Record<string, {
+    carros_sencers: number
+    pico_caixes: number
+    pollets_reals: number
+    diferencia: number
+    en_carro_compartit: boolean
+  }>
+  carros_compartits: Array<{
+    alcada_carro: number
+    items: Array<{ expedicio_id: number; client: string; caixes: number }>
+  }>
+}>
+
 function nomDestinacio(d: { nom_granja: string; nau: string | null }) {
   return d.nau ? `${d.nom_granja} ${d.nau}` : d.nom_granja
+}
+
+function calcularOpcions(exps: Expedicio[], t: Transportista): Opcio[] {
+  const { alcada_min, alcada_max, pollets_caixa_min, pollets_caixa_max, max_carros } = t
+  if (!alcada_min || !alcada_max || !pollets_caixa_min || !pollets_caixa_max || !max_carros) return []
+
+  const opcions: Opcio[] = []
+
+  for (let alcada = alcada_min; alcada <= alcada_max; alcada++) {
+    for (let pc = pollets_caixa_min; pc <= pollets_caixa_max; pc++) {
+      const pollets_per_carro = alcada * pc
+
+      const resultats: ResultatExpedicio[] = exps.map(e => {
+        const pollets = e.pollets_comanda || 0
+        const carros_sencers = Math.floor(pollets / pollets_per_carro)
+        const resta = pollets % pollets_per_carro
+        const pico_caixes = Math.round(resta / pc)
+        const pollets_reals = carros_sencers * pollets_per_carro + pico_caixes * pc
+        const diferencia = Math.abs(pollets - pollets_reals)
+        return { expedicio_id: e.id, client: e.comandes?.clients?.nom || '', carros_sencers, pico_caixes, pollets_reals, diferencia }
+      })
+
+      if (resultats.some(r => r.diferencia >= 100)) continue
+
+      const total_sencers = resultats.reduce((s, r) => s + r.carros_sencers, 0)
+      const amPico = resultats.filter(r => r.pico_caixes > 0)
+      let carros_compartits: CarroCompartit[] = []
+
+      if (amPico.length > 0) {
+        if (total_sencers + amPico.length <= max_carros) {
+          carros_compartits = amPico.map(r => ({
+            alcada_carro: r.pico_caixes,
+            items: [{ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes }],
+          }))
+        } else {
+          const carros_disp = max_carros - total_sencers
+          if (carros_disp <= 0) {
+            carros_compartits = [{
+              alcada_carro: amPico.reduce((s, r) => s + r.pico_caixes, 0),
+              items: amPico.map(r => ({ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes })),
+            }]
+          } else {
+            const grups: CarroCompartit[] = Array.from({ length: carros_disp }, () => ({ alcada_carro: 0, items: [] }))
+            amPico.forEach((r, i) => {
+              const g = grups[i % carros_disp]
+              g.items.push({ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes })
+              g.alcada_carro += r.pico_caixes
+            })
+            carros_compartits = grups.filter(g => g.items.length > 0)
+          }
+        }
+      }
+
+      const total_carros = total_sencers + carros_compartits.length
+      if (total_carros > max_carros) continue
+
+      const num_multiples_5 = resultats.filter(r => r.carros_sencers > 0 && r.carros_sencers % 5 === 0).length
+      const suma_dif = resultats.reduce((s, r) => s + r.diferencia, 0)
+
+      opcions.push({
+        alcada,
+        pollets_caixa: pc,
+        resultats,
+        carros_compartits,
+        total_carros,
+        score: { num_compartits: carros_compartits.length, num_multiples_5, suma_diferencies: suma_dif },
+      })
+    }
+  }
+
+  opcions.sort((a, b) => {
+    if (a.score.num_compartits !== b.score.num_compartits) return a.score.num_compartits - b.score.num_compartits
+    if (a.score.num_multiples_5 !== b.score.num_multiples_5) return b.score.num_multiples_5 - a.score.num_multiples_5
+    return a.score.suma_diferencies - b.score.suma_diferencies
+  })
+
+  return opcions.slice(0, 5)
 }
 
 export default function Expedicions() {
@@ -77,7 +204,6 @@ export default function Expedicions() {
   const [loading, setLoading] = useState(true)
   const [vacunes, setVacunes] = useState<Vacuna[]>([])
 
-  // Formulari nova expedició
   const [mostrarForm, setMostrarForm] = useState(false)
   const [comandaId, setComandaId] = useState('')
   const [destinacioId, setDestinacioId] = useState('')
@@ -88,6 +214,9 @@ export default function Expedicions() {
   const [cercaDestinacio, setCercaDestinacio] = useState('')
   const [creant, setCreant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
+  const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
@@ -107,7 +236,6 @@ export default function Expedicions() {
     fetch('/api/vacunes').then(r => r.json()).then(data => setVacunes(Array.isArray(data) ? data : []))
   }, [])
 
-  // Carregar destinacions filtrades per client quan es selecciona comanda
   useEffect(() => {
     if (!comandaId || !full) return
     const comanda = full.comandes.find(c => c.id === parseInt(comandaId))
@@ -121,7 +249,6 @@ export default function Expedicions() {
     if (!comandaId || !destinacioId) return
     setCreant(true)
     setErrorMsg('')
-
     const res = await fetch(`/api/carrega/${params.id}/expedicions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -134,7 +261,6 @@ export default function Expedicions() {
         pollets_comanda: polletsComanda ? parseInt(polletsComanda) : null,
       }),
     })
-
     const data = await res.json()
     if (!res.ok) {
       setErrorMsg(data.error || 'Error desconegut')
@@ -178,6 +304,64 @@ export default function Expedicions() {
     carregarDades()
   }
 
+  async function actualitzarNumViatge(expId: number, val: number | null) {
+    setExpedicions(prev => prev.map(e => e.id === expId ? { ...e, num_viatge: val } : e))
+    await fetch(`/api/expedicions/${expId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ num_viatge: val }),
+    })
+  }
+
+  function calcularGrup(grupKey: string, exps: Expedicio[], transportista: Transportista) {
+    const opcions = calcularOpcions(exps, transportista)
+    setOpcionsPerViatge(prev => ({ ...prev, [grupKey]: opcions }))
+  }
+
+  function triarOpcio(
+    grupKey: string,
+    idx: number,
+    opcio: Opcio,
+    transportista: Transportista,
+    numViatge: number,
+  ) {
+    setOpcioSeleccionada(prev => ({ ...prev, [grupKey]: idx }))
+
+    const expIdsEnCompartit = new Set<number>()
+    opcio.carros_compartits.filter(cc => cc.items.length > 1).forEach(cc => {
+      cc.items.forEach(it => expIdsEnCompartit.add(it.expedicio_id))
+    })
+
+    const per_expedicio: DistribucioSaved[string]['per_expedicio'] = {}
+    opcio.resultats.forEach(r => {
+      per_expedicio[String(r.expedicio_id)] = {
+        carros_sencers: r.carros_sencers,
+        pico_caixes: r.pico_caixes,
+        pollets_reals: r.pollets_reals,
+        diferencia: r.diferencia,
+        en_carro_compartit: expIdsEnCompartit.has(r.expedicio_id),
+      }
+    })
+
+    const lsKey = `mav_dist_${params.id}`
+    let saved: DistribucioSaved = {}
+    try {
+      const raw = localStorage.getItem(lsKey)
+      if (raw) saved = JSON.parse(raw)
+    } catch { /* ignore */ }
+
+    saved[grupKey] = {
+      alcada: opcio.alcada,
+      pollets_caixa: opcio.pollets_caixa,
+      nom_transportista: transportista.nom,
+      num_viatge: numViatge,
+      transportista_id: transportista.id,
+      per_expedicio,
+      carros_compartits: opcio.carros_compartits,
+    }
+    localStorage.setItem(lsKey, JSON.stringify(saved))
+  }
+
   if (loading || !full) return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
       <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
@@ -191,16 +375,33 @@ export default function Expedicions() {
     (d.poblacio || '').toLowerCase().includes(cercaDestinacio.toLowerCase())
   )
 
-  // Pollets totals per comanda vs assignats a expedicions
   const polletsPerComanda: Record<number, { objectiu: number; assignats: number }> = {}
   full.comandes.filter(c => c.tipus === 'Pollets').forEach(c => {
     polletsPerComanda[c.id] = { objectiu: c.quantitat_pollets || 0, assignats: 0 }
   })
   expedicions.forEach(e => {
     const cid = e.comandes?.id
-    if (cid && polletsPerComanda[cid]) {
-      polletsPerComanda[cid].assignats += e.pollets_comanda || 0
+    if (cid && polletsPerComanda[cid]) polletsPerComanda[cid].assignats += e.pollets_comanda || 0
+  })
+
+  // Grups de viatge: per transportista + num_viatge
+  const grupsViatge: Array<{ key: string; transportista: Transportista; num_viatge: number; exps: Expedicio[] }> = []
+  const grupMap = new Map<string, typeof grupsViatge[0]>()
+  expedicions.forEach(e => {
+    if (!e.transportistes || e.num_viatge == null) return
+    const key = `${e.transportistes.id}_${e.num_viatge}`
+    if (!grupMap.has(key)) {
+      const t = transportistes.find(t => t.id === e.transportistes!.id)
+      if (!t) return
+      const g = { key, transportista: t, num_viatge: e.num_viatge, exps: [] as Expedicio[] }
+      grupMap.set(key, g)
+      grupsViatge.push(g)
     }
+    grupMap.get(key)!.exps.push(e)
+  })
+  grupsViatge.sort((a, b) => {
+    const nc = a.transportista.nom.localeCompare(b.transportista.nom)
+    return nc !== 0 ? nc : a.num_viatge - b.num_viatge
   })
 
   const inputStyle = {
@@ -227,25 +428,25 @@ export default function Expedicions() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-  <Link href={`/carrega/${params.id}/expedicions/naixement`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem', background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      Dia del naixement
-    </button>
-  </Link>
-  <button onClick={() => setMostrarForm(!mostrarForm)} style={{
-    padding: '0.6rem 1rem', background: 'var(--accent)', border: 'none',
-    borderRadius: '8px', color: '#0f1117', fontWeight: 700, fontSize: '0.85rem',
-    cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-  }}>
-    + Nova expedició
-  </button>
-</div>
+            <Link href={`/carrega/${params.id}/expedicions/naixement`} style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '0.6rem 1rem', background: 'var(--bg)',
+                border: '1px solid var(--border)', borderRadius: '8px',
+                color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
+                cursor: 'pointer', fontFamily: 'IBM Plex Sans',
+              }}>
+                Dia del naixement
+              </button>
+            </Link>
+            <button onClick={() => setMostrarForm(!mostrarForm)} style={{
+              padding: '0.6rem 1rem', background: 'var(--accent)', border: 'none',
+              borderRadius: '8px', color: '#0f1117', fontWeight: 700, fontSize: '0.85rem',
+              cursor: 'pointer', fontFamily: 'IBM Plex Sans',
+            }}>
+              + Nova expedició
+            </button>
           </div>
+        </div>
 
         {/* Resum per comanda */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
@@ -386,6 +587,28 @@ export default function Expedicions() {
                       }).join(' + ')}
                     </div>
                   )}
+
+                  {/* Selector viatge */}
+                  <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Viatge
+                    </span>
+                    <select
+                      value={e.num_viatge ?? ''}
+                      onChange={ev => actualitzarNumViatge(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
+                      style={{
+                        background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                        padding: '0.2rem 0.5rem', color: e.num_viatge ? 'var(--accent)' : 'var(--text-dim)',
+                        fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', cursor: 'pointer', outline: 'none',
+                        fontWeight: e.num_viatge ? 700 : 400,
+                      }}
+                    >
+                      <option value="">—</option>
+                      {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Vacunes naixement */}
                   <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(240,180,41,0.08)', border: '1px solid var(--accent)', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
                       Vacunes naixement ({vacunesNaixement.length})
@@ -420,6 +643,153 @@ export default function Expedicions() {
             </div>
           ))}
         </div>
+
+        {/* Distribució de carros per viatge */}
+        {grupsViatge.length > 0 && (
+          <div style={{ marginTop: '2rem' }}>
+            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '1rem' }}>
+              Distribució de carros per viatge
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {grupsViatge.map(g => {
+                const opcions = opcionsPerViatge[g.key]
+                const selIdx = opcioSeleccionada[g.key] ?? -1
+                const teParametres = !!(g.transportista.alcada_min && g.transportista.alcada_max &&
+                  g.transportista.pollets_caixa_min && g.transportista.pollets_caixa_max && g.transportista.max_carros)
+
+                return (
+                  <div key={g.key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{g.transportista.nom}</span>
+                        <span style={{ marginLeft: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 700 }}>
+                          Viatge {g.num_viatge}
+                        </span>
+                        {g.transportista.max_carros && (
+                          <span style={{ marginLeft: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                            (màx. {g.transportista.max_carros} carros)
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => calcularGrup(g.key, g.exps, g.transportista)}
+                        disabled={!teParametres}
+                        title={!teParametres ? 'El transportista no té els paràmetres de carro configurats' : undefined}
+                        style={{
+                          padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono',
+                          borderRadius: '6px', border: '1px solid',
+                          borderColor: teParametres ? 'var(--accent)' : 'var(--border)',
+                          background: 'var(--bg)',
+                          color: teParametres ? 'var(--accent)' : 'var(--text-dim)',
+                          cursor: teParametres ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Calcular opcions
+                      </button>
+                    </div>
+
+                    {/* Expedicions del grup */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      {g.exps.map(e => (
+                        <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+                          <span>{e.comandes?.clients?.nom} — {nomDestinacio(e.destinacions)}</span>
+                          <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                            {e.pollets_comanda ? e.pollets_comanda.toLocaleString() : '—'} pollets
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cap combinació */}
+                    {opcions !== undefined && opcions.length === 0 && (
+                      <div style={{ padding: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--danger)' }}>
+                        Cap combinació vàlida amb els paràmetres actuals.
+                      </div>
+                    )}
+
+                    {/* Opcions calculades */}
+                    {opcions && opcions.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        {opcions.map((opcio, idx) => {
+                          const sel = selIdx === idx
+                          return (
+                            <div key={idx} style={{
+                              border: '1px solid',
+                              borderColor: sel ? 'var(--success)' : 'var(--border)',
+                              borderRadius: '8px',
+                              padding: '0.75rem 1rem',
+                              background: sel ? 'rgba(34,197,94,0.06)' : 'var(--bg)',
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem' }}>
+                                  <span style={{ fontWeight: 700 }}>Alçada: {opcio.alcada} cx · Pollets/caixa: {opcio.pollets_caixa}</span>
+                                  <span style={{ marginLeft: '0.6rem', color: 'var(--text-dim)', fontWeight: 400 }}>
+                                    {opcio.total_carros} carros
+                                    {opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 0 && (
+                                      <span style={{ color: 'var(--accent)' }}>
+                                        {' '}({opcio.carros_compartits.filter(cc => cc.items.length > 1).length} compartit{opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 1 ? 's' : ''})
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => triarOpcio(g.key, idx, opcio, g.transportista, g.num_viatge)}
+                                  style={{
+                                    padding: '0.3rem 0.75rem', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono',
+                                    borderRadius: '6px', cursor: 'pointer', border: '1px solid',
+                                    borderColor: sel ? 'var(--success)' : 'var(--border)',
+                                    background: sel ? 'rgba(34,197,94,0.18)' : 'var(--bg)',
+                                    color: sel ? 'var(--success)' : 'var(--text)',
+                                    fontWeight: sel ? 700 : 400,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {sel ? '✓ Triada' : 'Triar aquesta opció'}
+                                </button>
+                              </div>
+
+                              {/* Detall per expedició */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: opcio.carros_compartits.some(cc => cc.items.length > 1) ? '0.5rem' : 0 }}>
+                                {opcio.resultats.map(r => (
+                                  <div key={r.expedicio_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono' }}>
+                                    <span style={{ color: 'var(--text)' }}>{r.client}</span>
+                                    <span>
+                                      <span style={{ color: 'var(--text)' }}>{r.carros_sencers}c</span>
+                                      {r.pico_caixes > 0 && <span style={{ color: 'var(--accent)' }}> + {r.pico_caixes} cx pico</span>}
+                                      <span style={{ color: 'var(--text-dim)' }}> · {r.pollets_reals.toLocaleString()} pollets</span>
+                                      {r.diferencia > 0 && (
+                                        <span style={{ color: r.diferencia >= 50 ? 'var(--danger)' : 'var(--text-dim)' }}> (Δ{r.diferencia})</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Carros compartits (amb múltiples expedicions) */}
+                              {opcio.carros_compartits.some(cc => cc.items.length > 1) && (
+                                <div style={{ padding: '0.45rem 0.6rem', background: 'rgba(240,180,41,0.07)', borderRadius: '6px', border: '1px solid rgba(240,180,41,0.2)' }}>
+                                  <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>
+                                    Carros compartits
+                                  </div>
+                                  {opcio.carros_compartits.filter(cc => cc.items.length > 1).map((cc, ci) => (
+                                    <div key={ci} style={{ fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                                      Carro {ci + 1} ({cc.alcada_carro} cx): {cc.items.map(it => `${it.client} ${it.caixes}cx`).join(' + ')}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
     </main>

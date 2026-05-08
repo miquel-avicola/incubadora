@@ -13,6 +13,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     hora_arribada_camio,
     ordre,
     observacions,
+    num_viatge,
   } = body
 
   const updates: Record<string, unknown> = {}
@@ -25,6 +26,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (hora_arribada_camio !== undefined) updates.hora_arribada_camio = hora_arribada_camio
   if (ordre !== undefined) updates.ordre = ordre
   if (observacions !== undefined) updates.observacions = observacions
+  if (num_viatge !== undefined) updates.num_viatge = num_viatge
 
   const { data, error } = await supabase
     .from('expedicions')

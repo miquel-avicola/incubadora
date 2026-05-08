@@ -21,8 +21,10 @@ interface Expedicio {
   pollets_comanda: number | null
   pollets_servits: number | null
   hora_prevista_naixement: string | null
+  num_viatge: number | null
   comandes: { clients: { nom: string } }
   destinacions: { nom_granja: string; nau: string | null }
+  transportistes: { id: number; nom: string } | null
   expedicio_lots: ExpedicioLot[]
   expedicio_vacunes: { vacuna_id: number; vacunes: { nom: string } }[]
 }
@@ -44,6 +46,25 @@ interface Full {
   assignacions: Assignacio[]
 }
 
+type DistribucioSaved = Record<string, {
+  alcada: number
+  pollets_caixa: number
+  nom_transportista: string
+  num_viatge: number
+  transportista_id: number
+  per_expedicio: Record<string, {
+    carros_sencers: number
+    pico_caixes: number
+    pollets_reals: number
+    diferencia: number
+    en_carro_compartit: boolean
+  }>
+  carros_compartits: Array<{
+    alcada_carro: number
+    items: Array<{ expedicio_id: number; client: string; caixes: number }>
+  }>
+}>
+
 function nomDestinacio(d: { nom_granja: string; nau: string | null }) {
   return d.nau ? `${d.nom_granja} ${d.nau}` : d.nom_granja
 }
@@ -60,6 +81,7 @@ export default function ExpedicionsNaixement() {
   const [loading, setLoading] = useState(true)
   const [expedicioOberta, setExpedicioOberta] = useState<number | null>(null)
   const [guardant, setGuardant] = useState(false)
+  const [distribucio, setDistribucio] = useState<DistribucioSaved>({})
 
   const [polletsServits, setPolletsServits] = useState('')
   const [polletsPerLot, setPolletsPerLot] = useState<Record<number, string>>({})
@@ -76,6 +98,14 @@ export default function ExpedicionsNaixement() {
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
+
+  useEffect(() => {
+    if (!params.id) return
+    try {
+      const raw = localStorage.getItem(`mav_dist_${params.id}`)
+      if (raw) setDistribucio(JSON.parse(raw))
+    } catch { /* ignore */ }
+  }, [params.id])
 
   function obrirExpedicio(exp: Expedicio) {
     if (expedicioOberta === exp.id) {
@@ -148,9 +178,7 @@ export default function ExpedicionsNaixement() {
   expedicions.forEach(e => {
     e.expedicio_lots.forEach(el => {
       const lotId = el.lots_reproductores.id
-      if (statsPerLot[lotId]) {
-        statsPerLot[lotId].assignats += el.pollets
-      }
+      if (statsPerLot[lotId]) statsPerLot[lotId].assignats += el.pollets
     })
   })
 
@@ -158,7 +186,6 @@ export default function ExpedicionsNaixement() {
   const totalNascuts = Object.values(statsPerLot).reduce((s, l) => s + l.nascuts, 0)
   const totalAssignats = expedicions.reduce((s, e) => s + (e.pollets_servits || e.pollets_comanda || 0), 0)
 
-  // Expedicions ordenades per client i hora prevista per a la taula d'impressió
   const expedicionsOrdenades = [...expedicions].sort((a, b) => {
     const clientA = a.comandes?.clients?.nom || ''
     const clientB = b.comandes?.clients?.nom || ''
@@ -169,6 +196,46 @@ export default function ExpedicionsNaixement() {
   })
 
   const lotIds = Object.keys(statsPerLot).map(Number)
+
+  // Helpers per accedir a la distribució d'una expedició
+  function getGrupKey(e: Expedicio): string | null {
+    if (!e.transportistes || e.num_viatge == null) return null
+    return `${e.transportistes.id}_${e.num_viatge}`
+  }
+
+  function getDistExp(e: Expedicio) {
+    const key = getGrupKey(e)
+    if (!key || !distribucio[key]) return null
+    return distribucio[key].per_expedicio[String(e.id)] ?? null
+  }
+
+  function getDistGrup(e: Expedicio) {
+    const key = getGrupKey(e)
+    if (!key) return null
+    return distribucio[key] ?? null
+  }
+
+  // Carros compartits que apareixeran a la llegenda
+  const carrosCompartitsLlegenda: Array<{
+    nom_transportista: string
+    num_viatge: number
+    carros: DistribucioSaved[string]['carros_compartits']
+  }> = []
+  const keysVistos = new Set<string>()
+  expedicionsOrdenades.forEach(e => {
+    const key = getGrupKey(e)
+    if (!key || keysVistos.has(key)) return
+    const grup = distribucio[key]
+    if (!grup) return
+    const teCompartits = grup.carros_compartits.some(cc => cc.items.length > 1)
+    if (!teCompartits) return
+    keysVistos.add(key)
+    carrosCompartitsLlegenda.push({
+      nom_transportista: grup.nom_transportista,
+      num_viatge: grup.num_viatge,
+      carros: grup.carros_compartits.filter(cc => cc.items.length > 1),
+    })
+  })
 
   const inputStyle = {
     background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
@@ -188,9 +255,13 @@ export default function ExpedicionsNaixement() {
           .print-table th { background: #f0f0f0; font-weight: bold; }
           .print-table td.lot-nom { text-align: left; font-weight: bold; }
           .print-table tr.total-row td { background: #e8e8e8; font-weight: bold; }
+          .print-table tr.dist-row td { background: #f8f4e8; font-size: 9px; }
+          .print-table td.dist-label { text-align: left; font-weight: bold; font-size: 9px; }
           .print-header { font-family: Arial, sans-serif; margin-bottom: 12px; }
           .print-header h2 { font-size: 14px; margin: 0 0 4px 0; }
           .print-header p { font-size: 10px; margin: 0; color: #555; }
+          .print-llegenda { font-family: Arial, sans-serif; font-size: 9px; margin-top: 14px; border-top: 1px solid #ccc; padding-top: 6px; }
+          .print-llegenda h4 { font-size: 10px; margin: 0 0 4px 0; }
         }
         @media screen {
           .print-only { display: none; }
@@ -208,18 +279,22 @@ export default function ExpedicionsNaixement() {
             <tr>
               <th>Lot</th>
               <th>Nascuts</th>
-              {expedicionsOrdenades.map(e => (
-                <th key={e.id}>
-                  <div>{nomDestinacio(e.destinacions)}</div>
-                  <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
-                  {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
-                  {e.expedicio_vacunes?.length > 0 && (
-                    <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
-                      {e.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
-                    </div>
-                  )}
-                </th>
-              ))}
+              {expedicionsOrdenades.map(e => {
+                const distExp = getDistExp(e)
+                const enCompartit = distExp?.en_carro_compartit ?? false
+                return (
+                  <th key={e.id}>
+                    <div>{nomDestinacio(e.destinacions)}{enCompartit ? ' *' : ''}</div>
+                    <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
+                    {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
+                    {e.expedicio_vacunes?.length > 0 && (
+                      <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
+                        {e.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
+                      </div>
+                    )}
+                  </th>
+                )
+              })}
               <th>Total assignat</th>
             </tr>
           </thead>
@@ -250,8 +325,60 @@ export default function ExpedicionsNaixement() {
               ))}
               <td>{totalAssignats.toLocaleString()}</td>
             </tr>
+            {/* Fila: Pollets/caixa */}
+            <tr className="dist-row">
+              <td className="dist-label">Pollets/caixa</td>
+              <td></td>
+              {expedicionsOrdenades.map(e => {
+                const grup = getDistGrup(e)
+                return <td key={e.id}>{grup ? grup.pollets_caixa : '—'}</td>
+              })}
+              <td></td>
+            </tr>
+            {/* Fila: Alçada carro */}
+            <tr className="dist-row">
+              <td className="dist-label">Alçada carro</td>
+              <td></td>
+              {expedicionsOrdenades.map(e => {
+                const grup = getDistGrup(e)
+                return <td key={e.id}>{grup ? grup.alcada : '—'}</td>
+              })}
+              <td></td>
+            </tr>
+            {/* Fila: Distribució */}
+            <tr className="dist-row">
+              <td className="dist-label">Distribució</td>
+              <td></td>
+              {expedicionsOrdenades.map(e => {
+                const distExp = getDistExp(e)
+                const enCompartit = distExp?.en_carro_compartit ?? false
+                const val = distExp
+                  ? `${distExp.carros_sencers}c + ${distExp.pico_caixes}${enCompartit ? ' *' : ''}`
+                  : '—'
+                return <td key={e.id}>{val}</td>
+              })}
+              <td></td>
+            </tr>
           </tbody>
         </table>
+
+        {/* Llegenda carros compartits */}
+        {carrosCompartitsLlegenda.length > 0 && (
+          <div className="print-llegenda">
+            <h4>* Carros compartits</h4>
+            {carrosCompartitsLlegenda.map((ll, i) => (
+              <div key={i} style={{ marginBottom: '4px' }}>
+                <strong>{ll.nom_transportista} · Viatge {ll.num_viatge}:</strong>{' '}
+                {ll.carros.map((cc, ci) => (
+                  <span key={ci}>
+                    Carro {ci + 1} ({cc.alcada_carro} cx): {cc.items.map(it => `${it.client} ${it.caixes}cx`).join(' + ')}
+                    {ci < ll.carros.length - 1 ? '  |  ' : ''}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Pàgina normal (amagada en imprimir) */}
@@ -312,6 +439,8 @@ export default function ExpedicionsNaixement() {
             {expedicions.map(e => {
               const obert = expedicioOberta === e.id
               const tePollets = e.pollets_servits !== null
+              const distExp = getDistExp(e)
+              const distGrup = getDistGrup(e)
               return (
                 <div key={e.id} style={{ background: 'var(--surface)', border: '1px solid', borderColor: obert ? 'var(--accent)' : tePollets ? 'var(--success)' : 'var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
                   <button onClick={() => obrirExpedicio(e)} style={{
@@ -324,7 +453,18 @@ export default function ExpedicionsNaixement() {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.15rem' }}>
                         {e.comandes?.clients?.nom}
                         {e.hora_prevista_naixement && ` · ${e.hora_prevista_naixement}`}
+                        {e.num_viatge != null && e.transportistes && (
+                          <span style={{ color: 'var(--accent)' }}> · {e.transportistes.nom} V{e.num_viatge}</span>
+                        )}
                       </div>
+                      {distExp && distGrup && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
+                          {distExp.carros_sencers}c + {distExp.pico_caixes} cx pico
+                          <span style={{ marginLeft: '0.4rem', color: 'var(--text-dim)' }}>
+                            · {distGrup.alcada} cx · {distGrup.pollets_caixa} p/cx
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.88rem', fontWeight: 700, color: tePollets ? 'var(--success)' : 'var(--text-dim)' }}>

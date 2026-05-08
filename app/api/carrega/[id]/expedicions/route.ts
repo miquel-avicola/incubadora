@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   const { data, error } = await supabase
     .from('expedicions')
     .select(`
-      id, ordre, pollets_comanda, pollets_servits, matricula,
+      id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge,
       hora_prevista_naixement, hora_sortida_camio, hora_arribada_camio, observacions,
       comandes (id, clients (id, nom)),
       destinacions (id, nom_granja, nau, poblacio),
