@@ -53,7 +53,7 @@ interface Expedicio {
   observacions: string | null
   num_viatge: number | null
   comandes: { id: number; clients: { id: number; nom: string } }
-  destinacions: { id: number; nom_granja: string; nau: string | null; poblacio: string | null }
+  destinacions: { id: number; nom_granja: string; nau: string | null; poblacio: string | null; sexe: string | null }
   transportistes: { id: number; nom: string } | null
   expedicio_lots: ExpedicioLot[]
   expedicio_vacunes: { vacuna_id: number; vacunes: { id: number; nom: string; via: string } }[]
@@ -436,6 +436,16 @@ export default function Expedicions() {
                 cursor: 'pointer', fontFamily: 'IBM Plex Sans',
               }}>
                 Dia del naixement
+              </button>
+            </Link>
+            <Link href={`/carrega/${params.id}/expedicions/etiquetes-pollets`} style={{ textDecoration: 'none' }}>
+              <button style={{
+                padding: '0.6rem 1rem', background: 'var(--bg)',
+                border: '1px solid var(--border)', borderRadius: '8px',
+                color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
+                cursor: 'pointer', fontFamily: 'IBM Plex Sans',
+              }}>
+                🏷 Etiquetes
               </button>
             </Link>
             <button onClick={() => setMostrarForm(!mostrarForm)} style={{
