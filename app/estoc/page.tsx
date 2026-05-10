@@ -90,12 +90,19 @@ export default function Estoc() {
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
       <div style={{ maxWidth: 640, margin: '0 auto' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
-          <div>
-            <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Estoc</p>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Carros disponibles</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
+            <div>
+              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Estoc</p>
+              <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Carros disponibles</h1>
+            </div>
           </div>
+          <Link href="/recepcio" style={{ textDecoration: 'none' }}>
+            <button style={{ background: 'var(--accent)', color: '#0f1117', border: 'none', borderRadius: '8px', padding: '0.6rem 1rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
+              + Recepció
+            </button>
+          </Link>
         </div>
 
         {loading && <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>Carregant...</p>}

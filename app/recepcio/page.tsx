@@ -92,7 +92,7 @@ export default function Recepcio() {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
+          <Link href="/estoc" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
           <div>
             <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>
               Recepció

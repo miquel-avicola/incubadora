@@ -8,8 +8,6 @@ export default async function Home() {
   const session = token ? await verifySession(token) : null
   const role = session?.role ?? 'admin'
 
-  const showRecepcio = true
-  const showEstoc = true
   const showLots = role === 'admin'
   const showCarrega = role === 'carregues' || role === 'admin'
 
@@ -28,25 +26,13 @@ export default async function Home() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-          {showRecepcio && (
-            <Link href="/recepcio" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--accent)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📦</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f1117', marginBottom: '0.25rem' }}>Recepció de carros</div>
-                <div style={{ fontSize: '0.85rem', color: '#3a2e00' }}>Registrar carros d&apos;ous rebuts</div>
-              </div>
-            </Link>
-          )}
-
-          {showEstoc && (
-            <Link href="/estoc" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📋</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estoc de carros</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Consultar carros disponibles</div>
-              </div>
-            </Link>
-          )}
+          <Link href="/estoc" style={{ textDecoration: 'none' }}>
+            <div style={{ background: 'var(--accent)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📋</div>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f1117', marginBottom: '0.25rem' }}>Estoc de carros</div>
+              <div style={{ fontSize: '0.85rem', color: '#3a2e00' }}>Consultar carros disponibles i registrar recepcions</div>
+            </div>
+          </Link>
 
           {showLots && (
             <Link href="/lots" style={{ textDecoration: 'none' }}>
