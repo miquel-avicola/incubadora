@@ -132,6 +132,7 @@ export default function DetallCarrega() {
                     { href: `/carrega/${full.id}/transferencia`, label: 'Transferència' },
                     { href: `/carrega/${full.id}/naixement`, label: 'Naixement' },
                     { href: `/carrega/${full.id}/expedicions`, label: 'Expedicions' },
+                    { href: `/carrega/${full.id}/estadistiques`, label: '📊 Estadístiques' },
                   ].map((item, i, arr) => (
                     <Link
                       key={i}
