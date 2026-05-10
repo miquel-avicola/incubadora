@@ -13,10 +13,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
   const { data, error } = await supabase
     .from('expedicions')
     .select(`
-      id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge,
+      id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge, sexe,
       hora_prevista_naixement, hora_sortida_camio, hora_arribada_camio, observacions,
       comandes (id, clients (id, nom)),
-      destinacions (id, nom_granja, nau, poblacio),
+      destinacions (id, nom_granja, nau, poblacio, sexe),
       transportistes (id, nom),
       expedicio_lots (
         id, pollets,
@@ -33,26 +33,25 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const body = await request.json()
-  const { comanda_id, destinacio_id, transportista_id, matricula, hora_prevista_naixement, pollets_comanda, observacions } = body
+  const { comanda_id, destinacio_id, transportista_id, matricula, hora_prevista_naixement, pollets_comanda, observacions, sexe } = body
 
   if (!comanda_id || !destinacio_id) {
     return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
   }
 
-  // Obtenir l'ordre màxim actual per aquest full
- const { data: comandesOrdre } = await supabase
-  .from('comandes')
-  .select('id')
-  .eq('full_carrega_id', params.id)
+  const { data: comandesOrdre } = await supabase
+    .from('comandes')
+    .select('id')
+    .eq('full_carrega_id', params.id)
 
-const comandaIdsOrdre = comandesOrdre?.map(c => c.id) || []
+  const comandaIdsOrdre = comandesOrdre?.map(c => c.id) || []
 
-const { data: existing } = await supabase
-  .from('expedicions')
-  .select('ordre')
-  .in('comanda_id', comandaIdsOrdre)
-  .order('ordre', { ascending: false })
-  .limit(1)
+  const { data: existing } = await supabase
+    .from('expedicions')
+    .select('ordre')
+    .in('comanda_id', comandaIdsOrdre)
+    .order('ordre', { ascending: false })
+    .limit(1)
 
   const nextOrdre = existing && existing.length > 0 && existing[0].ordre
     ? existing[0].ordre + 1
@@ -70,28 +69,29 @@ const { data: existing } = await supabase
       pollets_servits: null,
       ordre: nextOrdre,
       observacions: observacions || null,
+      sexe: sexe || null,
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  // Autocompletar client_id a la destinació si encara no en té
-if (data) {
-  const comanda = await supabase
-    .from('comandes')
-    .select('full_carrega_id, clients(id)')
-    .eq('id', comanda_id)
-    .single()
-  
-  const client = (comanda.data?.clients as unknown as { id: number } | null)
-  if (client?.id) {
-    await supabase
-      .from('destinacions')
-      .update({ client_id: client.id })
-      .eq('id', destinacio_id)
-      .is('client_id', null)
+
+  if (data) {
+    const comanda = await supabase
+      .from('comandes')
+      .select('full_carrega_id, clients(id)')
+      .eq('id', comanda_id)
+      .single()
+
+    const client = (comanda.data?.clients as unknown as { id: number } | null)
+    if (client?.id) {
+      await supabase
+        .from('destinacions')
+        .update({ client_id: client.id })
+        .eq('id', destinacio_id)
+        .is('client_id', null)
+    }
   }
-}
   return NextResponse.json(data, { status: 201 })
 }
 
