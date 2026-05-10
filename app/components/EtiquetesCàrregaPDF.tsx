@@ -3,7 +3,7 @@ import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 const MM = 2.835
 const s = StyleSheet.create({
   page: {
-    width: 90 * MM, height: 70 * MM,
+    width: 90 * MM, height: 90 * MM,
     padding: 4 * MM,
     fontFamily: 'Helvetica',
     backgroundColor: 'white',
@@ -78,7 +78,7 @@ export function EtiquetesCàrregaPDF({ full }: { full: Full }) {
         const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
         const estirp = lot.estirp ? ` ${lot.estirp}` : ''
         return (
-          <Page key={a.num_carro_full} size={[90 * MM, 70 * MM]} style={s.page}>
+          <Page key={a.num_carro_full} size={[90 * MM, 90 * MM]} style={s.page}>
             <View style={s.fila1}>
               <Text style={s.numCarrega}>{full.num_carrega}</Text>
               <Text style={s.numCarro}>{a.num_carro_full}</Text>
