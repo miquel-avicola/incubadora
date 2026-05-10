@@ -48,6 +48,7 @@ export default function DetallCarrega() {
   const params = useParams()
   const [full, setFull] = useState<Full | null>(null)
   const [loading, setLoading] = useState(true)
+  const [menuObert, setMenuObert] = useState(false)
 
   const carregarDades = useCallback(() => {
     if (!params.id) return
@@ -98,74 +99,64 @@ export default function DetallCarrega() {
               <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>#{full.num_carrega}</h1>
             </div>
           </div>
-         <div style={{ display: 'flex', gap: '0.5rem' }}>
-  <Link href={`/carrega/${full.id}/imprimir`} target="_blank" style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      🖨️
-    </button>
-  </Link>
-  <Link href={`/carrega/${full.id}/assignacions`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--accent)',
-      border: 'none', borderRadius: '8px',
-      color: '#0f1117', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      + Assignar carros
-    </button>
-  </Link>
-  <Link href={`/carrega/${full.id}/vacunes`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      Pla vacunal
-    </button>
-  </Link>
-  <Link href={`/carrega/${full.id}/transferencia`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      Transferència
-    </button>
-  </Link>
-  <Link href={`/carrega/${full.id}/naixement`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      Naixement
-    </button>
-  </Link>
-  <Link href={`/carrega/${full.id}/expedicions`} style={{ textDecoration: 'none' }}>
-    <button style={{
-      padding: '0.6rem 1rem',
-      background: 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: '8px',
-      color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem',
-      cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-    }}>
-      Expedicions
-    </button>
-  </Link>
-</div>
+         <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuObert(!menuObert)}
+              style={{
+                padding: '0.6rem 1.1rem',
+                background: 'var(--accent)',
+                border: 'none', borderRadius: '8px',
+                color: '#0f1117', fontWeight: 700, fontSize: '0.9rem',
+                cursor: 'pointer', fontFamily: 'IBM Plex Sans',
+              }}
+            >
+              Accions ▾
+            </button>
+            {menuObert && (
+              <>
+                <div
+                  onClick={() => setMenuObert(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                />
+                <div style={{
+                  position: 'absolute', right: 0, top: '110%',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: '10px', overflow: 'hidden', zIndex: 100,
+                  minWidth: '200px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                }}>
+                  {[
+                    { href: `/carrega/${full.id}/imprimir`, label: '🖨️ Imprimir', target: '_blank' },
+                    { href: `/carrega/${full.id}/assignacions`, label: '+ Assignar carros' },
+                    { href: `/carrega/${full.id}/vacunes`, label: 'Pla vacunal' },
+                    { href: `/carrega/${full.id}/transferencia`, label: 'Transferència' },
+                    { href: `/carrega/${full.id}/naixement`, label: 'Naixement' },
+                    { href: `/carrega/${full.id}/expedicions`, label: 'Expedicions' },
+                  ].map((item, i, arr) => (
+                    <Link
+                      key={i}
+                      href={item.href}
+                      target={item.target as '_blank' | undefined}
+                      style={{ textDecoration: 'none' }}
+                      onClick={() => setMenuObert(false)}
+                    >
+                      <div style={{
+                        padding: '0.85rem 1rem',
+                        color: 'var(--text)',
+                        fontSize: '0.9rem',
+                        fontFamily: 'IBM Plex Sans',
+                        borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                        cursor: 'pointer',
+                        background: 'transparent',
+                      }}>
+                        {item.label}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Info dates */}
