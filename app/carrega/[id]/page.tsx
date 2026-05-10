@@ -127,6 +127,7 @@ export default function DetallCarrega() {
                 }}>
                   {[
                     { href: `/carrega/${full.id}/imprimir`, label: '🖨️ Imprimir', target: '_blank' },
+                    { href: `/carrega/${full.id}/etiquetes`, label: '🏷️ Etiquetes càrrega' },
                     { href: `/carrega/${full.id}/assignacions`, label: '+ Assignar carros' },
                     { href: `/carrega/${full.id}/vacunes`, label: 'Pla vacunal' },
                     { href: `/carrega/${full.id}/transferencia`, label: 'Transferència' },
