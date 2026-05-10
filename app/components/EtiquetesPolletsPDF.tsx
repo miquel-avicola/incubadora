@@ -1,119 +1,106 @@
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+// app/components/EtiquetesPolletsPDF.tsx
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
-const MM = 2.835
-const s = StyleSheet.create({
+const MM = 2.8346456692913385
+
+export interface LabelPollet {
+  client: string        // Secció 1 (top): nom del client
+  sexe: string | null   // Secció 2 (mig): 'M', 'F', o null
+  nom_granja: string    // Secció 3 (baix): nom de la granja
+  poblacio: string | null  // Secció 3 (baix): població
+  esPico: boolean
+}
+
+const styles = StyleSheet.create({
   page: {
-    width: 90 * MM,
-    height: 70 * MM,
-    padding: 4 * MM,
-    fontFamily: 'Helvetica',
-    backgroundColor: 'white',
+    width: 50 * MM,
+    height: 50 * MM,
+    padding: 0,
+    backgroundColor: '#ffffff',
+    border: '1pt solid #000000',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  seccioClient: {
+    flex: 2,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 3 * MM,
+    borderBottom: '1pt solid #000000',
+    paddingHorizontal: 3 * MM,
   },
-  title: { fontSize: 24, fontFamily: 'Helvetica-Bold' },
-  subtitle: { fontSize: 12, fontFamily: 'Helvetica-Bold' },
-  section: {
-    marginBottom: 2 * MM,
+  seccioSexe: {
+    flex: 1.3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottom: '1pt solid #000000',
+    paddingHorizontal: 3 * MM,
   },
-  label: {
+  seccioGranja: {
+    flex: 1.7,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3 * MM,
+  },
+  textClient: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#000000',
+  },
+  textSexe: {
     fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 1 * MM,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#000000',
+    textTransform: 'uppercase',
   },
-  value: {
-    fontSize: 11,
-    lineHeight: 1.4,
+  textGranja: {
+    fontSize: 9,
+    textAlign: 'center',
+    color: '#000000',
+    lineHeight: 1.3,
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  smallText: {
-    fontSize: 10,
+  picoIndicador: {
+    position: 'absolute',
+    bottom: 2,
+    right: 3 * MM,
+    fontSize: 7,
+    color: '#666666',
+    fontStyle: 'italic',
   },
 })
 
-function formatDate(dateStr: string) {
-  if (!dateStr) return '—'
-  const [y, m, d] = dateStr.split('-')
-  return `${parseInt(d)}/${parseInt(m)}/${y}`
+function LabelPage({ label }: { label: LabelPollet }) {
+  const sexeText = label.sexe === 'M' ? 'MASCLES' : label.sexe === 'F' ? 'FEMELLES' : ''
+  const granjaText = [label.nom_granja, label.poblacio].filter(Boolean).join('\n')
+
+  return (
+    <Page size={[50 * MM, 50 * MM]} style={styles.page}>
+      {/* Secció 1: Client */}
+      <View style={styles.seccioClient}>
+        <Text style={styles.textClient}>{label.client}</Text>
+      </View>
+
+      {/* Secció 2: Sexe */}
+      <View style={styles.seccioSexe}>
+        <Text style={styles.textSexe}>{sexeText}</Text>
+      </View>
+
+      {/* Secció 3: Granja + Població */}
+      <View style={styles.seccioGranja}>
+        <Text style={styles.textGranja}>{granjaText}</Text>
+        {label.esPico && (
+          <Text style={styles.picoIndicador}>PICO</Text>
+        )}
+      </View>
+    </Page>
+  )
 }
 
-interface ExpedicioLot {
-  id: number
-  pollets: number
-  lots_reproductores: {
-    id: number
-    data_naixement: string
-    estirp: string | null
-    granges_reproductores: { granja: string; nom_informal: string | null }
-  }
-}
-
-interface Expedicio {
-  id: number
-  ordre: number | null
-  pollets_comanda: number | null
-  comandes: { id: number; clients: { id: number; nom: string } }
-  destinacions: { nom_granja: string; nau: string | null }
-  expedicio_lots: ExpedicioLot[]
-}
-
-interface Full {
-  num_carrega: number
-  carrega: string
-  expedicions: Expedicio[]
-}
-
-export function EtiquetesPolletsPDF({ full }: { full: Full }) {
+export default function EtiquetesPolletsPDF({ labels }: { labels: LabelPollet[] }) {
   return (
     <Document>
-      {full.expedicions.map((expedicio) => {
-        const destinacio = expedicio.destinacions.nau
-          ? `${expedicio.destinacions.nom_granja} ${expedicio.destinacions.nau}`
-          : expedicio.destinacions.nom_granja
-        const lotsText = expedicio.expedicio_lots
-          .map(lot => {
-            const granja = lot.lots_reproductores.granges_reproductores.nom_informal || lot.lots_reproductores.granges_reproductores.granja
-            const estirp = lot.lots_reproductores.estirp ? ` ${lot.lots_reproductores.estirp}` : ''
-            return `${lot.pollets.toLocaleString()} de ${granja}${estirp}`
-          })
-          .join(' + ')
-        return (
-          <Page key={expedicio.id} size={[90 * MM, 70 * MM]} style={s.page}>
-            <View style={s.header}>
-              <Text style={s.title}>#{full.num_carrega}</Text>
-              <Text style={s.title}>{expedicio.ordre ?? expedicio.id}</Text>
-            </View>
-            <View style={s.section}>
-              <Text style={s.label}>Client</Text>
-              <Text style={s.value}>{expedicio.comandes.clients.nom}</Text>
-            </View>
-            <View style={s.section}>
-              <Text style={s.label}>Destinació</Text>
-              <Text style={s.value}>{destinacio}</Text>
-            </View>
-            <View style={s.section}>
-              <Text style={s.label}>Pollets previstos</Text>
-              <Text style={s.value}>{expedicio.pollets_comanda?.toLocaleString() ?? '—'}</Text>
-            </View>
-            <View style={s.section}>
-              <Text style={s.label}>Lots</Text>
-              <Text style={s.value}>{lotsText || 'Sense lots assignats'}</Text>
-            </View>
-            <View style={s.row}>
-              <Text style={s.smallText}>Càrrega: {formatDate(full.carrega)}</Text>
-              <Text style={s.smallText}>{formatDate(full.carrega)}</Text>
-            </View>
-          </Page>
-        )
-      })}
+      {labels.map((label, i) => (
+        <LabelPage key={i} label={label} />
+      ))}
     </Document>
   )
 }
