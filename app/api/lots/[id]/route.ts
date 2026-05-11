@@ -47,7 +47,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     .select('carro_id, full_carrega_id')
     .in('carro_id', carroIds)
 
-  const fullIds = [...new Set((assignacions || []).map(a => a.full_carrega_id).filter(Boolean))]
+ const fullIdsSet = new Set((assignacions || []).map(a => a.full_carrega_id).filter(Boolean))
+const fullIds = Array.from(fullIdsSet)
 
   // 5. Fulls de càrrega
   const { data: fulls } = fullIds.length > 0
