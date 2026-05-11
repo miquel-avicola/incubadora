@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface Granja {
   id: number
@@ -28,16 +29,16 @@ export default function Lots() {
   const [loading, setLoading] = useState(false)
   const [resultat, setResultat] = useState<{ ok: boolean; missatge: string } | null>(null)
 
-  // Formulari nou lot
   const [granjaId, setGranjaId] = useState('')
   const [dataNaixement, setDataNaixement] = useState('')
   const [estirp, setEstirp] = useState('')
 
-  // Formulari nova granja
   const [nomGranja, setNomGranja] = useState('')
   const [nomInformal, setNomInformal] = useState('')
   const [marcaOficial, setMarcaOficial] = useState('')
   const [codiRega, setCodiRega] = useState('')
+
+  const router = useRouter()
 
   useEffect(() => {
     fetch('/api/lots').then(r => r.json()).then(setLots)
@@ -135,32 +136,13 @@ export default function Lots() {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={() => { setMostrarFormGranja(!mostrarFormGranja); setMostrarForm(false) }}
-              style={{
-                padding: '0.5rem 0.75rem',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                color: 'var(--text-dim)',
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                fontFamily: 'IBM Plex Sans',
-              }}
+              style={{ padding: '0.5rem 0.75rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}
             >
               + Granja
             </button>
             <button
               onClick={() => { setMostrarForm(!mostrarForm); setMostrarFormGranja(false) }}
-              style={{
-                padding: '0.5rem 0.75rem',
-                background: 'var(--accent)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#0f1117',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'IBM Plex Sans',
-              }}
+              style={{ padding: '0.5rem 0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}
             >
               + Lot
             </button>
@@ -170,14 +152,11 @@ export default function Lots() {
         {/* Resultat */}
         {resultat && (
           <div style={{
-            padding: '0.875rem 1rem',
-            borderRadius: '8px',
+            padding: '0.875rem 1rem', borderRadius: '8px', marginBottom: '1rem',
             background: resultat.ok ? 'rgba(62,207,142,0.1)' : 'rgba(240,68,68,0.1)',
             border: `1px solid ${resultat.ok ? 'var(--success)' : 'var(--danger)'}`,
             color: resultat.ok ? 'var(--success)' : 'var(--danger)',
-            fontFamily: 'IBM Plex Mono',
-            fontSize: '0.85rem',
-            marginBottom: '1rem',
+            fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
           }}>
             {resultat.missatge}
           </div>
@@ -185,16 +164,7 @@ export default function Lots() {
 
         {/* Formulari nova granja */}
         {mostrarFormGranja && (
-          <form onSubmit={crearGranja} style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            marginBottom: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-          }}>
+          <form onSubmit={crearGranja} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <p style={{ fontWeight: 700, margin: 0, fontSize: '0.95rem' }}>Nova granja reproductora</p>
             <div>
               <label style={labelStyle}>Nom oficial *</label>
@@ -215,28 +185,15 @@ export default function Lots() {
               <input value={codiRega} onChange={e => setCodiRega(e.target.value)} style={inputStyle} placeholder="Ex: ES0001234" />
             </div>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setMostrarFormGranja(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
-                Cancel·lar
-              </button>
-              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
-                Crear granja
-              </button>
+              <button type="button" onClick={() => setMostrarFormGranja(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Cancel·lar</button>
+              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Crear granja</button>
             </div>
           </form>
         )}
 
         {/* Formulari nou lot */}
         {mostrarForm && (
-          <form onSubmit={crearLot} style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            marginBottom: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-          }}>
+          <form onSubmit={crearLot} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <p style={{ fontWeight: 700, margin: 0, fontSize: '0.95rem' }}>Nou lot de reproductores</p>
             <div>
               <label style={labelStyle}>Granja reproductora *</label>
@@ -265,12 +222,8 @@ export default function Lots() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setMostrarForm(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
-                Cancel·lar
-              </button>
-              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
-                Crear lot
-              </button>
+              <button type="button" onClick={() => setMostrarForm(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Cancel·lar</button>
+              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Crear lot</button>
             </div>
           </form>
         )}
@@ -283,15 +236,23 @@ export default function Lots() {
             </p>
           )}
           {lots.map(lot => (
-            <div key={lot.id} style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: '10px',
-              padding: '1rem 1.25rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
+            <div
+              key={lot.id}
+              onClick={() => router.push(`/lots/${lot.id}`)}
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '1rem 1.25rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+            >
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
                   {lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja}
@@ -301,8 +262,9 @@ export default function Lots() {
                   nascut {lot.data_naixement}
                 </div>
               </div>
-              <div style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
-                #{lot.id}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>#{lot.id}</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>→</span>
               </div>
             </div>
           ))}
