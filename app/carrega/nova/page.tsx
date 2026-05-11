@@ -18,6 +18,16 @@ interface Comanda {
   sexat: boolean
 }
 
+interface ComandaPendent {
+  id: number
+  tipus: string
+  quantitat_pollets: number | null
+  quantitat_ous_maquila: number | null
+  sexat: boolean
+  data_prevista_naixement: string | null
+  clients: { id: number; nom: string }
+}
+
 export default function NovaCarrega() {
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
@@ -27,16 +37,18 @@ export default function NovaCarrega() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Form nova comanda
+  // Comandes pendents suggerides
+  const [comandesPendents, setComandesPendents] = useState<ComandaPendent[]>([])
+  const [seleccionades, setSeleccionades] = useState<Set<number>>(new Set())
+
+  // Form nova comanda manual
   const [clientId, setClientId] = useState('')
   const [tipus, setTipus] = useState<'Pollets' | 'Maquila'>('Pollets')
   const [quantitat, setQuantitat] = useState('')
   const [sexat, setSexat] = useState(false)
 
   useEffect(() => {
-    fetch('/api/clients-list')
-      .then(r => r.json())
-      .then(setClients)
+    fetch('/api/clients-list').then(r => r.json()).then(setClients)
   }, [])
 
   useEffect(() => {
@@ -45,23 +57,41 @@ export default function NovaCarrega() {
     }
   }, [dataCarrega])
 
+  // Quan canvia la data de càrrega, buscar comandes pendents properes al naixement
+  useEffect(() => {
+    if (!dataCarrega) { setComandesPendents([]); return }
+    const naixement = calcularNaixement(dataCarrega)
+    fetch(`/api/comandes?pendents=true&data=${naixement}`)
+      .then(r => r.json())
+      .then(data => {
+        const arr = Array.isArray(data) ? data : []
+        setComandesPendents(arr)
+        // Seleccionar-les totes per defecte
+        setSeleccionades(new Set(arr.map((c: ComandaPendent) => c.id)))
+      })
+  }, [dataCarrega])
+
   const naixement = dataCarrega ? calcularNaixement(dataCarrega) : null
+
+  function toggleSeleccio(id: number) {
+    setSeleccionades(prev => {
+      const nou = new Set(prev)
+      if (nou.has(id)) nou.delete(id)
+      else nou.add(id)
+      return nou
+    })
+  }
 
   function afegirComanda() {
     if (!clientId || !quantitat) return
     const client = clients.find(c => c.id === parseInt(clientId))
     if (!client) return
-
     setComandes(prev => [...prev, {
       client_id: parseInt(clientId),
       client_nom: client.nom,
-      tipus,
-      quantitat: parseInt(quantitat),
-      sexat,
+      tipus, quantitat: parseInt(quantitat), sexat,
     }])
-    setClientId('')
-    setQuantitat('')
-    setSexat(false)
+    setClientId(''); setQuantitat(''); setSexat(false)
   }
 
   function eliminarComanda(idx: number) {
@@ -83,7 +113,16 @@ export default function NovaCarrega() {
       const full = await resF.json()
       if (!resF.ok) { setError(full.error); setLoading(false); return }
 
-      // Crear comandes
+      // Vincular comandes pendents seleccionades
+      for (const id of seleccionades) {
+        await fetch(`/api/comandes/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_carrega_id: full.id }),
+        })
+      }
+
+      // Crear comandes noves manuals
       for (const c of comandes) {
         await fetch('/api/comandes', {
           method: 'POST',
@@ -107,25 +146,14 @@ export default function NovaCarrega() {
   }
 
   const inputStyle = {
-    width: '100%',
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: 'var(--text)',
-    fontSize: '0.95rem',
-    outline: 'none',
-    fontFamily: 'IBM Plex Sans',
+    width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
+    borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text)',
+    fontSize: '0.95rem', outline: 'none', fontFamily: 'IBM Plex Sans',
   }
-
   const labelStyle = {
-    display: 'block',
-    fontSize: '0.7rem',
-    fontFamily: 'IBM Plex Mono',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase' as const,
-    color: 'var(--text-dim)',
-    marginBottom: '0.4rem',
+    display: 'block' as const, fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
+    letterSpacing: '0.1em', textTransform: 'uppercase' as const,
+    color: 'var(--text-dim)', marginBottom: '0.4rem',
   }
 
   const clientsDisponibles = clients.filter(c => !comandes.find(co => co.client_id === c.id))
@@ -165,11 +193,62 @@ export default function NovaCarrega() {
             )}
           </div>
 
-          {/* Comandes */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
-            <p style={{ fontWeight: 700, margin: '0 0 1rem 0', fontSize: '0.95rem' }}>Comandes</p>
+          {/* Comandes pendents suggerides */}
+          {comandesPendents.length > 0 && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '1.25rem' }}>
+              <p style={{ fontWeight: 700, margin: '0 0 0.25rem 0', fontSize: '0.95rem' }}>
+                Comandes pendents suggerides
+              </p>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', margin: '0 0 1rem 0' }}>
+                Naixement previst: {naixement ? formatData(naixement) : '—'} (±14 dies)
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {comandesPendents.map(c => {
+                  const sel = seleccionades.has(c.id)
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => toggleSeleccio(c.id)}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '0.75rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                        border: '1px solid', borderColor: sel ? 'var(--success)' : 'var(--border)',
+                        background: sel ? 'rgba(34,197,94,0.06)' : 'var(--bg)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '1rem', color: sel ? 'var(--success)' : 'var(--border)' }}>
+                          {sel ? '✓' : '○'}
+                        </span>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.clients.nom}</span>
+                          <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', marginLeft: '0.5rem' }}>
+                            {c.tipus === 'Pollets'
+                              ? `${(c.quantitat_pollets || 0).toLocaleString()} pollets`
+                              : `${(c.quantitat_ous_maquila || 0).toLocaleString()} ous maq.`}
+                            {c.sexat && ' · sexat'}
+                          </span>
+                        </div>
+                      </div>
+                      {c.data_prevista_naixement && (
+                        <span style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
+                          {formatData(c.data_prevista_naixement)}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', marginTop: '0.75rem', marginBottom: 0 }}>
+                {seleccionades.size} de {comandesPendents.length} seleccionades
+              </p>
+            </div>
+          )}
 
-            {/* Llista comandes afegides */}
+          {/* Comandes noves manuals */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
+            <p style={{ fontWeight: 700, margin: '0 0 1rem 0', fontSize: '0.95rem' }}>Afegir comandes noves</p>
+
             {comandes.length > 0 && (
               <div style={{ marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {comandes.map((c, i) => (
@@ -187,7 +266,6 @@ export default function NovaCarrega() {
               </div>
             )}
 
-            {/* Formulari nova comanda */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div>
                 <label style={labelStyle}>Client</label>
@@ -204,8 +282,7 @@ export default function NovaCarrega() {
                       <button key={t} type="button" onClick={() => setTipus(t)} style={{
                         flex: 1, padding: '0.7rem', border: '1px solid',
                         borderColor: tipus === t ? 'var(--accent)' : 'var(--border)',
-                        borderRadius: '8px',
-                        background: tipus === t ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
+                        borderRadius: '8px', background: tipus === t ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
                         color: tipus === t ? 'var(--accent)' : 'var(--text-dim)',
                         fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans',
                       }}>{t}</button>
@@ -228,15 +305,11 @@ export default function NovaCarrega() {
                 onClick={afegirComanda}
                 disabled={!clientId || !quantitat}
                 style={{
-                  padding: '0.75rem',
+                  padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600,
+                  fontFamily: 'IBM Plex Sans', cursor: (!clientId || !quantitat) ? 'not-allowed' : 'pointer',
                   background: (!clientId || !quantitat) ? 'var(--border)' : 'var(--surface)',
                   border: `1px solid ${(!clientId || !quantitat) ? 'var(--border)' : 'var(--accent)'}`,
-                  borderRadius: '8px',
                   color: (!clientId || !quantitat) ? 'var(--text-dim)' : 'var(--accent)',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: (!clientId || !quantitat) ? 'not-allowed' : 'pointer',
-                  fontFamily: 'IBM Plex Sans',
                 }}
               >
                 + Afegir comanda
@@ -254,18 +327,15 @@ export default function NovaCarrega() {
             onClick={handleSubmit}
             disabled={loading || !dataCarrega}
             style={{
-              width: '100%', padding: '1rem',
+              width: '100%', padding: '1rem', border: 'none', borderRadius: '10px',
+              fontSize: '1rem', fontWeight: 700, fontFamily: 'IBM Plex Sans',
+              cursor: (loading || !dataCarrega) ? 'not-allowed' : 'pointer',
               background: (loading || !dataCarrega) ? 'var(--border)' : 'var(--accent)',
               color: (loading || !dataCarrega) ? 'var(--text-dim)' : '#0f1117',
-              border: 'none', borderRadius: '10px',
-              fontSize: '1rem', fontWeight: 700,
-              cursor: (loading || !dataCarrega) ? 'not-allowed' : 'pointer',
-              fontFamily: 'IBM Plex Sans',
             }}
           >
-            {loading ? 'Creant càrrega...' : 'Crear càrrega'}
+            {loading ? 'Creant càrrega...' : `Crear càrrega${seleccionades.size > 0 ? ` (${seleccionades.size + comandes.length} comandes)` : comandes.length > 0 ? ` (${comandes.length} comandes)` : ''}`}
           </button>
-
         </div>
       </div>
     </main>
