@@ -131,7 +131,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (c.naixement !== null) sumNaixement += c.naixement
   }
 
-  const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
+  const grangeData = Array.isArray(lot.granges_reproductores) ? lot.granges_reproductores[0] : lot.granges_reproductores
+  const granja = grangeData.nom_informal || grangeData.granja
   const nomLot = `${granja}${lot.estirp ? ' ' + lot.estirp : ''}`
 
   return NextResponse.json({
