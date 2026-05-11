@@ -18,7 +18,7 @@ export async function GET() {
         clients (nom)
       )
     `)
-    .order('num_carrega', { ascending: false })
+    .order('carrega', { ascending: false })
     .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
