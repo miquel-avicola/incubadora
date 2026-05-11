@@ -114,7 +114,7 @@ export default function NovaCarrega() {
       if (!resF.ok) { setError(full.error); setLoading(false); return }
 
       // Vincular comandes pendents seleccionades
-      for (const id of seleccionades) {
+      for (const id of Array.from(seleccionades)) {
         await fetch(`/api/comandes/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
