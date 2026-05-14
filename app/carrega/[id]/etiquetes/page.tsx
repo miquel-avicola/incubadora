@@ -79,7 +79,7 @@ export default function Etiquetes() {
             Etiquetes càrrega #{full.num_carrega}
           </div>
           <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono', marginBottom: '1.5rem' }}>
-            {full.assignacions.length} etiquetes · 90 × 70 mm
+            {full.assignacions.length} etiquetes · 90 × 90 mm
           </div>
           <button
             onClick={descarregarEtiquetes}
