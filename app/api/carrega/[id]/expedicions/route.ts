@@ -98,6 +98,21 @@ export async function POST(request: Request, { params }: { params: { id: string 
 export async function DELETE(request: Request) {
   const { expedicio_id } = await request.json()
 
+  // Eliminar primer els registres dependents per evitar errors de clau forana
+  const { error: errorLots } = await supabase
+    .from('expedicio_lots')
+    .delete()
+    .eq('expedicio_id', expedicio_id)
+
+  if (errorLots) return NextResponse.json({ error: errorLots.message }, { status: 500 })
+
+  const { error: errorVacunes } = await supabase
+    .from('expedicio_vacunes')
+    .delete()
+    .eq('expedicio_id', expedicio_id)
+
+  if (errorVacunes) return NextResponse.json({ error: errorVacunes.message }, { status: 500 })
+
   const { error } = await supabase
     .from('expedicions')
     .delete()
