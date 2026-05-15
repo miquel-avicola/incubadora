@@ -51,10 +51,29 @@ interface Full {
   assignacions: Assignacio[]
 }
 
+interface Previsio {
+  pollets_previstos: number
+  pct_naixement_previst: number
+  eclosio_esperada: number
+  font: string
+  n_registres: number
+}
+
+const FONT_ETIQUETES: Record<string, string> = {
+  supabase_setmana_exacta: 'dades recents',
+  excel_setmana_exacta: 'històric',
+  supabase_finestra_mobil: 'dades recents (finestra)',
+  excel_finestra_mobil: 'històric (finestra)',
+  mitjana_estirp_tipus: 'mitjana estirp',
+  cobb_singlestage_estimat: 'estimació indirecta',
+  fallback_constant: 'fallback genèric',
+}
+
 export default function Transferencia() {
   const params = useParams()
   const [full, setFull] = useState<Full | null>(null)
   const [naixedores, setNaixedores] = useState<Naixedora[]>([])
+  const [previsions, setPrevisions] = useState<Record<number, Previsio>>({})
   const [loading, setLoading] = useState(true)
   const [carroObert, setCarroObert] = useState<number | null>(null)
   const [ousExplosius, setOusExplosius] = useState('')
@@ -62,6 +81,28 @@ export default function Transferencia() {
   const [naixedoraId, setNaixedoraId] = useState('')
   const [guardant, setGuardant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  const carregarPrevisions = useCallback(async (fullData: Full) => {
+    const transferenciaIds: number[] = []
+    for (const a of fullData.assignacions) {
+      for (const t of a.transferencies) transferenciaIds.push(t.id)
+    }
+    if (transferenciaIds.length === 0) return
+
+    const resultats = await Promise.all(
+      transferenciaIds.map(id =>
+        fetch(`/api/previsio-post-transferencia?transferencia_id=${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
+    )
+    const map: Record<number, Previsio> = {}
+    transferenciaIds.forEach((id, i) => {
+      const r = resultats[i]
+      if (r && !r.error) map[id] = r
+    })
+    setPrevisions(map)
+  }, [])
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
@@ -72,7 +113,8 @@ export default function Transferencia() {
     setFull(fullRes)
     setNaixedores(naixedoresRes)
     setLoading(false)
-  }, [params.id])
+    carregarPrevisions(fullRes)
+  }, [params.id, carregarPrevisions])
 
   useEffect(() => { carregarDades() }, [carregarDades])
 
@@ -183,6 +225,29 @@ export default function Transferencia() {
           </div>
         </div>
 
+        {/* Resum de previsió global */}
+        {(() => {
+          const previsionsArr = Object.values(previsions)
+          if (previsionsArr.length === 0) return null
+          const polletsTotals = previsionsArr.reduce((s, p) => s + p.pollets_previstos, 0)
+          const ousTotals = assignacionsOrdenades.reduce((s, a) => s + (a.transferencies[0] ? a.carros_estoc.quantitat_ous : 0), 0)
+          const pctMitja = ousTotals > 0 ? (polletsTotals / ousTotals) * 100 : 0
+          return (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                Previsió actualitzada
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{polletsTotals.toLocaleString()} pollets</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono' }}>{pctMitja.toFixed(1)}% naixement</span>
+              </div>
+              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
+                Basat en {previsionsArr.length} de {total} carros transferits
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Llista de carros */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {assignacionsOrdenades.map(a => {
@@ -220,6 +285,27 @@ export default function Transferencia() {
                           Naix.{a.transferencies[0]!.naixedores.numero} · {a.transferencies[0]!.ous_fertils_vacunats.toLocaleString()} fèrtils
                           {a.transferencies[0]!.ous_explosius > 0 && ` · ${a.transferencies[0]!.ous_explosius} exp.`}
                         </div>
+                        {(() => {
+                          const p = previsions[a.transferencies[0]!.id]
+                          if (!p) return null
+                          const previsioInicial = a.previsio_naixement
+                          const diff = previsioInicial != null
+                            ? (p.pct_naixement_previst - previsioInicial) * 100
+                            : null
+                          return (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
+                              Previsió: {p.pollets_previstos.toLocaleString()} pollets ({(p.pct_naixement_previst * 100).toFixed(1)}%)
+                              {previsioInicial != null && diff != null && (
+                                <span style={{ color: diff >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                  {' '}({diff >= 0 ? '+' : ''}{diff.toFixed(1)} vs inicial)
+                                </span>
+                              )}
+                              <span style={{ color: 'var(--text-dim)', opacity: 0.7 }}>
+                                {' · '}{FONT_ETIQUETES[p.font] ?? p.font}
+                              </span>
+                            </div>
+                          )
+                        })()}
                         <button onClick={e => { e.stopPropagation(); eliminarTransferencia(a.transferencies[0]!, a.carros_estoc.id) }}
                           style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono' }}>
                           desfer
