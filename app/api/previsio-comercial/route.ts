@@ -134,7 +134,7 @@ export async function GET(request: Request) {
     const dia = new Date(d + 'T00:00:00').getDay()
     if (dia !== 1 && dia !== 4) datesExtra.add(d)
   })
-  const totesDates = Array.from(new Set([...datesGenerades, ...datesExtra])).sort()
+  const totesDates = Array.from(new Set(datesGenerades.concat(Array.from(datesExtra)))).sort()
 
   // 6. Determinar columnes: tots els clients que tenen alguna activitat (regla o comanda)
   const columnesMap = new Map<string, Columna>()
