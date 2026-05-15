@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { formatData, calcularNaixement } from '@/lib/dates'
@@ -152,23 +152,39 @@ export default function Estadistiques() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Inc.', 'Model', 'Carros', 'Ous', 'Fèrtils', 'Pollets', 'Fertilitat', 'Eclosió'].map(h => (
+                {['Inc.', 'Model', 'Carros', 'Ous', 'Fèrtils', 'Pollets', 'Fertilitat', 'Eclosió', 'Naix.'].map(h => (
                   <th key={h} style={{ ...thStyle, textAlign: h === 'Model' ? 'left' : 'center' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {stats.per_incubadora.map((inc, i) => (
-                <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                  <td style={tdStyle}>{inc.numero}</td>
-                  <td style={{ ...tdStyle, textAlign: 'left' }}>{inc.model}</td>
-                  <td style={tdStyle}>{inc.carros}</td>
-                  <td style={tdStyle}>{inc.ous.toLocaleString()}</td>
-                  <td style={tdStyle}>{inc.fertils.toLocaleString()}</td>
-                  <td style={tdStyle}>{inc.pollets.toLocaleString()}</td>
-                  <td style={{ ...tdStyle, color: semafar(inc.fertilitat, 'f') }}>{fmt(inc.fertilitat)}</td>
-                  <td style={{ ...tdStyle, color: semafar(inc.taxa_eclosio, 'e') }}>{fmt(inc.taxa_eclosio)}</td>
-                </tr>
+                <Fragment key={`inc-${inc.numero}`}>
+                  <tr style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent', fontWeight: 700 }}>
+                    <td style={tdStyle}>{inc.numero}</td>
+                    <td style={{ ...tdStyle, textAlign: 'left' }}>{inc.model}</td>
+                    <td style={tdStyle}>{inc.carros}</td>
+                    <td style={tdStyle}>{inc.ous.toLocaleString()}</td>
+                    <td style={tdStyle}>{inc.fertils.toLocaleString()}</td>
+                    <td style={tdStyle}>{inc.pollets.toLocaleString()}</td>
+                    <td style={{ ...tdStyle, color: semafar(inc.fertilitat, 'f') }}>{fmt(inc.fertilitat)}</td>
+                    <td style={{ ...tdStyle, color: semafar(inc.taxa_eclosio, 'e') }}>{fmt(inc.taxa_eclosio)}</td>
+                    <td style={{ ...tdStyle, color: semafar(inc.naixement, 'e') }}>{fmt(inc.naixement)}</td>
+                  </tr>
+                  {inc.lots && inc.lots.map((l) => (
+                    <tr key={`inc-${inc.numero}-lot-${l.lot_id}`} style={{ background: 'rgba(255,255,255,0.04)', fontSize: '0.78rem' }}>
+                      <td style={{ ...tdStyle, color: 'var(--text-dim)' }}></td>
+                      <td style={{ ...tdStyle, textAlign: 'left', paddingLeft: '1.5rem', color: 'var(--text-dim)' }}>└ {l.nom}</td>
+                      <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.carros}</td>
+                      <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.ous.toLocaleString()}</td>
+                      <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.fertils.toLocaleString()}</td>
+                      <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.pollets.toLocaleString()}</td>
+                      <td style={{ ...tdStyle, color: semafar(l.fertilitat, 'f') }}>{fmt(l.fertilitat)}</td>
+                      <td style={{ ...tdStyle, color: semafar(l.taxa_eclosio, 'e') }}>{fmt(l.taxa_eclosio)}</td>
+                      <td style={{ ...tdStyle, color: semafar(l.naixement, 'e') }}>{fmt(l.naixement)}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -182,20 +198,37 @@ export default function Estadistiques() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {['Naix.', 'Ous fèrtils', 'Pollets', 'Taxa eclosió', 'Pèrdua'].map(h => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    {['N.', 'Lot', 'Ous', 'Fèrtils', 'Pollets', 'Eclosió', 'Naix.', 'Pèrdua'].map(h => (
+                      <th key={h} style={{ ...thStyle, textAlign: h === 'Lot' ? 'left' : 'center' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {stats.per_naixedora.map((n, i) => (
-                    <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                      <td style={tdStyle}>N{n.numero}</td>
-                      <td style={tdStyle}>{n.fertils.toLocaleString()}</td>
-                      <td style={tdStyle}>{n.pollets.toLocaleString()}</td>
-                      <td style={{ ...tdStyle, color: semafar(n.taxa_eclosio, 'e') }}>{fmt(n.taxa_eclosio)}</td>
-                      <td style={{ ...tdStyle, color: semafar(n.perdua, 'p') }}>{fmt(n.perdua)}</td>
-                    </tr>
+                    <Fragment key={`nax-${n.numero}`}>
+                      <tr style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent', fontWeight: 700 }}>
+                        <td style={tdStyle}>N{n.numero}</td>
+                        <td style={{ ...tdStyle, textAlign: 'left', color: 'var(--text-dim)' }}>—</td>
+                        <td style={tdStyle}>{n.ous.toLocaleString()}</td>
+                        <td style={tdStyle}>{n.fertils.toLocaleString()}</td>
+                        <td style={tdStyle}>{n.pollets.toLocaleString()}</td>
+                        <td style={{ ...tdStyle, color: semafar(n.taxa_eclosio, 'e') }}>{fmt(n.taxa_eclosio)}</td>
+                        <td style={{ ...tdStyle, color: semafar(n.naixement, 'e') }}>{fmt(n.naixement)}</td>
+                        <td style={{ ...tdStyle, color: semafar(n.perdua, 'p') }}>{fmt(n.perdua)}</td>
+                      </tr>
+                      {n.lots && n.lots.map((l) => (
+                        <tr key={`nax-${n.numero}-lot-${l.lot_id}`} style={{ background: 'rgba(255,255,255,0.04)', fontSize: '0.78rem' }}>
+                          <td style={tdStyle}></td>
+                          <td style={{ ...tdStyle, textAlign: 'left', paddingLeft: '1.5rem', color: 'var(--text-dim)' }}>└ {l.nom}</td>
+                          <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.ous.toLocaleString()}</td>
+                          <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.fertils.toLocaleString()}</td>
+                          <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{l.pollets.toLocaleString()}</td>
+                          <td style={{ ...tdStyle, color: semafar(l.taxa_eclosio, 'e') }}>{fmt(l.taxa_eclosio)}</td>
+                          <td style={{ ...tdStyle, color: semafar(l.naixement, 'e') }}>{fmt(l.naixement)}</td>
+                          <td style={{ ...tdStyle, color: semafar(l.perdua, 'p') }}>{fmt(l.perdua)}</td>
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
