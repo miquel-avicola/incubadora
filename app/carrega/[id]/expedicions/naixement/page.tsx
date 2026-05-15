@@ -493,27 +493,53 @@ export default function ExpedicionsNaixement() {
                             De quin lot
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {lotsDisponibles.map(([lotId, stats]) => (
-                              <div key={lotId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text)' }}>{stats.nom}</div>
-                                <input
-                                  type="number"
-                                  value={polletsPerLot[parseInt(lotId)] || ''}
-                                  onChange={ev => setPolletsPerLot(prev => ({ ...prev, [parseInt(lotId)]: ev.target.value }))}
-                                  inputMode="numeric"
-                                  placeholder="0"
-                                  style={{ ...inputStyle, width: '7rem', textAlign: 'right', fontSize: '0.9rem' }}
-                                />
-                              </div>
-                            ))}
+                            {lotsDisponibles.map(([lotId, stats]) => {
+                              const lotIdNum = parseInt(lotId)
+                              const valorActual = parseInt(polletsPerLot[lotIdNum] || '0') || 0
+                              // Pollets que aquesta expedició ja tenia assignats d'aquest lot (estat guardat)
+                              const jaTenia = e.expedicio_lots.find(el => el.lots_reproductores.id === lotIdNum)?.pollets || 0
+                              // Disponibles dinàmics: nascuts − assignats_a_altres_expedicions − valor_camp_actual
+                              const assignatsAltres = stats.assignats - jaTenia
+                              const disponiblesDinamic = stats.nascuts - assignatsAltres - valorActual
+                              const colorDisp = disponiblesDinamic < 0 ? 'var(--danger)' : disponiblesDinamic === 0 ? 'var(--text-dim)' : 'var(--accent)'
+                              return (
+                                <div key={lotId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontSize: '0.82rem', color: 'var(--text)' }}>{stats.nom}</span>
+                                    <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: colorDisp }}>
+                                      {disponiblesDinamic.toLocaleString()} disp.
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    value={polletsPerLot[lotIdNum] || ''}
+                                    onChange={ev => setPolletsPerLot(prev => ({ ...prev, [lotIdNum]: ev.target.value }))}
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    style={{ ...inputStyle, width: '7rem', textAlign: 'right', fontSize: '0.9rem' }}
+                                  />
+                                </div>
+                              )
+                            })}
                           </div>
                           {(() => {
                             const sumaLots = Object.values(polletsPerLot).reduce((s, v) => s + (parseInt(v) || 0), 0)
                             const total = parseInt(polletsServits) || 0
-                            if (total === 0) return null
+                            if (total === 0 && sumaLots === 0) return null
+                            const diff = total - sumaLots
+                            let label = ''
+                            let color = 'var(--text-dim)'
+                            if (diff > 0) { label = `Falten ${diff.toLocaleString()}`; color = 'var(--danger)' }
+                            else if (diff < 0) { label = `Sobren ${(-diff).toLocaleString()}`; color = 'var(--danger)' }
+                            else { label = '✓ Complet'; color = 'var(--success)' }
                             return (
-                              <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: sumaLots === total ? 'var(--success)' : 'var(--danger)', textAlign: 'right' }}>
-                                {sumaLots.toLocaleString()} / {total.toLocaleString()} assignats per lot
+                              <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'baseline', gap: '0.6rem' }}>
+                                <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
+                                  {sumaLots.toLocaleString()} / {total.toLocaleString()}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', fontFamily: 'IBM Plex Sans', fontWeight: 700, color }}>
+                                  {label}
+                                </span>
                               </div>
                             )
                           })()}
