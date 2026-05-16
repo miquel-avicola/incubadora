@@ -11,6 +11,7 @@ interface Cell {
 
 interface Fila {
   data: string
+  data_carrega: string
   dia_setmana: string
   cells: Record<string, Cell>
   total_pollets: number
@@ -249,7 +250,8 @@ export default function PrevisioComercial() {
             <thead>
               <tr>
                 <th style={{ ...thStyle, textAlign: 'left', minWidth: '5rem' }}>Dia</th>
-                <th style={thStyle}>Data</th>
+                <th style={thStyle}>Càrrega</th>
+                <th style={thStyle}>Naixement</th>
                 {colsPollets.map(c => (
                   <th key={c.key} style={thStyle} title={c.nom_client}>{c.nom_client}</th>
                 ))}
@@ -267,6 +269,7 @@ export default function PrevisioComercial() {
                 return (
                   <tr key={fila.data} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.015)' : 'transparent', borderTop: esDilluns && i > 0 ? '2px solid var(--border)' : undefined }}>
                     <td style={{ ...tdStyle, textAlign: 'left', color: esDilluns ? 'var(--accent)' : 'var(--text-dim)', fontWeight: esDilluns ? 700 : 400 }}>{fila.dia_setmana}</td>
+                    <td style={{ ...tdStyle, color: 'var(--text-dim)' }}>{fmtData(fila.data_carrega)}</td>
                     <td style={tdStyle}>{fmtData(fila.data)}</td>
                     {colsPollets.map(c => renderCell(fila, c))}
                     {colsMaquila.map(c => renderCell(fila, c))}
@@ -280,7 +283,7 @@ export default function PrevisioComercial() {
               })}
               {data.files.length === 0 && (
                 <tr>
-                  <td colSpan={2 + colsPollets.length + colsMaquila.length + 2 + (colsMaquila.length > 0 ? 1 : 0)} style={{ ...tdStyle, padding: '1rem', color: 'var(--text-dim)' }}>
+                  <td colSpan={3 + colsPollets.length + colsMaquila.length + 2 + (colsMaquila.length > 0 ? 1 : 0)} style={{ ...tdStyle, padding: '1rem', color: 'var(--text-dim)' }}>
                     Cap dia dins del rang seleccionat. Configura regles recurrents o crea comandes per veure-hi alguna cosa.
                   </td>
                 </tr>

@@ -22,7 +22,8 @@ interface Cell {
 }
 
 interface Fila {
-  data: string
+  data: string             // data de naixement
+  data_carrega: string     // data en que els ous van a la incubadora (naixement - 21 dies)
   dia_setmana: string
   cells: Record<string, Cell>
   total_pollets: number
@@ -35,6 +36,7 @@ interface Columna {
   client_id: number
   nom_client: string
   tipus: Tipus
+  ordre_calendari?: number | null
 }
 
 function fmtDate(d: Date): string {
@@ -78,7 +80,7 @@ export async function GET(request: Request) {
     .select(`
       id, client_id, tipus, quantitat_pollets, quantitat_ous_maquila,
       data_prevista_naixement, full_carrega_id,
-      clients ( nom )
+      clients ( nom, mostrar_calendari, ordre_calendari )
     `)
   if (errCo) return NextResponse.json({ error: errCo.message }, { status: 500 })
 
@@ -97,7 +99,7 @@ export async function GET(request: Request) {
   // 3. Regles recurrents actives
   const { data: regles, error: errReg } = await supabase
     .from('previsio_recurrent')
-    .select('client_id, dia_setmana, tipus, quantitat, clients ( nom )')
+    .select('client_id, dia_setmana, tipus, quantitat, clients ( nom, mostrar_calendari, ordre_calendari )')
     .eq('actiu', true)
   if (errReg) return NextResponse.json({ error: errReg.message }, { status: 500 })
 
@@ -136,29 +138,44 @@ export async function GET(request: Request) {
   })
   const totesDates = Array.from(new Set(datesGenerades.concat(Array.from(datesExtra)))).sort()
 
-  // 6. Determinar columnes: tots els clients que tenen alguna activitat (regla o comanda)
+  // 6. Determinar columnes: tots els clients amb mostrar_calendari = true que tenen alguna activitat
   const columnesMap = new Map<string, Columna>()
   ;(regles || []).forEach((r: any) => {
+    if (r.clients?.mostrar_calendari === false) return
     const key = `${r.client_id}_${r.tipus}`
     if (!columnesMap.has(key)) {
       columnesMap.set(key, {
-        key, client_id: r.client_id, nom_client: r.clients?.nom || `Client ${r.client_id}`, tipus: r.tipus,
+        key, client_id: r.client_id,
+        nom_client: r.clients?.nom || `Client ${r.client_id}`,
+        tipus: r.tipus,
+        ordre_calendari: r.clients?.ordre_calendari ?? null,
       })
     }
   })
   ;(comandes || []).forEach((co: any) => {
+    if (co.clients?.mostrar_calendari === false) return
     const d = dataEfectivaComanda(co)
     if (!d || d < iniciStr || d >= fiStr) return
     const key = `${co.client_id}_${co.tipus}`
     if (!columnesMap.has(key)) {
       columnesMap.set(key, {
-        key, client_id: co.client_id, nom_client: co.clients?.nom || `Client ${co.client_id}`, tipus: co.tipus,
+        key, client_id: co.client_id,
+        nom_client: co.clients?.nom || `Client ${co.client_id}`,
+        tipus: co.tipus,
+        ordre_calendari: co.clients?.ordre_calendari ?? null,
       })
     }
   })
 
-  // Ordenar columnes: Pollets primer (per nom), després Maquila (per nom)
+  // Ordenar columnes:
+  //  1. Clients sense ordre_calendari assignat (per tipus i nom)
+  //  2. Clients amb ordre_calendari (a la dreta, segons aquest valor)
   const columnes = Array.from(columnesMap.values()).sort((a, b) => {
+    const aFixat = a.ordre_calendari != null
+    const bFixat = b.ordre_calendari != null
+    if (aFixat !== bFixat) return aFixat ? 1 : -1
+    if (aFixat && bFixat) return (a.ordre_calendari! - b.ordre_calendari!)
+    // Cap té ordre fix: pollets primer, després maquila, alfabètic dins
     if (a.tipus !== b.tipus) return a.tipus === 'Pollets' ? -1 : 1
     return a.nom_client.localeCompare(b.nom_client)
   })
@@ -200,8 +217,13 @@ export async function GET(request: Request) {
     })
     const totalCarros = polletsPerCarro > 0 ? Math.round((totalPollets / polletsPerCarro) * 10) / 10 : 0
 
+    // Data de càrrega = naixement - 21 dies
+    const dCarrega = new Date(d)
+    dCarrega.setDate(dCarrega.getDate() - 21)
+
     return {
       data,
+      data_carrega: fmtDate(dCarrega),
       dia_setmana: diaSetmanaNom(diaNum),
       cells,
       total_pollets: totalPollets,
