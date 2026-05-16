@@ -17,9 +17,25 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { assignacio_vacuna_id } = await request.json()
+  const body = await request.json()
+  const { assignacio_vacuna_id, assignacio_ids } = body
+
+  // Mode bulk: esborrar totes les vacunes assignades a un conjunt de carros
+  if (Array.isArray(assignacio_ids)) {
+    if (assignacio_ids.length === 0) {
+      return NextResponse.json({ error: 'assignacio_ids buit' }, { status: 400 })
+    }
+    const { error, count } = await supabase
+      .from('assignacio_vacunes')
+      .delete({ count: 'exact' })
+      .in('assignacio_id', assignacio_ids)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, eliminades: count ?? 0 })
+  }
+
+  // Mode individual (retrocompatible): esborrar una assignacio_vacuna concreta
   if (!assignacio_vacuna_id) {
-    return NextResponse.json({ error: 'Falta assignacio_vacuna_id' }, { status: 400 })
+    return NextResponse.json({ error: 'Falta assignacio_vacuna_id o assignacio_ids' }, { status: 400 })
   }
   const { error } = await supabase
     .from('assignacio_vacunes')

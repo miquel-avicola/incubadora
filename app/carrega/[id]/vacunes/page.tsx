@@ -50,6 +50,7 @@ export default function PlaVacunal() {
   const [vacunaId2, setVacunaId2] = useState('')
 const [dosi2, setDosi2] = useState('1')
   const [assignant, setAssignant] = useState(false)
+  const [buidant, setBuidant] = useState(false)
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
@@ -111,6 +112,25 @@ const [dosi2, setDosi2] = useState('1')
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assignacio_vacuna_id }),
     })
+    carregarDades()
+  }
+
+  async function buidarPlaSeleccionats() {
+    if (seleccionats.length < 2) return
+    const totalVacunes = (full?.assignacions ?? [])
+      .filter(a => seleccionats.includes(a.id))
+      .reduce((s, a) => s + a.assignacio_vacunes.length, 0)
+    if (totalVacunes === 0) return
+    const missatge = `Esborrar ${totalVacunes} vacuna${totalVacunes !== 1 ? 's' : ''} de ${seleccionats.length} carros?\n\nAquesta acció no es pot desfer.`
+    if (!window.confirm(missatge)) return
+    setBuidant(true)
+    await fetch(`/api/carrega/${params.id}/vacunes`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignacio_ids: seleccionats }),
+    })
+    setSeleccionats([])
+    setBuidant(false)
     carregarDades()
   }
 
@@ -263,6 +283,34 @@ const [dosi2, setDosi2] = useState('1')
                 </button>
               </div>
             )}
+
+            {/* Buidar pla vacunal: només per selecció múltiple */}
+            {seleccionats.length >= 2 && (() => {
+              const totalVacunes = assignacionsOrdenades
+                .filter(a => seleccionats.includes(a.id))
+                .reduce((s, a) => s + a.assignacio_vacunes.length, 0)
+              if (totalVacunes === 0) return null
+              return (
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--danger)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    Eliminar pla vacunal
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: 0, lineHeight: 1.4 }}>
+                    Esborrarà <strong style={{ color: 'var(--text)' }}>{totalVacunes}</strong> vacuna{totalVacunes !== 1 ? 's' : ''} dels <strong style={{ color: 'var(--text)' }}>{seleccionats.length}</strong> carros seleccionats.
+                  </p>
+                  <button onClick={buidarPlaSeleccionats}
+                    disabled={buidant}
+                    style={{
+                      padding: '0.6rem 0.75rem', border: '1px solid var(--danger)', borderRadius: '8px',
+                      fontWeight: 700, fontFamily: 'IBM Plex Sans', fontSize: '0.85rem', cursor: 'pointer',
+                      background: buidant ? 'var(--border)' : 'transparent',
+                      color: buidant ? 'var(--text-dim)' : 'var(--danger)',
+                    }}>
+                    {buidant ? 'Esborrant...' : `Buidar pla de ${seleccionats.length} carros`}
+                  </button>
+                </div>
+              )
+            })()}
 
             {/* Resum vacunes del full */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
