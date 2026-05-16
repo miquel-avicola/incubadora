@@ -51,6 +51,11 @@ function inputTextColor(origen: 'real' | 'preliminar' | 'recurrent' | null) {
   return 'var(--text)'
 }
 
+interface ClientOpcio {
+  id: number
+  nom: string
+}
+
 export default function PrevisioComercial() {
   const [data, setData] = useState<Resposta | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,6 +70,16 @@ export default function PrevisioComercial() {
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [guardant, setGuardant] = useState<string | null>(null)
 
+  // Formulari "Nova comanda"
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [clients, setClients] = useState<ClientOpcio[]>([])
+  const [novaClientId, setNovaClientId] = useState('')
+  const [novaData, setNovaData] = useState('')
+  const [novaTipus, setNovaTipus] = useState<'Pollets' | 'Maquila'>('Pollets')
+  const [novaQuantitat, setNovaQuantitat] = useState('')
+  const [novaSexat, setNovaSexat] = useState(false)
+  const [creant, setCreant] = useState(false)
+
   const carregar = useCallback(async () => {
     setLoading(true)
     const res = await fetch(`/api/previsio-comercial?inici=${inici}&setmanes=${setmanes}`)
@@ -75,6 +90,45 @@ export default function PrevisioComercial() {
   }, [inici, setmanes])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // Carregar llista de clients per al formulari nova comanda
+  useEffect(() => {
+    fetch('/api/clients-list').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : []))
+  }, [])
+
+  async function crearNovaComanda() {
+    if (!novaClientId || !novaData || !novaQuantitat) {
+      alert('Cal omplir client, data i quantitat')
+      return
+    }
+    setCreant(true)
+    try {
+      const q = parseInt(novaQuantitat) || 0
+      const res = await fetch('/api/comandes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: parseInt(novaClientId),
+          tipus: novaTipus,
+          quantitat_pollets: novaTipus === 'Pollets' ? q : null,
+          quantitat_ous_maquila: novaTipus === 'Maquila' ? q : null,
+          sexat: novaSexat,
+          data_prevista_naixement: novaData,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        alert(`Error: ${err.error || 'desconegut'}`)
+        return
+      }
+      // Reset form i recarregar
+      setNovaClientId(''); setNovaData(''); setNovaQuantitat(''); setNovaSexat(false)
+      setMostrarForm(false)
+      await carregar()
+    } finally {
+      setCreant(false)
+    }
+  }
 
   async function guardarCell(filaData: string, col: Columna, valor: string) {
     const cellKey = `${filaData}_${col.key}`
@@ -196,14 +250,89 @@ export default function PrevisioComercial() {
               <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Previsió comercial</h1>
             </div>
           </div>
-          <Link href="/previsio-comercial/regles" style={{
-            padding: '0.5rem 1rem', background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: '8px', color: 'var(--text)', fontFamily: 'IBM Plex Sans',
-            fontSize: '0.85rem', textDecoration: 'none', fontWeight: 600,
-          }}>
-            ⚙ Regles recurrents
-          </Link>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setMostrarForm(!mostrarForm)}
+              style={{
+                padding: '0.5rem 1rem', background: mostrarForm ? 'var(--bg)' : 'var(--accent)',
+                border: '1px solid', borderColor: mostrarForm ? 'var(--border)' : 'var(--accent)',
+                borderRadius: '8px', color: mostrarForm ? 'var(--text)' : '#0f1117',
+                fontFamily: 'IBM Plex Sans', fontSize: '0.85rem', fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {mostrarForm ? 'Cancel·lar' : '+ Nova comanda'}
+            </button>
+            <Link href="/previsio-comercial/regles" style={{
+              padding: '0.5rem 1rem', background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: '8px', color: 'var(--text)', fontFamily: 'IBM Plex Sans',
+              fontSize: '0.85rem', textDecoration: 'none', fontWeight: 600,
+            }}>
+              ⚙ Regles
+            </Link>
+          </div>
         </div>
+
+        {/* Formulari nova comanda manual */}
+        {mostrarForm && (
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: '10px',
+            padding: '1rem', marginBottom: '1rem',
+          }}>
+            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem' }}>
+              Afegir comanda puntual
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.2fr 1fr 1fr auto auto', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={novaClientId}
+                onChange={e => setNovaClientId(e.target.value)}
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
+              >
+                <option value="">— Client —</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+              </select>
+              <input
+                type="date"
+                value={novaData}
+                onChange={e => setNovaData(e.target.value)}
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem' }}
+              />
+              <select
+                value={novaTipus}
+                onChange={e => setNovaTipus(e.target.value as any)}
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
+              >
+                <option value="Pollets">Pollets</option>
+                <option value="Maquila">Maquila</option>
+              </select>
+              <input
+                type="number"
+                value={novaQuantitat}
+                onChange={e => setNovaQuantitat(e.target.value)}
+                placeholder="Quantitat"
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', textAlign: 'right' }}
+              />
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--text-dim)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                <input type="checkbox" checked={novaSexat} onChange={e => setNovaSexat(e.target.checked)} />
+                Sexat
+              </label>
+              <button
+                onClick={crearNovaComanda}
+                disabled={creant}
+                style={{
+                  padding: '0.55rem 0.9rem', background: 'var(--accent)', color: '#0f1117',
+                  border: 'none', borderRadius: '6px', fontFamily: 'IBM Plex Sans',
+                  fontWeight: 700, fontSize: '0.85rem', cursor: creant ? 'wait' : 'pointer',
+                }}
+              >
+                {creant ? '...' : 'Afegir'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', margin: '0.6rem 0 0 0' }}>
+              La data és la data prevista de naixement. La comanda apareixerà al calendari encara que el client estigui amagat.
+            </p>
+          </div>
+        )}
 
         {/* Navegació + totals */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>

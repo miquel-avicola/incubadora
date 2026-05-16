@@ -152,8 +152,10 @@ export async function GET(request: Request) {
       })
     }
   })
+  // NOTA: les comandes reals i preliminars NO es filtren per mostrar_calendari.
+  // Així si fas una comanda puntual d'un client amagat, la columna apareix al calendari.
+  // El filtre mostrar_calendari només afecta les projeccions de regles recurrents.
   ;(comandes || []).forEach((co: any) => {
-    if (co.clients?.mostrar_calendari === false) return
     const d = dataEfectivaComanda(co)
     if (!d || d < iniciStr || d >= fiStr) return
     const key = `${co.client_id}_${co.tipus}`
