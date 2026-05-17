@@ -22,6 +22,7 @@ interface Assignacio {
     }
   }
   incubadores: { id: number; numero: number; model: string; tipus: string }
+  transferencies?: { id: number; resultats_naix?: { id: number }[] }[]
 }
 
 interface Comanda {
@@ -49,6 +50,7 @@ export default function DetallCarrega() {
   const [full, setFull] = useState<Full | null>(null)
   const [loading, setLoading] = useState(true)
   const [menuObert, setMenuObert] = useState(false)
+  const [canviantEstat, setCanviantEstat] = useState(false)
 
   const carregarDades = useCallback(() => {
     if (!params.id) return
@@ -58,6 +60,52 @@ export default function DetallCarrega() {
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
+
+  const finalitzarFull = async () => {
+    if (!full) return
+    const totalCarros = full.assignacions.length
+    const ambNaixement = full.assignacions.filter(a =>
+      (a.transferencies || []).some(t => (t.resultats_naix || []).length > 0)
+    ).length
+    const totsRegistrats = totalCarros > 0 && ambNaixement === totalCarros
+
+    const missatge = totsRegistrats
+      ? `Vols finalitzar el full #${full.num_carrega}?`
+      : `⚠️ Aquest full encara no té tots els naixements registrats (${ambNaixement} de ${totalCarros}). Estàs segur que el vols tancar tot i així?`
+
+    if (!confirm(missatge)) return
+    setCanviantEstat(true)
+    setMenuObert(false)
+    const res = await fetch(`/api/carrega/${full.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estat: 'Finalitzat' }),
+    })
+    setCanviantEstat(false)
+    if (!res.ok) {
+      alert('No s\'ha pogut finalitzar el full.')
+      return
+    }
+    carregarDades()
+  }
+
+  const reobrirFull = async () => {
+    if (!full) return
+    if (!confirm(`Vols reobrir el full #${full.num_carrega}? Tornarà a estat Planificat.`)) return
+    setCanviantEstat(true)
+    setMenuObert(false)
+    const res = await fetch(`/api/carrega/${full.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estat: 'Planificat' }),
+    })
+    setCanviantEstat(false)
+    if (!res.ok) {
+      alert('No s\'ha pogut reobrir el full.')
+      return
+    }
+    carregarDades()
+  }
 
   if (loading) return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
@@ -96,7 +144,22 @@ export default function DetallCarrega() {
             <Link href="/carrega" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Càrregues</Link>
             <div>
               <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Càrrega</p>
-              <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>#{full.num_carrega}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>#{full.num_carrega}</h1>
+                {full.estat === 'Finalitzat' && (
+                  <span style={{
+                    background: 'var(--success)',
+                    color: '#0f1117',
+                    fontFamily: 'IBM Plex Mono',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '4px',
+                    fontWeight: 700,
+                  }}>Finalitzat</span>
+                )}
+              </div>
             </div>
           </div>
          <div style={{ position: 'relative' }}>
@@ -147,7 +210,7 @@ export default function DetallCarrega() {
                         color: 'var(--text)',
                         fontSize: '0.9rem',
                         fontFamily: 'IBM Plex Sans',
-                        borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                        borderBottom: '1px solid var(--border)',
                         cursor: 'pointer',
                         background: 'transparent',
                       }}>
@@ -155,6 +218,40 @@ export default function DetallCarrega() {
                       </div>
                     </Link>
                   ))}
+                  {/* Acció destacada: Finalitzar / Reobrir */}
+                  {full.estat === 'Finalitzat' ? (
+                    <div
+                      onClick={canviantEstat ? undefined : reobrirFull}
+                      style={{
+                        padding: '0.85rem 1rem',
+                        color: 'var(--accent)',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        fontFamily: 'IBM Plex Sans',
+                        cursor: canviantEstat ? 'wait' : 'pointer',
+                        background: 'transparent',
+                        opacity: canviantEstat ? 0.5 : 1,
+                      }}
+                    >
+                      ↺ Reobrir full
+                    </div>
+                  ) : (
+                    <div
+                      onClick={canviantEstat ? undefined : finalitzarFull}
+                      style={{
+                        padding: '0.85rem 1rem',
+                        color: 'var(--success)',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        fontFamily: 'IBM Plex Sans',
+                        cursor: canviantEstat ? 'wait' : 'pointer',
+                        background: 'transparent',
+                        opacity: canviantEstat ? 0.5 : 1,
+                      }}
+                    >
+                      ✓ Finalitzar full
+                    </div>
+                  )}
                 </div>
               </>
             )}

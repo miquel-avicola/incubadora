@@ -23,20 +23,23 @@ interface Full {
 
 const ESTAT_COLOR: Record<string, string> = {
   'Planificat': 'var(--text-dim)',
-  'En curs': 'var(--accent)',
-  'Completat': 'var(--success)',
-  'Cancel·lat': 'var(--danger)',
+  'Finalitzat': 'var(--success)',
 }
 
 export default function Carregues() {
   const [fulls, setFulls] = useState<Full[]>([])
   const [loading, setLoading] = useState(true)
+  const [mostrarFinalitzats, setMostrarFinalitzats] = useState(false)
 
   useEffect(() => {
     fetch('/api/carrega')
       .then(r => r.json())
       .then(data => { setFulls(data); setLoading(false) })
   }, [])
+
+  const fullsFinalitzats = fulls.filter(f => f.estat === 'Finalitzat')
+  const fullsActius = fulls.filter(f => f.estat !== 'Finalitzat')
+  const fullsVisibles = mostrarFinalitzats ? fulls : fullsActius
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
@@ -63,8 +66,28 @@ export default function Carregues() {
 
         {loading && <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>Carregant...</p>}
 
+        {!loading && fullsFinalitzats.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+            <button
+              onClick={() => setMostrarFinalitzats(!mostrarFinalitzats)}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                color: 'var(--text-dim)',
+                padding: '0.35rem 0.7rem',
+                fontSize: '0.75rem',
+                fontFamily: 'IBM Plex Mono',
+                cursor: 'pointer',
+              }}
+            >
+              {mostrarFinalitzats ? `Amagar finalitzats (${fullsFinalitzats.length})` : `Mostrar finalitzats (${fullsFinalitzats.length})`}
+            </button>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {fulls.map(full => {
+          {fullsVisibles.map(full => {
             const totalPollets = full.comandes.filter(c => c.tipus === 'Pollets').reduce((s, c) => s + (c.quantitat_pollets || 0), 0)
             const totalMaquila = full.comandes.filter(c => c.tipus === 'Maquila').reduce((s, c) => s + (c.quantitat_ous_maquila || 0), 0)
             return (
