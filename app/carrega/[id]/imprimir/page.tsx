@@ -94,6 +94,34 @@ export default function ImprimirFull() {
       .join(' + ')
   }
 
+  // Signatura del pla vacunal per agrupar carros amb el mateix pla
+  function signaturaPla(av: AssignacioVacuna[]): string {
+    if (av.length === 0) return ''
+    return [...av]
+      .sort((x, y) => x.vacunes.id - y.vacunes.id)
+      .map(v => `${v.vacunes.id}|${v.dosi}`)
+      .join('+')
+  }
+
+  // Paleta pastel: colors clars i diferenciables, neutres per a impressió
+  const PALETA_PASTEL = ['#e8e1f5', '#d9f0e1', '#fbe6dc', '#d6e8f5', '#fdf0c8', '#f5dde8', '#e0eaf0', '#efe1cd']
+
+  // Mapeig signatura -> color, ordenat per primera aparició a la llista
+  const signaturesUniques: string[] = []
+  assignacionsOrdenades.forEach(a => {
+    const s = signaturaPla(a.assignacio_vacunes)
+    if (s && !signaturesUniques.includes(s)) signaturesUniques.push(s)
+  })
+  const sigToColor: Record<string, string> = {}
+  signaturesUniques.forEach((s, i) => { sigToColor[s] = PALETA_PASTEL[i % PALETA_PASTEL.length] })
+
+  // Per a la llegenda: signatura -> nom llegible (un carro qualsevol del grup)
+  const sigToNom: Record<string, string> = {}
+  assignacionsOrdenades.forEach(a => {
+    const s = signaturaPla(a.assignacio_vacunes)
+    if (s && !sigToNom[s]) sigToNom[s] = nomVacuna(a)
+  })
+
   const td = { border: '1px solid #ccc', padding: '2px 4px' }
   const tdC = { ...td, textAlign: 'center' as const }
 
@@ -107,8 +135,10 @@ export default function ImprimirFull() {
     const t = a.transferencies[0]
     const transferit = !!t
     const nascut = transferit && t.resultats_naix.length > 0
+    const sig = signaturaPla(a.assignacio_vacunes)
+    const bgPla = sig ? sigToColor[sig] : 'white'
     return (
-      <tr key={a.id} style={{ background: a.num_carro_full % 2 === 0 ? 'white' : '#f5f5f5' }}>
+      <tr key={a.id} style={{ background: bgPla }}>
         <td style={tdC}>{a.num_carro_full}</td>
         <td style={td}>{nomGranja(a)}</td>
         <td style={tdC}>{a.incubadores.numero}</td>
@@ -209,7 +239,19 @@ export default function ImprimirFull() {
           <table>{capcalera}<tbody>{dreta22.map((a, i) => filaCarro(a, i))}</tbody></table>
         </div>
 
-        <div style={{ marginTop: '5px', fontSize: '7px', color: '#999', borderTop: '1px solid #ddd', paddingTop: '3px', display: 'flex', justifyContent: 'space-between' }}>
+        {signaturesUniques.length > 0 && (
+          <div style={{ marginTop: '4px', fontSize: '7.5px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #ddd', paddingTop: '3px' }}>
+            <span style={{ color: '#666', fontWeight: 700 }}>PLA VACUNAL:</span>
+            {signaturesUniques.map(s => (
+              <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ display: 'inline-block', width: '10px', height: '10px', background: sigToColor[s], border: '1px solid #aaa' }} />
+                <span>{sigToNom[s]}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: '3px', fontSize: '7px', color: '#999', borderTop: '1px solid #ddd', paddingTop: '3px', display: 'flex', justifyContent: 'space-between' }}>
           <span>Exp. = ous explosius · Fèrtils = ous fèrtils vacunats · Naix. = naixedora destí</span>
           <span>Imprès: {new Date().toLocaleDateString('ca-ES')}</span>
         </div>

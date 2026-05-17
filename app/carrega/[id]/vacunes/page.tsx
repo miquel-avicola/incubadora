@@ -231,55 +231,36 @@ const [dosi2, setDosi2] = useState('1')
           {/* Columna dreta: panell assignació */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
 
-            {/* Resum de comandes del dia amb cobertura dinàmica */}
+            {/* Comandes del dia: només demanda i total, sense prorrateig */}
             {(() => {
               const comandesPollets = (full.comandes || [])
                 .filter(c => c.tipus === 'Pollets' && c.quantitat_pollets)
                 .sort((a, b) => (a.clients?.nom || '').localeCompare(b.clients?.nom || ''))
               if (comandesPollets.length === 0) return null
               const totalDemanat = comandesPollets.reduce((s, c) => s + (c.quantitat_pollets || 0), 0)
-              const pctTotal = totalDemanat > 0 ? (polletsSeleccionats / totalDemanat) * 100 : 0
-              const colorPct = (pct: number) => {
-                if (polletsSeleccionats === 0) return 'var(--text-dim)'
-                if (pct < 95) return '#f59e0b'
-                if (pct <= 105) return 'var(--success)'
-                return 'var(--danger)'
-              }
               return (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
                   <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.6rem' }}>
                     Comandes del dia
                   </div>
-                  {comandesPollets.map(c => {
-                    const dem = c.quantitat_pollets || 0
-                    const cobert = totalDemanat > 0 ? Math.round(polletsSeleccionats * (dem / totalDemanat)) : 0
-                    const pct = dem > 0 ? (cobert / dem) * 100 : 0
-                    return (
-                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0.3rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem' }}>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>{c.clients?.nom || '—'}</span>
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginLeft: '0.4rem', fontFamily: 'IBM Plex Mono' }}>
-                            {c.sexat ? 'sexat' : 'mix'}
-                          </span>
-                        </div>
-                        <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                          <span style={{ color: colorPct(pct), fontWeight: 700 }}>~{cobert.toLocaleString()}</span>
-                          <span style={{ color: 'var(--text-dim)' }}> / {dem.toLocaleString()}</span>
-                        </div>
+                  {comandesPollets.map(c => (
+                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0.3rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{c.clients?.nom || '—'}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginLeft: '0.4rem', fontFamily: 'IBM Plex Mono' }}>
+                          {c.sexat ? 'sexat' : 'mix'}
+                        </span>
                       </div>
-                    )
-                  })}
+                      <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                        {(c.quantitat_pollets || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0.55rem 0 0.15rem' }}>
                     <span style={{ fontFamily: 'IBM Plex Mono', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.1em', color: 'var(--text-dim)' }}>Total</span>
-                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: colorPct(pctTotal), fontWeight: 700 }}>~{polletsSeleccionats.toLocaleString()}</span>
-                      <span style={{ color: 'var(--text-dim)' }}> / {totalDemanat.toLocaleString()}</span>
-                      {polletsSeleccionats > 0 && (
-                        <span style={{ color: colorPct(pctTotal), fontSize: '0.72rem', marginLeft: '0.4rem' }}>
-                          ({Math.round(pctTotal)}%)
-                        </span>
-                      )}
-                    </div>
+                    <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.9rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      {totalDemanat.toLocaleString()}
+                    </span>
                   </div>
                 </div>
               )
