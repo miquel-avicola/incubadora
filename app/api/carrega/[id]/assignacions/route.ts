@@ -83,26 +83,22 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }, { status: 400 })
     }
 
-    const { data: actives } = await supabase
+    // Unicitat NOMÉS dins del mateix full. Permetem planificar un full nou
+    // sobre una incubadora que ara està plena amb un full anterior:
+    // físicament les posicions estaran lliures el dia de la càrrega.
+    const { data: dinsFull } = await supabase
       .from('assignacions')
-      .select('id, posicio')
+      .select('posicio')
+      .eq('full_carrega_id', params.id)
       .eq('incubadora_id', incubadora_id)
       .not('posicio', 'is', null)
 
-    if (actives && actives.length > 0) {
-      const idsActives = actives.map(a => a.id)
-      const { data: transferides } = await supabase
-        .from('transferencies')
-        .select('assignacio_id')
-        .in('assignacio_id', idsActives)
-      const idsTransf = new Set((transferides || []).map(t => t.assignacio_id))
-      const posicionsOcupades = new Set(
-        actives.filter(a => !idsTransf.has(a.id)).map(a => a.posicio)
-      )
-      const xocs = posicions.filter(p => posicionsOcupades.has(p))
+    if (dinsFull && dinsFull.length > 0) {
+      const posicionsOcupadesFull = new Set(dinsFull.map(a => a.posicio))
+      const xocs = posicions.filter(p => posicionsOcupadesFull.has(p))
       if (xocs.length > 0) {
         return NextResponse.json({
-          error: `Les posicions ${xocs.join(', ')} ja estan ocupades per altres carros actius. Refresca la pàgina i torna a triar.`
+          error: `Les posicions ${xocs.join(', ')} ja estan assignades en aquest mateix full. Refresca la pàgina i torna a triar.`
         }, { status: 409 })
       }
     }

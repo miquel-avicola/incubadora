@@ -36,6 +36,9 @@ interface Assignacio {
   id: number
   num_carro_full: number
   previsio_naixement: number | null
+  posicio: number | null
+  zona: ZonaMS | null
+  incubadora_id: number
   carros_estoc: { id: number; posta: string; quantitat_ous: number; lots_reproductores: { data_naixement: string; estirp: string | null; granges_reproductores: { granja: string; nom_informal: string | null } } }
   incubadores: { numero: number; model: string; tipus: string }
 }
@@ -155,15 +158,27 @@ export default function Assignacions() {
   }, [grupSeleccionat, incubadoraId, incubadores, full])
 
   // Helpers d'ocupació
+  // Posicions ocupades AL FULL ACTUAL a una inc. concreta.
+  // No mirem altres fulls per permetre planificar a futur sobre incubadores
+  // que físicament estan plenes amb fulls anteriors (es transferiran abans
+  // de la nostra data de càrrega).
   function ocupacioSS(incId: number): Map<number, number> {
     const map = new Map<number, number>()
-    if (!estatInstalacions) return map
-    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
-    if (!inc) return map
-    for (const c of inc.carros) {
-      if (c.posicio !== null) map.set(c.posicio, c.num_carro_full)
+    if (!full) return map
+    for (const a of full.assignacions) {
+      if (a.incubadora_id === incId && a.posicio !== null) {
+        map.set(a.posicio, a.num_carro_full)
+      }
     }
     return map
+  }
+
+  // Ocupació global (totes les incubadores, tots els fulls actius)
+  // només s'usa al desplegable per informar "ara X/cap".
+  function ocupacioGlobalInc(incId: number): number {
+    if (!estatInstalacions) return 0
+    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
+    return inc ? inc.carros.length : 0
   }
 
   function ocupacioMSZones(incId: number): { central: number; paret: number; pulsator: number } {
@@ -417,9 +432,11 @@ export default function Assignacions() {
                     {incubadores.map(i => {
                       const ocupats = ocupacioPerInc[i.numero] || 0
                       const lliures = i.capacitat_carros - ocupats
+                      const ocupatsGlobals = ocupacioGlobalInc(i.id)
+                      const sufixGlobal = ocupatsGlobals > 0 ? ` · ara ${ocupatsGlobals}/${i.capacitat_carros}` : ''
                       return <option key={i.id} value={i.id} disabled={lliures <= 0}>
-                        Inc. {i.numero} — {i.model} ({i.tipus === 'Singlestage' ? 'SS' : 'MS'}) · {ocupats}/{i.capacitat_carros}
-                        {lliures <= 0 ? ' PLENA' : ''}
+                        Inc. {i.numero} — {i.model} ({i.tipus === 'Singlestage' ? 'SS' : 'MS'}) · {ocupats}/{i.capacitat_carros}{sufixGlobal}
+                        {lliures <= 0 ? ' PLE' : ''}
                       </option>
                     })}
                   </select>

@@ -27,6 +27,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
         hora_entrada,
         previsio_naixement,
         observacions,
+        posicio,
+        zona,
+        incubadora_id,
         carros_estoc (
           id,
           posta,
@@ -39,19 +42,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
           )
         ),
         incubadores (id, numero, model, tipus),
-assignacio_vacunes (
-  id,
-  dosi,
-  vacunes (id, nom, via)
-),
-transferencies (
-  id,
-  ous_explosius,
-  ous_fertils_vacunats,
-  naixedora_id,
-  naixedores (numero),
-  resultats_naix (id, pollets_nascuts, sexat)
-)
+        assignacio_vacunes (
+          id,
+          dosi,
+          vacunes (id, nom, via)
+        ),
+        transferencies (
+          id,
+          ous_explosius,
+          ous_fertils_vacunats,
+          naixedora_id,
+          naixedores (numero),
+          resultats_naix (id, pollets_nascuts, sexat)
+        )
       )
     `)
     .eq('id', params.id)
