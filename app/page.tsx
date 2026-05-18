@@ -64,8 +64,5 @@ export default async function Home() {
             </Link>
           )}
 
-        </div>
-      </div>
-    </main>
-  )
-}
+          {showCarrega && (
+            <Link hr
