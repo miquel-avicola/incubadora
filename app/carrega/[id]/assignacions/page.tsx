@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+
+// ───────────────────────────────────────────────────────────────────
+// Tipus
+// ───────────────────────────────────────────────────────────────────
+
+type ZonaMS = 'central' | 'paret' | 'pulsator'
 
 interface CarroEstoc {
   id: number
@@ -42,6 +48,37 @@ interface Full {
   comandes: { quantitat_pollets: number | null; quantitat_ous_maquila: number | null; tipus: string }[]
 }
 
+// Subconjunt del JSON de /api/instalacions
+interface CarroAInstalacio {
+  assignacio_id: number
+  num_carro_full: number
+  posicio: number | null
+  zona: ZonaMS | null
+  estirp: string | null
+}
+interface IncAInstalacio {
+  id: number
+  tipus: string
+  carros: CarroAInstalacio[]
+}
+interface EstatInstalacions {
+  incubadores: IncAInstalacio[]
+}
+
+// Layout físic SS — mateixa estructura que /instal·lacions
+const SS_LAYOUT: Array<{ posicio: number; col: number; row: number }> = [
+  { posicio: 1, col: 1, row: 1 }, { posicio: 2, col: 1, row: 2 }, { posicio: 3, col: 1, row: 3 }, { posicio: 4, col: 1, row: 4 },
+  { posicio: 9, col: 2, row: 1 }, { posicio: 10, col: 2, row: 2 }, { posicio: 11, col: 2, row: 3 }, { posicio: 12, col: 2, row: 4 },
+  { posicio: 17, col: 3, row: 1 }, { posicio: 18, col: 3, row: 2 }, { posicio: 19, col: 3, row: 3 }, { posicio: 20, col: 3, row: 4 },
+  { posicio: 21, col: 4, row: 1 }, { posicio: 22, col: 4, row: 2 }, { posicio: 23, col: 4, row: 3 }, { posicio: 24, col: 4, row: 4 },
+  { posicio: 13, col: 5, row: 1 }, { posicio: 14, col: 5, row: 2 }, { posicio: 15, col: 5, row: 3 }, { posicio: 16, col: 5, row: 4 },
+  { posicio: 5, col: 6, row: 1 }, { posicio: 6, col: 6, row: 2 }, { posicio: 7, col: 6, row: 3 }, { posicio: 8, col: 6, row: 4 },
+]
+
+// ───────────────────────────────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────────────────────────────
+
 function nomCarro(carro: CarroEstoc) {
   const lot = carro.lots_reproductores
   const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
@@ -54,16 +91,23 @@ function diesEstoc(posta: string, carrega: string): number {
   const c = new Date(carrega + 'T00:00:00')
   return Math.floor((c.getTime() - p.getTime()) / 86400000)
 }
+
 function setmanesReproductores(posta: string, dataNaixement: string): number {
   const p = new Date(posta + 'T00:00:00')
   const n = new Date(dataNaixement + 'T00:00:00')
   return Math.floor((p.getTime() - n.getTime()) / (86400000 * 7))
 }
+
+// ───────────────────────────────────────────────────────────────────
+// Component
+// ───────────────────────────────────────────────────────────────────
+
 export default function Assignacions() {
   const params = useParams()
   const [full, setFull] = useState<Full | null>(null)
   const [carrosDisponibles, setCarrosDisponibles] = useState<CarroEstoc[]>([])
   const [incubadores, setIncubadores] = useState<Incubadora[]>([])
+  const [estatInstalacions, setEstatInstalacions] = useState<EstatInstalacions | null>(null)
   const [loading, setLoading] = useState(true)
   const [assignant, setAssignant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -74,23 +118,27 @@ export default function Assignacions() {
   const [previsioManual, setPrevisioManual] = useState('')
   const [previsioCalculada, setPrevisioCalculada] = useState<number | null>(null)
   const [horaEntrada, setHoraEntrada] = useState('')
-  const [numCarroInicial, setNumCarroInicial] = useState('')
+  const [posicionsSeleccionades, setPosicionsSeleccionades] = useState<number[]>([])
+  const [zonaSeleccionada, setZonaSeleccionada] = useState<ZonaMS>('central')
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
-    const [fullRes, carrosRes, incRes] = await Promise.all([
+    const [fullRes, carrosRes, incRes, instRes] = await Promise.all([
       fetch(`/api/carrega/${params.id}`).then(r => r.json()),
       fetch('/api/carros').then(r => r.json()),
       fetch('/api/incubadores').then(r => r.json()),
+      fetch('/api/instalacions').then(r => r.json()),
     ])
     setFull(fullRes)
     setCarrosDisponibles(carrosRes)
     setIncubadores(incRes)
+    setEstatInstalacions(instRes)
     setLoading(false)
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
 
+  // Cascada de previsió
   useEffect(() => {
     if (!grupSeleccionat || !full) return
     const incubadora = incubadores.find(i => i.id === parseInt(incubadoraId))
@@ -106,6 +154,52 @@ export default function Assignacions() {
       })
   }, [grupSeleccionat, incubadoraId, incubadores, full])
 
+  // Helpers d'ocupació
+  function ocupacioSS(incId: number): Map<number, number> {
+    const map = new Map<number, number>()
+    if (!estatInstalacions) return map
+    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
+    if (!inc) return map
+    for (const c of inc.carros) {
+      if (c.posicio !== null) map.set(c.posicio, c.num_carro_full)
+    }
+    return map
+  }
+
+  function ocupacioMSZones(incId: number): { central: number; paret: number; pulsator: number } {
+    const r = { central: 0, paret: 0, pulsator: 0 }
+    if (!estatInstalacions) return r
+    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
+    if (!inc) return r
+    for (const c of inc.carros) {
+      if (c.zona) r[c.zona]++
+    }
+    return r
+  }
+
+  // Pre-selecció de posicions quan canvia la incubadora seleccionada
+  useEffect(() => {
+    setPosicionsSeleccionades([])
+    setZonaSeleccionada('central')
+    if (!incubadoraId) return
+    const inc = incubadores.find(i => i.id === parseInt(incubadoraId))
+    if (!inc) return
+    if (inc.tipus !== 'Singlestage') return
+    const ocupades = ocupacioSS(inc.id)
+    const lliures: number[] = []
+    for (let p = 1; p <= inc.capacitat_carros; p++) {
+      if (!ocupades.has(p)) lliures.push(p)
+      if (lliures.length === nombreAssignar) break
+    }
+    setPosicionsSeleccionades(lliures)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incubadoraId])
+
+  // Retallar selecció si baixa el nombreAssignar
+  useEffect(() => {
+    setPosicionsSeleccionades(prev => prev.slice(0, nombreAssignar))
+  }, [nombreAssignar])
+
   function seleccionarGrup(carros: CarroEstoc[]) {
     if (grupSeleccionat && grupSeleccionat[0].id === carros[0].id) {
       setGrupSeleccionat(null)
@@ -117,13 +211,25 @@ export default function Assignacions() {
     }
   }
 
+  function clicarPosicio(p: number, ocupades: Map<number, number>) {
+    if (ocupades.has(p)) return
+    setPosicionsSeleccionades(prev => {
+      if (prev.includes(p)) return prev.filter(x => x !== p)
+      if (prev.length >= nombreAssignar) {
+        return [...prev.slice(1), p]
+      }
+      return [...prev, p]
+    })
+  }
+
   async function assignar() {
     if (!grupSeleccionat || !incubadoraId || !full) return
     setAssignant(true)
     setErrorMsg('')
     const previsio = parseFloat(previsioManual) / 100
     const carrosAassignar = grupSeleccionat.slice(0, nombreAssignar).map(c => c.id)
-    const isSinglestage = incubadores.find(i => i.id === parseInt(incubadoraId))?.tipus === 'Singlestage'
+    const inc = incubadores.find(i => i.id === parseInt(incubadoraId))
+    const isSS = inc?.tipus === 'Singlestage'
 
     const body: Record<string, unknown> = {
       carro_ids: carrosAassignar,
@@ -131,9 +237,8 @@ export default function Assignacions() {
       hora_entrada: horaEntrada || null,
       previsio_naixement: isNaN(previsio) ? null : previsio,
     }
-    if (isSinglestage && numCarroInicial) {
-      body.num_carro_inicial = parseInt(numCarroInicial)
-    }
+    if (isSS) body.posicions = posicionsSeleccionades
+    else body.zona = zonaSeleccionada
 
     const res = await fetch(`/api/carrega/${full.id}/assignacions`, {
       method: 'POST',
@@ -151,7 +256,8 @@ export default function Assignacions() {
       setPrevisioManual('')
       setPrevisioCalculada(null)
       setHoraEntrada('')
-      setNumCarroInicial('')
+      setPosicionsSeleccionades([])
+      setZonaSeleccionada('central')
       carregarDades()
     }
     setAssignant(false)
@@ -185,7 +291,6 @@ export default function Assignacions() {
     return diesEstoc(b[1][0].posta, full.carrega) - diesEstoc(a[1][0].posta, full.carrega)
   })
 
-  // Carros per incubadora (per mostrar ocupació)
   const ocupacioPerInc: Record<number, number> = {}
   full.assignacions.forEach(a => {
     ocupacioPerInc[a.incubadores.numero] = (ocupacioPerInc[a.incubadores.numero] || 0) + 1
@@ -195,6 +300,18 @@ export default function Assignacions() {
   const ocupacioActual = incubadoraSeleccionada ? (ocupacioPerInc[incubadoraSeleccionada.numero] || 0) : 0
   const lliuresIncubadora = incubadoraSeleccionada ? incubadoraSeleccionada.capacitat_carros - ocupacioActual : 99
   const isSinglestage = incubadoraSeleccionada?.tipus === 'Singlestage'
+
+  // Per a la mini-graella SS i el selector MS
+  const ocupadesSS = incubadoraSeleccionada && isSinglestage ? ocupacioSS(incubadoraSeleccionada.id) : new Map<number, number>()
+  const ocupacioZones = incubadoraSeleccionada && !isSinglestage ? ocupacioMSZones(incubadoraSeleccionada.id) : { central: 0, paret: 0, pulsator: 0 }
+
+  // Validació per al botó "Assignar"
+  const posicionsOK = !incubadoraSeleccionada
+    ? false
+    : isSinglestage
+      ? posicionsSeleccionades.length === nombreAssignar
+      : !!zonaSeleccionada
+  const potAssignar = !!incubadoraId && !assignant && lliuresIncubadora >= nombreAssignar && posicionsOK
 
   const inputStyle = {
     background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
@@ -314,13 +431,119 @@ export default function Assignacions() {
                   )}
                 </div>
 
-                {/* Número inicial (només Singlestage) */}
-                {isSinglestage && (
+                {/* Selector de posició (només SS) */}
+                {incubadoraSeleccionada && isSinglestage && (
                   <div>
-                    <label style={labelStyle}>Nº carro inicial (posició física)</label>
-                    <input type="number" value={numCarroInicial} onChange={e => setNumCarroInicial(e.target.value)}
-                      placeholder="Automàtic si buit" min="1"
-                      style={{ ...inputStyle, width: '100%' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
+                      <label style={{ ...labelStyle, marginBottom: 0 }}>Posicions a la SS</label>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: posicionsSeleccionades.length === nombreAssignar ? 'var(--success)' : 'var(--accent)' }}>
+                        {posicionsSeleccionades.length} / {nombreAssignar}
+                      </span>
+                    </div>
+                    {/* Mini-graella 6×4 en U */}
+                    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+                        {[1, 2, 3, 4].map(row => (
+                          <Fragment key={row}>
+                            {[1, 2, 3].map(col => {
+                              const cell = SS_LAYOUT.find(c => c.col === col && c.row === row)
+                              if (!cell) return null
+                              const p = cell.posicio
+                              const num = ocupadesSS.get(p)
+                              const ocupada = num !== undefined
+                              const seleccionada = posicionsSeleccionades.includes(p)
+                              return (
+                                <button key={`l-${row}-${col}`} type="button"
+                                  onClick={() => clicarPosicio(p, ocupadesSS)}
+                                  disabled={ocupada}
+                                  style={{
+                                    aspectRatio: '1', padding: 0,
+                                    border: '1px solid',
+                                    borderColor: seleccionada ? 'var(--accent)' : ocupada ? 'var(--border)' : 'var(--border)',
+                                    borderRadius: '4px',
+                                    background: seleccionada ? 'var(--accent)' : ocupada ? 'rgba(120,120,120,0.15)' : 'var(--surface)',
+                                    color: seleccionada ? '#0f1117' : ocupada ? 'var(--text-dim)' : 'var(--text)',
+                                    fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', fontWeight: 700,
+                                    cursor: ocupada ? 'not-allowed' : 'pointer',
+                                  }}>
+                                  {ocupada ? `C${num}` : p}
+                                </button>
+                              )
+                            })}
+                            {/* Banda central (pulsator) */}
+                            {row === 1 && (
+                              <div key={`puls-${row}`} style={{
+                                gridRow: '1 / span 4', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: 'rgba(80,80,80,0.2)', borderRadius: '4px',
+                                fontFamily: 'IBM Plex Mono', fontSize: '0.6rem', color: 'var(--text-dim)',
+                                writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.15em',
+                              }}>
+                                PULSATOR
+                              </div>
+                            )}
+                            {[4, 5, 6].map(col => {
+                              const cell = SS_LAYOUT.find(c => c.col === col && c.row === row)
+                              if (!cell) return null
+                              const p = cell.posicio
+                              const num = ocupadesSS.get(p)
+                              const ocupada = num !== undefined
+                              const seleccionada = posicionsSeleccionades.includes(p)
+                              return (
+                                <button key={`r-${row}-${col}`} type="button"
+                                  onClick={() => clicarPosicio(p, ocupadesSS)}
+                                  disabled={ocupada}
+                                  style={{
+                                    aspectRatio: '1', padding: 0,
+                                    border: '1px solid',
+                                    borderColor: seleccionada ? 'var(--accent)' : ocupada ? 'var(--border)' : 'var(--border)',
+                                    borderRadius: '4px',
+                                    background: seleccionada ? 'var(--accent)' : ocupada ? 'rgba(120,120,120,0.15)' : 'var(--surface)',
+                                    color: seleccionada ? '#0f1117' : ocupada ? 'var(--text-dim)' : 'var(--text)',
+                                    fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', fontWeight: 700,
+                                    cursor: ocupada ? 'not-allowed' : 'pointer',
+                                  }}>
+                                  {ocupada ? `C${num}` : p}
+                                </button>
+                              )
+                            })}
+                          </Fragment>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: '0.4rem', fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textAlign: 'center' }}>
+                        Paret · Central · Pulsator esq │ Pulsator dre · Central · Paret
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selector de zona (només MS) */}
+                {incubadoraSeleccionada && !isSinglestage && (
+                  <div>
+                    <label style={labelStyle}>Zona dins de la incubadora</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                      {(['central', 'paret', 'pulsator'] as ZonaMS[]).map(z => {
+                        const sel = z === zonaSeleccionada
+                        return (
+                          <button key={z} type="button"
+                            onClick={() => setZonaSeleccionada(z)}
+                            style={{
+                              padding: '0.7rem 0.4rem', border: '1px solid',
+                              borderColor: sel ? 'var(--accent)' : 'var(--border)',
+                              borderRadius: '8px',
+                              background: sel ? 'rgba(240,180,41,0.12)' : 'var(--bg)',
+                              color: sel ? 'var(--accent)' : 'var(--text)',
+                              cursor: 'pointer', textAlign: 'center',
+                            }}>
+                            <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {z}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
+                              {ocupacioZones[z]} carro{ocupacioZones[z] !== 1 ? 's' : ''}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -348,12 +571,12 @@ export default function Assignacions() {
                 )}
 
                 <button onClick={assignar}
-                  disabled={!incubadoraId || assignant || lliuresIncubadora < nombreAssignar}
+                  disabled={!potAssignar}
                   style={{
                     padding: '0.75rem', border: 'none', borderRadius: '8px', fontWeight: 700,
                     fontFamily: 'IBM Plex Sans', fontSize: '0.9rem', cursor: 'pointer',
-                    background: (!incubadoraId || assignant || lliuresIncubadora < nombreAssignar) ? 'var(--border)' : 'var(--accent)',
-                    color: (!incubadoraId || assignant || lliuresIncubadora < nombreAssignar) ? 'var(--text-dim)' : '#0f1117',
+                    background: !potAssignar ? 'var(--border)' : 'var(--accent)',
+                    color: !potAssignar ? 'var(--text-dim)' : '#0f1117',
                   }}>
                   {assignant ? 'Assignant...' : `Assignar ${nombreAssignar} carro${nombreAssignar !== 1 ? 's' : ''}`}
                 </button>
