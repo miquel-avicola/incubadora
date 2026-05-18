@@ -16,6 +16,7 @@ interface CarroInc {
   num_carrega: number
   lot_id: number | null
   estirp: 'Ross' | 'Cobb' | null
+  granja: string | null
   data_naixement_lot: string | null
   setmanes_lot: number | null
   quantitat_ous: number
@@ -37,6 +38,7 @@ interface CarroNx {
   num_carrega: number
   lot_id: number | null
   estirp: 'Ross' | 'Cobb' | null
+  granja: string | null
   data_naixement_lot: string | null
   setmanes_lot: number | null
   quantitat_ous: number
@@ -112,10 +114,9 @@ const SS_LAYOUT: Array<{ posicio: number; col: number; row: number; zona: 'paret
 // Helpers de presentació
 // ───────────────────────────────────────────────────────────────────
 
-function colorEstirp(estirp: string | null): { bg: string; text: string; border: string } {
-  if (estirp === 'Ross') return { bg: '#d6e8f5', text: '#1e3a5f', border: '#a8c8e0' }
-  if (estirp === 'Cobb') return { bg: '#e8e1f5', text: '#3d2566', border: '#c1b0db' }
-  return { bg: '#eeeeee', text: '#666666', border: '#cccccc' }
+// Color únic per a cel·les ocupades — tema fosc, sense distinció per estirp.
+function colorOcupat(): { bg: string; text: string; border: string } {
+  return { bg: '#2a2c35', text: '#e0e0e0', border: '#3a3c45' }
 }
 
 function fmtData(s: string | null): string {
@@ -169,7 +170,7 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
         >
           {SS_LAYOUT.map(({ posicio, col, row }) => {
             const carro = carrosPerPosicio.get(posicio)
-            const c = colorEstirp(carro?.estirp ?? null)
+            const c = colorOcupat()
             // Insereix el separador del pulsator central a la columna 4 visual
             const colVisual = col <= 3 ? col : col + 1
             return (
@@ -177,7 +178,7 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
                 key={posicio}
                 title={
                   carro
-                    ? `Pos ${posicio} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.estirp ?? '—'} · lot ${carro.lot_id} · ${carro.setmanes_lot ?? '?'}s · dia ${carro.dia_incubacio ?? '?'}`
+                    ? `Pos ${posicio} · ${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}`
                     : `Pos ${posicio} · lliure`
                 }
                 style={{
@@ -187,19 +188,31 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
                   color: carro ? c.text : '#555',
                   border: `1px solid ${carro ? c.border : '#2a2c35'}`,
                   borderRadius: '3px',
-                  padding: '4px 2px',
-                  fontSize: '0.6rem',
+                  padding: '3px 3px',
+                  fontSize: '0.55rem',
                   textAlign: 'center',
                   fontFamily: 'IBM Plex Mono, monospace',
-                  lineHeight: 1.1,
-                  minHeight: '36px',
+                  lineHeight: 1.15,
+                  minHeight: '58px',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'center',
+                  justifyContent: carro ? 'space-between' : 'center',
+                  overflow: 'hidden',
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: '0.65rem' }}>{posicio}</div>
-                {carro && <div style={{ fontSize: '0.55rem', opacity: 0.8 }}>{carro.dia_incubacio ?? '?'}d</div>}
+                <div style={{ fontWeight: 700, fontSize: '0.6rem', opacity: 0.55 }}>{posicio}</div>
+                {carro ? (
+                  <>
+                    <div style={{
+                      fontSize: '0.58rem', fontWeight: 600,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{carro.granja ?? '—'}</div>
+                    <div style={{ fontSize: '0.55rem', opacity: 0.85 }}>
+                      {carro.num_carrega}/{carro.num_carro_full}
+                    </div>
+                    <div style={{ fontSize: '0.55rem', opacity: 0.7 }}>{carro.dia_incubacio ?? '?'}d</div>
+                  </>
+                ) : null}
               </div>
             )
           })}
@@ -277,28 +290,32 @@ function ColumnaZona({ titol, carros, accent }: { titol: string; carros: CarroIn
 }
 
 function ChipCarro({ carro }: { carro: CarroInc | CarroNx }) {
-  const c = colorEstirp(carro.estirp)
+  const c = colorOcupat()
   return (
     <div
-      title={`#${carro.num_carrega}/${carro.num_carro_full} · ${carro.estirp ?? '—'} · lot ${carro.lot_id} · ${carro.setmanes_lot ?? '?'}s · dia ${carro.dia_incubacio ?? '?'}`}
+      title={`${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}`}
       style={{
         background: c.bg,
         color: c.text,
         border: `1px solid ${c.border}`,
         borderRadius: '3px',
-        padding: '2px 5px',
-        fontSize: '0.65rem',
+        padding: '3px 5px',
+        fontSize: '0.62rem',
         fontFamily: 'IBM Plex Mono, monospace',
         display: 'flex',
-        justifyContent: 'space-between',
-        gap: '4px',
+        flexDirection: 'column',
+        gap: '1px',
       }}
     >
-      <span style={{ fontWeight: 600 }}>
-        {carro.num_carrega}/{carro.num_carro_full}
+      <span style={{
+        fontWeight: 600,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {carro.granja ?? '—'}
       </span>
-      <span style={{ opacity: 0.75 }}>
-        {carro.estirp?.[0] ?? '?'} · {carro.dia_incubacio ?? '?'}d
+      <span style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, fontSize: '0.58rem' }}>
+        <span>{carro.num_carrega}/{carro.num_carro_full}</span>
+        <span>{carro.dia_incubacio ?? '?'}d</span>
       </span>
     </div>
   )
