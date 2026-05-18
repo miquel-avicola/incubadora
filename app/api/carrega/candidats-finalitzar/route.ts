@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const LLINDAR_DIES = 7
 
 export async function GET() {
@@ -10,5 +13,8 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ candidats: data || [], llindar_dies: LLINDAR_DIES })
+  return NextResponse.json(
+    { candidats: data || [], llindar_dies: LLINDAR_DIES },
+    { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+  )
 }
