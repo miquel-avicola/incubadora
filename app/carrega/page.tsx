@@ -21,6 +21,15 @@ interface Full {
   comandes: Comanda[]
 }
 
+interface Candidat {
+  id: number
+  num_carrega: number
+  carrega: string
+  darrer_naixement: string
+  dies_sense_activitat: number
+  n_carros: number
+}
+
 const ESTAT_COLOR: Record<string, string> = {
   'Planificat': 'var(--text-dim)',
   'Finalitzat': 'var(--success)',
@@ -30,12 +39,39 @@ export default function Carregues() {
   const [fulls, setFulls] = useState<Full[]>([])
   const [loading, setLoading] = useState(true)
   const [mostrarFinalitzats, setMostrarFinalitzats] = useState(false)
+  const [candidats, setCandidats] = useState<Candidat[]>([])
+  const [llindarDies, setLlindarDies] = useState(7)
+  const [finalitzantId, setFinalitzantId] = useState<number | null>(null)
 
-  useEffect(() => {
+  const carregarTot = () => {
     fetch('/api/carrega')
       .then(r => r.json())
       .then(data => { setFulls(data); setLoading(false) })
-  }, [])
+    fetch('/api/carrega/candidats-finalitzar')
+      .then(r => r.json())
+      .then(data => {
+        setCandidats(data.candidats || [])
+        if (data.llindar_dies) setLlindarDies(data.llindar_dies)
+      })
+  }
+
+  useEffect(() => { carregarTot() }, [])
+
+  const finalitzarCandidat = async (c: Candidat) => {
+    if (!confirm('Vols finalitzar el full #' + c.num_carrega + '?')) return
+    setFinalitzantId(c.id)
+    const res = await fetch('/api/carrega/' + c.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estat: 'Finalitzat' }),
+    })
+    setFinalitzantId(null)
+    if (!res.ok) {
+      alert("No s'ha pogut finalitzar el full.")
+      return
+    }
+    carregarTot()
+  }
 
   const fullsFinalitzats = fulls.filter(f => f.estat === 'Finalitzat')
   const fullsActius = fulls.filter(f => f.estat !== 'Finalitzat')
@@ -66,6 +102,66 @@ export default function Carregues() {
 
         {loading && <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>Carregant...</p>}
 
+        {!loading && candidats.length > 0 && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            borderRadius: '10px',
+            padding: '0.9rem 1.1rem',
+            marginBottom: '1rem',
+          }}>
+            <div style={{
+              fontSize: '0.7rem',
+              fontFamily: 'IBM Plex Mono',
+              color: '#f59e0b',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: '0.6rem',
+              fontWeight: 700,
+            }}>
+              {candidats.length} full{candidats.length !== 1 ? 's' : ''} pendent{candidats.length !== 1 ? 's' : ''} de tancar
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.7rem' }}>
+              Tots els carros tenen el naixement registrat i fa {'>='}{llindarDies} dies sense activitat.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {candidats.map(c => (
+                <div key={c.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'var(--surface)', borderRadius: '6px', padding: '0.5rem 0.75rem',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                    <Link href={'/carrega/' + c.id} style={{ textDecoration: 'none', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontWeight: 700, fontSize: '0.9rem' }}>
+                      #{c.num_carrega}
+                    </Link>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                      Càrrega {formatData(c.carrega)} · darrer naixement fa {c.dies_sense_activitat} dies · {c.n_carros} carros
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => finalitzarCandidat(c)}
+                    disabled={finalitzantId === c.id}
+                    style={{
+                      background: 'var(--success)',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: '#0f1117',
+                      padding: '0.4rem 0.8rem',
+                      fontSize: '0.75rem',
+                      fontFamily: 'IBM Plex Sans',
+                      fontWeight: 700,
+                      cursor: finalitzantId === c.id ? 'wait' : 'pointer',
+                      opacity: finalitzantId === c.id ? 0.6 : 1,
+                    }}
+                  >
+                    {finalitzantId === c.id ? '...' : '✓ Finalitzar'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!loading && fullsFinalitzats.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
             <button
@@ -81,7 +177,7 @@ export default function Carregues() {
                 cursor: 'pointer',
               }}
             >
-              {mostrarFinalitzats ? `Amagar finalitzats (${fullsFinalitzats.length})` : `Mostrar finalitzats (${fullsFinalitzats.length})`}
+              {mostrarFinalitzats ? 'Amagar finalitzats (' + fullsFinalitzats.length + ')' : 'Mostrar finalitzats (' + fullsFinalitzats.length + ')'}
             </button>
           </div>
         )}
@@ -91,7 +187,7 @@ export default function Carregues() {
             const totalPollets = full.comandes.filter(c => c.tipus === 'Pollets').reduce((s, c) => s + (c.quantitat_pollets || 0), 0)
             const totalMaquila = full.comandes.filter(c => c.tipus === 'Maquila').reduce((s, c) => s + (c.quantitat_ous_maquila || 0), 0)
             return (
-              <Link key={full.id} href={`/carrega/${full.id}`} style={{ textDecoration: 'none' }}>
+              <Link key={full.id} href={'/carrega/' + full.id} style={{ textDecoration: 'none' }}>
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem 1.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
