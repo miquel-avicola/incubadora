@@ -151,18 +151,36 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
       <HeaderTargeta numero={inc.numero} tipus="Singlestage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
 
       <div style={{ marginTop: '0.75rem' }}>
-        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.25rem', display: 'flex', justifyContent: 'space-between' }}>
-          <span>← porta esq</span>
-          <span style={{ fontWeight: 600 }}>PULSATOR</span>
-          <span>porta dre →</span>
+        {/* Capçaleres per columna */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr) 10px repeat(3, 1fr)',
+          gap: '0 6px',
+          marginBottom: '0.3rem',
+          padding: '0 4px',
+          fontSize: '0.55rem',
+          color: 'var(--text-dim)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          textAlign: 'center',
+          fontFamily: 'IBM Plex Mono, monospace',
+          fontWeight: 600,
+        }}>
+          <div>Paret esq</div>
+          <div>Central esq</div>
+          <div>Pulsator esq</div>
+          <div />
+          <div>Pulsator dre</div>
+          <div>Central dre</div>
+          <div>Paret dre</div>
         </div>
 
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr) 6px repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(3, 1fr) 10px repeat(3, 1fr)',
             gridTemplateRows: 'repeat(4, auto)',
-            gap: '2px',
+            gap: '2px 6px',
             background: '#0f1117',
             padding: '4px',
             borderRadius: '6px',
