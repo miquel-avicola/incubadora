@@ -191,6 +191,9 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
             const c = colorOcupat()
             // Insereix el separador del pulsator central a la columna 4 visual
             const colVisual = col <= 3 ? col : col + 1
+            // Inverteix l'eix Y perquè el carro 1 (i la resta de "primers" de cada
+            // passadís) surti a baix, més a prop de la porta. Fila visual = 5 - row.
+            const rowVisual = 5 - row
             return (
               <div
                 key={posicio}
@@ -201,7 +204,7 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
                 }
                 style={{
                   gridColumn: colVisual,
-                  gridRow: row,
+                  gridRow: rowVisual,
                   background: carro ? c.bg : '#1a1c25',
                   color: carro ? c.text : '#555',
                   border: `1px solid ${carro ? c.border : '#2a2c35'}`,
