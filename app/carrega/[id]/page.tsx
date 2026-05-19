@@ -10,6 +10,7 @@ interface Assignacio {
   num_carro_full: number
   hora_entrada: string | null
   previsio_naixement: number | null
+  previsio_manual: boolean
   carros_estoc: {
     id: number
     posta: string
@@ -51,6 +52,9 @@ export default function DetallCarrega() {
   const [loading, setLoading] = useState(true)
   const [menuObert, setMenuObert] = useState(false)
   const [canviantEstat, setCanviantEstat] = useState(false)
+  const [editantPrevisioId, setEditantPrevisioId] = useState<number | null>(null)
+  const [valorEditPrevisio, setValorEditPrevisio] = useState<string>('')
+  const [desantPrevisio, setDesantPrevisio] = useState(false)
 
   const carregarDades = useCallback(() => {
     if (!params.id) return
@@ -86,6 +90,40 @@ export default function DetallCarrega() {
       alert('No s\'ha pogut finalitzar el full.')
       return
     }
+    carregarDades()
+  }
+
+  const desarPrevisio = async (assignacioId: number, valor: string) => {
+    if (desantPrevisio) return
+    setDesantPrevisio(true)
+    let body: { previsio_naixement: number | null }
+    const trimmed = valor.trim()
+    if (trimmed === '') {
+      // Buit -> tornar a càlcul automàtic
+      body = { previsio_naixement: null }
+    } else {
+      const num = parseFloat(trimmed.replace(',', '.'))
+      if (!Number.isFinite(num) || num < 0 || num > 100) {
+        alert("Valor invàlid: ha d'estar entre 0 i 100 (deixa-ho buit per tornar a auto).")
+        setDesantPrevisio(false)
+        return
+      }
+      body = { previsio_naixement: num / 100 }
+    }
+    const res = await fetch(`/api/assignacions/${assignacioId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Error: ${data.error || "no s'ha pogut desar"}`)
+      setDesantPrevisio(false)
+      return
+    }
+    setEditantPrevisioId(null)
+    setValorEditPrevisio('')
+    setDesantPrevisio(false)
     carregarDades()
   }
 
@@ -346,9 +384,67 @@ export default function DetallCarrega() {
                           <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
                             {a.carros_estoc.posta}
                           </span>
-                          {a.previsio_naixement && (
-                            <span style={{ marginLeft: '0.75rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
-                              {Math.round(a.previsio_naixement * 100)}%
+                          {editantPrevisioId === a.id ? (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              autoFocus
+                              value={valorEditPrevisio}
+                              onChange={(e) => setValorEditPrevisio(e.target.value)}
+                              onBlur={() => desarPrevisio(a.id, valorEditPrevisio)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') desarPrevisio(a.id, valorEditPrevisio)
+                                else if (e.key === 'Escape') {
+                                  setEditantPrevisioId(null)
+                                  setValorEditPrevisio('')
+                                }
+                              }}
+                              disabled={desantPrevisio}
+                              placeholder="buit=auto"
+                              style={{
+                                marginLeft: '0.75rem',
+                                width: '4.5rem',
+                                padding: '0.1rem 0.3rem',
+                                background: 'var(--bg)',
+                                border: '1px solid var(--accent)',
+                                borderRadius: '4px',
+                                color: 'var(--accent)',
+                                fontFamily: 'IBM Plex Mono',
+                                fontSize: '0.75rem',
+                                textAlign: 'right',
+                              }}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => {
+                                setEditantPrevisioId(a.id)
+                                setValorEditPrevisio(
+                                  a.previsio_naixement != null
+                                    ? String(Math.round(a.previsio_naixement * 1000) / 10)
+                                    : ''
+                                )
+                              }}
+                              title={
+                                a.previsio_manual
+                                  ? 'Previsio manual - clica per modificar (o esborra per tornar a auto)'
+                                  : 'Previsio automatica - clica per editar'
+                              }
+                              style={{
+                                marginLeft: '0.75rem',
+                                color: a.previsio_manual ? '#f59e0b' : 'var(--accent)',
+                                fontFamily: 'IBM Plex Mono',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                                borderBottom: a.previsio_manual ? '1px dashed currentColor' : 'none',
+                              }}
+                            >
+                              {a.previsio_naixement != null
+                                ? `${Math.round(a.previsio_naixement * 1000) / 10}%`
+                                : '—'}
+                              {a.previsio_manual && ' ✎'}
                             </span>
                           )}
                         </div>
