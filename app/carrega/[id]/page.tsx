@@ -55,6 +55,9 @@ export default function DetallCarrega() {
   const [editantPrevisioId, setEditantPrevisioId] = useState<number | null>(null)
   const [valorEditPrevisio, setValorEditPrevisio] = useState<string>('')
   const [desantPrevisio, setDesantPrevisio] = useState(false)
+  const [editantGrupKey, setEditantGrupKey] = useState<string | null>(null)
+  const [valorEditGrup, setValorEditGrup] = useState<string>('')
+  const [desantGrup, setDesantGrup] = useState(false)
 
   const carregarDades = useCallback(() => {
     if (!params.id) return
@@ -124,6 +127,39 @@ export default function DetallCarrega() {
     setEditantPrevisioId(null)
     setValorEditPrevisio('')
     setDesantPrevisio(false)
+    carregarDades()
+  }
+
+  const desarPrevisioGrup = async (lotId: number, incubadoraId: number, valor: string) => {
+    if (desantGrup) return
+    setDesantGrup(true)
+    let body: { lot_id: number; incubadora_id: number; previsio_naixement: number | null }
+    const trimmed = valor.trim()
+    if (trimmed === '') {
+      body = { lot_id: lotId, incubadora_id: incubadoraId, previsio_naixement: null }
+    } else {
+      const num = parseFloat(trimmed.replace(',', '.'))
+      if (!Number.isFinite(num) || num < 0 || num > 100) {
+        alert("Valor invàlid: 0-100 (buit per tornar a auto).")
+        setDesantGrup(false)
+        return
+      }
+      body = { lot_id: lotId, incubadora_id: incubadoraId, previsio_naixement: num / 100 }
+    }
+    const res = await fetch(`/api/carrega/${params.id}/previsio-grup`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Error: ${data.error || "no s'ha pogut desar"}`)
+      setDesantGrup(false)
+      return
+    }
+    setEditantGrupKey(null)
+    setValorEditGrup('')
+    setDesantGrup(false)
     carregarDades()
   }
 
@@ -368,91 +404,136 @@ export default function DetallCarrega() {
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
             <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Assignacions ({full.assignacions.length} carros)</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {Object.entries(perIncubadora).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([num, assigs]) => (
-                <div key={num}>
-                  <div style={{ fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', marginBottom: '0.4rem' }}>
-                    Incubadora {num} — {assigs[0].incubadores.model} ({assigs[0].incubadores.tipus === 'Singlestage' ? 'SS' : 'MS'})
+              {Object.entries(perIncubadora).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([num, assigs]) => {
+                const perLot: Record<number, Assignacio[]> = {}
+                for (const a of assigs) {
+                  const lid = a.carros_estoc.lots_reproductores.id
+                  if (!perLot[lid]) perLot[lid] = []
+                  perLot[lid].push(a)
+                }
+                const grups = Object.values(perLot).sort((g1, g2) => {
+                  const m1 = g1.reduce((m, c) => Math.min(m, c.num_carro_full), Infinity)
+                  const m2 = g2.reduce((m, c) => Math.min(m, c.num_carro_full), Infinity)
+                  return m1 - m2
+                })
+                return (
+                  <div key={num}>
+                    <div style={{ fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', marginBottom: '0.4rem' }}>
+                      Incubadora {num} — {assigs[0].incubadores.model} ({assigs[0].incubadores.tipus === 'Singlestage' ? 'SS' : 'MS'})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {grups.map(carrosLot => {
+                        const primer = carrosLot[0]
+                        const lot = primer.carros_estoc.lots_reproductores
+                        const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
+                        const incubadoraId = primer.incubadores.id
+                        const grupKey = `${incubadoraId}|${lot.id}`
+                        const valors = carrosLot.map(c => c.previsio_naixement)
+                        const totsIguals = valors.every(v => v === valors[0])
+                        const valorUniform = totsIguals ? valors[0] : null
+                        const algunsManuals = carrosLot.some(c => c.previsio_manual)
+                        const totsManuals = carrosLot.every(c => c.previsio_manual)
+                        return (
+                          <div key={grupKey} style={{ background: 'var(--bg)', borderRadius: 8, padding: '0.5rem 0.75rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
+                              <span style={{ fontWeight: 600 }}>{granja} {lot.estirp || ''} · {carrosLot.length} carro{carrosLot.length > 1 ? 's' : ''}</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem' }}>tot el grup:</span>
+                                {editantGrupKey === grupKey ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    autoFocus
+                                    value={valorEditGrup}
+                                    onChange={(e) => setValorEditGrup(e.target.value)}
+                                    onBlur={() => desarPrevisioGrup(lot.id, incubadoraId, valorEditGrup)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') desarPrevisioGrup(lot.id, incubadoraId, valorEditGrup)
+                                      else if (e.key === 'Escape') { setEditantGrupKey(null); setValorEditGrup('') }
+                                    }}
+                                    disabled={desantGrup}
+                                    placeholder="buit=auto"
+                                    style={{ width: '4.5rem', padding: '0.1rem 0.3rem', background: 'var(--bg)', border: '1px solid var(--accent)', borderRadius: '4px', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', textAlign: 'right' }}
+                                  />
+                                ) : (
+                                  <span
+                                    onClick={() => {
+                                      setEditantGrupKey(grupKey)
+                                      setValorEditGrup(valorUniform != null ? String(Math.round(valorUniform * 1000) / 10) : '')
+                                    }}
+                                    title={totsIguals ? (totsManuals ? 'Tot el grup amb valor manual - clica per modificar' : 'Tot el grup amb valor auto - clica per fixar manualment') : 'Valors diferents - clica per posar el mateix a tots'}
+                                    style={{
+                                      color: totsIguals ? (totsManuals ? '#f59e0b' : 'var(--accent)') : 'var(--text-dim)',
+                                      fontFamily: 'IBM Plex Mono',
+                                      fontSize: '0.78rem',
+                                      cursor: 'pointer',
+                                      userSelect: 'none',
+                                      borderBottom: totsIguals && totsManuals ? '1px dashed currentColor' : (totsIguals ? '1px dotted var(--text-dim)' : '1px dashed var(--text-dim)'),
+                                    }}
+                                  >
+                                    {totsIguals
+                                      ? (valorUniform != null ? `${Math.round(valorUniform * 1000) / 10}%${totsManuals ? ' ✎' : ''}` : '—')
+                                      : `mixt${algunsManuals ? ' ✎' : ''}`}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              {carrosLot.sort((c1, c2) => c1.num_carro_full - c2.num_carro_full).map(a => (
+                                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}>
+                                  <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', minWidth: '2rem' }}>C{a.num_carro_full}</span>
+                                  <span style={{ flex: 1, marginLeft: '0.5rem', color: 'var(--text-dim)' }}>{a.carros_estoc.posta}</span>
+                                  {editantPrevisioId === a.id ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      autoFocus
+                                      value={valorEditPrevisio}
+                                      onChange={(e) => setValorEditPrevisio(e.target.value)}
+                                      onBlur={() => desarPrevisio(a.id, valorEditPrevisio)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') desarPrevisio(a.id, valorEditPrevisio)
+                                        else if (e.key === 'Escape') { setEditantPrevisioId(null); setValorEditPrevisio('') }
+                                      }}
+                                      disabled={desantPrevisio}
+                                      placeholder="buit=auto"
+                                      style={{ marginLeft: '0.75rem', width: '4.5rem', padding: '0.1rem 0.3rem', background: 'var(--bg)', border: '1px solid var(--accent)', borderRadius: '4px', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', textAlign: 'right' }}
+                                    />
+                                  ) : (
+                                    <span
+                                      onClick={() => {
+                                        setEditantPrevisioId(a.id)
+                                        setValorEditPrevisio(a.previsio_naixement != null ? String(Math.round(a.previsio_naixement * 1000) / 10) : '')
+                                      }}
+                                      title={a.previsio_manual ? 'Manual - clica per modificar' : 'Auto - clica per editar individualment'}
+                                      style={{
+                                        marginLeft: '0.75rem',
+                                        color: a.previsio_manual ? '#f59e0b' : 'var(--text-dim)',
+                                        fontFamily: 'IBM Plex Mono',
+                                        fontSize: '0.72rem',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        borderBottom: a.previsio_manual ? '1px dashed currentColor' : 'none',
+                                      }}
+                                    >
+                                      {a.previsio_naixement != null ? `${Math.round(a.previsio_naixement * 1000) / 10}%` : '—'}
+                                      {a.previsio_manual && ' ✎'}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    {assigs.sort((a, b) => a.num_carro_full - b.num_carro_full).map(a => {
-                      const lot = a.carros_estoc.lots_reproductores
-                      const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
-                      return (
-                        <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.75rem', background: 'var(--bg)', borderRadius: '6px', fontSize: '0.8rem' }}>
-                          <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', minWidth: '2rem' }}>C{a.num_carro_full}</span>
-                          <span style={{ flex: 1, marginLeft: '0.5rem' }}>{granja} {lot.estirp}</span>
-                          <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
-                            {a.carros_estoc.posta}
-                          </span>
-                          {editantPrevisioId === a.id ? (
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              autoFocus
-                              value={valorEditPrevisio}
-                              onChange={(e) => setValorEditPrevisio(e.target.value)}
-                              onBlur={() => desarPrevisio(a.id, valorEditPrevisio)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') desarPrevisio(a.id, valorEditPrevisio)
-                                else if (e.key === 'Escape') {
-                                  setEditantPrevisioId(null)
-                                  setValorEditPrevisio('')
-                                }
-                              }}
-                              disabled={desantPrevisio}
-                              placeholder="buit=auto"
-                              style={{
-                                marginLeft: '0.75rem',
-                                width: '4.5rem',
-                                padding: '0.1rem 0.3rem',
-                                background: 'var(--bg)',
-                                border: '1px solid var(--accent)',
-                                borderRadius: '4px',
-                                color: 'var(--accent)',
-                                fontFamily: 'IBM Plex Mono',
-                                fontSize: '0.75rem',
-                                textAlign: 'right',
-                              }}
-                            />
-                          ) : (
-                            <span
-                              onClick={() => {
-                                setEditantPrevisioId(a.id)
-                                setValorEditPrevisio(
-                                  a.previsio_naixement != null
-                                    ? String(Math.round(a.previsio_naixement * 1000) / 10)
-                                    : ''
-                                )
-                              }}
-                              title={
-                                a.previsio_manual
-                                  ? 'Previsio manual - clica per modificar (o esborra per tornar a auto)'
-                                  : 'Previsio automatica - clica per editar'
-                              }
-                              style={{
-                                marginLeft: '0.75rem',
-                                color: a.previsio_manual ? '#f59e0b' : 'var(--accent)',
-                                fontFamily: 'IBM Plex Mono',
-                                fontSize: '0.75rem',
-                                cursor: 'pointer',
-                                userSelect: 'none',
-                                borderBottom: a.previsio_manual ? '1px dashed currentColor' : 'none',
-                              }}
-                            >
-                              {a.previsio_naixement != null
-                                ? `${Math.round(a.previsio_naixement * 1000) / 10}%`
-                                : '—'}
-                              {a.previsio_manual && ' ✎'}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
