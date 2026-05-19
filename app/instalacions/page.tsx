@@ -138,7 +138,8 @@ function ocupacioColor(ocupats: number, capacitat: number): string {
 // Subcomponent: targeta d'una Singlestage amb mapa de posicions
 // ───────────────────────────────────────────────────────────────────
 
-function TargetaSinglestage({ inc }: { inc: Incubadora }) {
+function TargetaSinglestage({ inc, edicio }: { inc: Incubadora; edicio?: ContextEdicio }) {
+  const sub: SubTipus = 'SS'
   const carrosPerPosicio = new Map<number, CarroInc>()
   const sensePosicio: CarroInc[] = []
   inc.carros.forEach((c) => {
@@ -194,20 +195,37 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
             // Inverteix l'eix Y perquè el carro 1 (i la resta de "primers" de cada
             // passadís) surti a baix, més a prop de la porta. Fila visual = 5 - row.
             const rowVisual = 5 - row
+            const arrossegable = !!edicio?.actiu && !!carro
+            const acceptaDropAqui = !!edicio?.actiu && !carro && edicio.subTipusArrossegat === 'SS'
             return (
               <div
                 key={posicio}
+                draggable={arrossegable}
+                onDragStart={arrossegable ? (e) => {
+                  e.dataTransfer.setData('assignacio_id', String(carro!.assignacio_id))
+                  e.dataTransfer.setData('sub', 'SS')
+                  e.dataTransfer.effectAllowed = 'move'
+                  edicio!.setSubTipusArrossegat('SS')
+                } : undefined}
+                onDragEnd={arrossegable ? () => edicio!.setSubTipusArrossegat(null) : undefined}
+                onDragOver={acceptaDropAqui ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+                onDrop={acceptaDropAqui ? (e) => {
+                  e.preventDefault()
+                  const aid = parseInt(e.dataTransfer.getData('assignacio_id'), 10)
+                  if (!Number.isFinite(aid)) return
+                  edicio!.onMoure(aid, inc.id, posicio, null)
+                } : undefined}
                 title={
                   carro
-                    ? `Pos ${posicio} · ${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}`
-                    : `Pos ${posicio} · lliure`
+                    ? `Pos ${posicio} · ${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}${edicio?.actiu ? ' · arrossega per moure' : ''}`
+                    : `Pos ${posicio} · lliure${acceptaDropAqui ? ' (drop aquí)' : ''}`
                 }
                 style={{
                   gridColumn: colVisual,
                   gridRow: rowVisual,
-                  background: carro ? c.bg : '#1a1c25',
+                  background: carro ? c.bg : (acceptaDropAqui ? '#1d2c1d' : '#1a1c25'),
                   color: carro ? c.text : '#555',
-                  border: `1px solid ${carro ? c.border : '#2a2c35'}`,
+                  border: `${acceptaDropAqui ? '2px dashed #27ae60' : '1px solid'} ${carro ? c.border : (acceptaDropAqui ? '#27ae60' : '#2a2c35')}`,
                   borderRadius: '3px',
                   padding: '3px 3px',
                   fontSize: '0.55rem',
@@ -219,6 +237,7 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
                   flexDirection: 'column',
                   justifyContent: carro ? 'space-between' : 'center',
                   overflow: 'hidden',
+                  cursor: arrossegable ? 'grab' : 'default',
                 }}
               >
                 <div style={{ fontWeight: 700, fontSize: '0.6rem', opacity: 0.55 }}>{posicio}</div>
@@ -255,7 +274,8 @@ function TargetaSinglestage({ inc }: { inc: Incubadora }) {
 // Subcomponent: targeta d'una Multistage agrupada per zona
 // ───────────────────────────────────────────────────────────────────
 
-function TargetaMultistage({ inc }: { inc: Incubadora }) {
+function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextEdicio }) {
+  const sub = subtipusDe(inc)
   const zones: Record<'central' | 'paret' | 'pulsator' | 'sense', CarroInc[]> = {
     central: [],
     paret: [],
@@ -272,9 +292,9 @@ function TargetaMultistage({ inc }: { inc: Incubadora }) {
       <HeaderTargeta numero={inc.numero} tipus="Multistage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
 
       <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
-        <ColumnaZona titol="Central" carros={zones.central} accent="#27ae60" />
-        <ColumnaZona titol="Paret" carros={zones.paret} accent="#3498db" />
-        <ColumnaZona titol="Pulsator" carros={zones.pulsator} accent="#e74c3c" />
+        <ColumnaZona titol="Central" carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
+        <ColumnaZona titol="Paret" carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
+        <ColumnaZona titol="Pulsator" carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
       </div>
 
       {zones.sense.length > 0 && (
@@ -293,9 +313,21 @@ function TargetaMultistage({ inc }: { inc: Incubadora }) {
   )
 }
 
-function ColumnaZona({ titol, carros, accent }: { titol: string; carros: CarroInc[]; accent: string }) {
+function ColumnaZona({ titol, carros, accent, inc, zona, edicio, sub }: { titol: string; carros: CarroInc[]; accent: string; inc?: Incubadora; zona?: 'central'|'paret'|'pulsator'; edicio?: ContextEdicio; sub?: SubTipus }) {
+  const acceptaDrop = edicio?.actiu && inc && zona && sub && edicio.subTipusArrossegat === sub
+  const lliureEnZona = inc && zona ? (carros.length < (inc.capacitat === 24 ? 8 : 4)) : false
   return (
-    <div style={{ background: '#1a1c25', borderRadius: '6px', padding: '0.4rem', minHeight: '120px' }}>
+    <div
+      style={{ background: '#1a1c25', borderRadius: '6px', padding: '0.4rem', minHeight: '120px', border: acceptaDrop && lliureEnZona ? '2px dashed ' + accent : '2px solid transparent', transition: 'border 0.1s' }}
+      onDragOver={acceptaDrop && lliureEnZona ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
+      onDrop={acceptaDrop && lliureEnZona && inc && zona && edicio ? (e) => {
+        e.preventDefault()
+        const aid = parseInt(e.dataTransfer.getData('assignacio_id'), 10)
+        const pos = posicioLliureMSZona(inc, zona)
+        if (!Number.isFinite(aid) || pos === null) return
+        edicio.onMoure(aid, inc.id, pos, zona)
+      } : undefined}
+    >
       <div style={{ fontSize: '0.65rem', color: accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem', fontWeight: 600 }}>
         {titol} <span style={{ color: 'var(--text-dim)' }}>({carros.length})</span>
       </div>
@@ -303,20 +335,31 @@ function ColumnaZona({ titol, carros, accent }: { titol: string; carros: CarroIn
         {carros.length === 0 ? (
           <div style={{ fontSize: '0.65rem', color: '#444', textAlign: 'center', padding: '0.5rem 0' }}>—</div>
         ) : (
-          carros.map((c) => <ChipCarro key={c.assignacio_id} carro={c} />)
+          carros.map((c) => <ChipCarro key={c.assignacio_id} carro={c} edicio={edicio} sub={sub} />)
         )}
       </div>
     </div>
   )
 }
 
-function ChipCarro({ carro }: { carro: CarroInc | CarroNx }) {
+function ChipCarro({ carro, edicio, sub }: { carro: CarroInc | CarroNx; edicio?: ContextEdicio; sub?: SubTipus }) {
   const c = colorOcupat()
+  const isInc = (carro as CarroInc).assignacio_id !== undefined && (carro as CarroNx).transferencia_id === undefined
+  const arrosegable = edicio?.actiu && isInc && sub !== undefined
   return (
     <div
-      title={`${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}`}
+      title={`${carro.granja ?? '—'} · #${carro.num_carrega}/${carro.num_carro_full} · ${carro.setmanes_lot ?? '?'}s repr · dia ${carro.dia_incubacio ?? '?'}${arrosegable ? ' · arrossega per moure' : ''}`}
+      draggable={arrosegable}
+      onDragStart={arrosegable ? (e) => {
+        e.dataTransfer.setData('assignacio_id', String((carro as CarroInc).assignacio_id))
+        e.dataTransfer.setData('sub', sub!)
+        e.dataTransfer.effectAllowed = 'move'
+        edicio!.setSubTipusArrossegat(sub!)
+      } : undefined}
+      onDragEnd={arrosegable ? () => edicio!.setSubTipusArrossegat(null) : undefined}
       style={{
         background: c.bg,
+        cursor: arrosegable ? 'grab' : 'default',
         color: c.text,
         border: `1px solid ${c.border}`,
         borderRadius: '3px',
@@ -396,6 +439,35 @@ const cardStyle: React.CSSProperties = {
   padding: '0.9rem',
 }
 
+
+// ───────────────────────────────────────────────────────────────────
+// Mode edició — drag-and-drop entre cel·les del mateix tipus
+// ───────────────────────────────────────────────────────────────────
+
+type SubTipus = 'SS' | 'MSG' | 'MSP'
+
+function subtipusDe(inc: Incubadora): SubTipus {
+  if (inc.tipus === 'Singlestage') return 'SS'
+  return inc.capacitat === 24 ? 'MSG' : 'MSP'
+}
+
+interface ContextEdicio {
+  actiu: boolean
+  // Subtipus del carro en curs d'arrossegament (per pintar drop targets vàlids)
+  subTipusArrossegat: SubTipus | null
+  setSubTipusArrossegat: (s: SubTipus | null) => void
+  // Crida PATCH /api/assignacions/[id]
+  onMoure: (assignacioId: number, incIdDesti: number, posDesti: number, zonaDesti: 'central'|'paret'|'pulsator'|null) => void
+}
+
+// Trobar la posició lliure mínima d'una zona MS dins una incubadora destí
+function posicioLliureMSZona(inc: Incubadora, zona: 'central'|'paret'|'pulsator'): number | null {
+  const max = inc.capacitat === 24 ? 8 : 4
+  const ocupades = new Set(inc.carros.filter(c => c.zona === zona && c.posicio !== null).map(c => c.posicio as number))
+  for (let p = 1; p <= max; p++) if (!ocupades.has(p)) return p
+  return null
+}
+
 // ───────────────────────────────────────────────────────────────────
 // Pàgina principal
 // ───────────────────────────────────────────────────────────────────
@@ -404,6 +476,9 @@ export default function Instalacions() {
   const [estat, setEstat] = useState<Estat | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [modeEdicio, setModeEdicio] = useState(false)
+  const [subTipusArrossegat, setSubTipusArrossegat] = useState<SubTipus | null>(null)
+  const [missatgeEdicio, setMissatgeEdicio] = useState<string>('')
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -426,6 +501,34 @@ export default function Instalacions() {
   useEffect(() => {
     carregar()
   }, [carregar])
+
+  // ── Mode edició: handler de mou
+  const onMoureCarro = useCallback(async (assignacioId: number, incIdDesti: number, posDesti: number, zonaDesti: 'central'|'paret'|'pulsator'|null) => {
+    setMissatgeEdicio('')
+    try {
+      const res = await fetch(`/api/assignacions/${assignacioId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incubadora_id: incIdDesti, posicio: posDesti, zona: zonaDesti }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMissatgeEdicio('Error: ' + (data.error || res.statusText))
+        return
+      }
+      setMissatgeEdicio('✓ Mogut')
+      carregar()
+    } catch (e) {
+      setMissatgeEdicio('Error xarxa: ' + String(e))
+    }
+  }, [carregar])
+
+  const ctxEdicio: ContextEdicio = {
+    actiu: modeEdicio,
+    subTipusArrossegat,
+    setSubTipusArrossegat,
+    onMoure: onMoureCarro,
+  }
 
   // Totals globals
   const totalCarrosInc = estat?.incubadores.reduce((s, i) => s + i.carros.length, 0) ?? 0
@@ -465,10 +568,28 @@ export default function Instalacions() {
 
         {estat && !loading && (
           <>
-            {/* Resum global */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            {/* Resum global + toggle edició */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <KpiBox titol="Incubadores" valor={`${totalCarrosInc}/${totalCapacitatInc}`} subtitol={`${estat.incubadores.length} màquines`} />
               <KpiBox titol="Naixedores" valor={`${totalCarrosNx}/${totalCapacitatNx}`} subtitol={`${estat.naixedores.length} màquines`} />
+              <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                <button
+                  onClick={() => setModeEdicio(v => !v)}
+                  style={{ background: modeEdicio ? '#c0392b' : 'var(--surface)', border: '1px solid ' + (modeEdicio ? '#c0392b' : 'var(--border)'), color: modeEdicio ? '#fff' : 'var(--text)', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                >
+                  {modeEdicio ? '✓ Tancar edició' : '✎ Editar'}
+                </button>
+                {modeEdicio && (
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', maxWidth: 240, textAlign: 'right' }}>
+                    Arrossega els carros a una cel·la lliure del mateix tipus. SS↔SS, MSG↔MSG, MSP↔MSP.
+                  </div>
+                )}
+                {missatgeEdicio && (
+                  <div style={{ fontSize: '0.7rem', color: missatgeEdicio.startsWith('Error') ? '#ffb3b3' : '#86efac', maxWidth: 240, textAlign: 'right' }}>
+                    {missatgeEdicio}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* INCUBADORES */}
@@ -478,7 +599,7 @@ export default function Instalacions() {
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
                 {estat.incubadores.map((inc) =>
-                  inc.tipus === 'Singlestage' ? <TargetaSinglestage key={inc.id} inc={inc} /> : <TargetaMultistage key={inc.id} inc={inc} />
+                  inc.tipus === 'Singlestage' ? <TargetaSinglestage key={inc.id} inc={inc} edicio={ctxEdicio} /> : <TargetaMultistage key={inc.id} inc={inc} edicio={ctxEdicio} />
                 )}
               </div>
             </section>

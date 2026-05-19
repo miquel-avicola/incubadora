@@ -1,21 +1,22 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 
-// ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Tipus
-// ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
+type SubTipus = 'SS' | 'MSG' | 'MSP' | 'NAIX'
+type Dia = 'dijous' | 'dilluns'
 
 interface CarroEstoc {
   id: number
   posta: string
   quantitat_ous: number
   estat: string
-  recepcio: string
   lots_reproductores: {
     id: number
     data_naixement: string
@@ -32,14 +33,23 @@ interface Incubadora {
   capacitat_carros: number
 }
 
-interface Assignacio {
+interface AssignacioActual {
   id: number
   num_carro_full: number
-  previsio_naixement: number | null
   posicio: number | null
   zona: ZonaMS | null
   incubadora_id: number
-  carros_estoc: { id: number; posta: string; quantitat_ous: number; lots_reproductores: { data_naixement: string; estirp: string | null; granges_reproductores: { granja: string; nom_informal: string | null } } }
+  carros_estoc: {
+    id: number
+    posta: string
+    quantitat_ous: number
+    lots_reproductores: {
+      id: number
+      data_naixement: string
+      estirp: string | null
+      granges_reproductores: { granja: string; nom_informal: string | null }
+    }
+  }
   incubadores: { numero: number; model: string; tipus: string }
 }
 
@@ -47,46 +57,74 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
-  assignacions: Assignacio[]
+  assignacions: AssignacioActual[]
   comandes: { quantitat_pollets: number | null; quantitat_ous_maquila: number | null; tipus: string }[]
 }
 
-// Subconjunt del JSON de /api/instalacions
-interface CarroAInstalacio {
+interface CarroInst {
   assignacio_id: number
   num_carro_full: number
   posicio: number | null
   zona: ZonaMS | null
   estirp: string | null
 }
-interface IncAInstalacio {
+
+interface IncInst {
   id: number
+  numero: number
   tipus: string
-  carros: CarroAInstalacio[]
-}
-interface EstatInstalacions {
-  incubadores: IncAInstalacio[]
+  capacitat: number
+  carros: CarroInst[]
 }
 
-// Layout físic SS — mateixa estructura que /instal·lacions
-const SS_LAYOUT: Array<{ posicio: number; col: number; row: number }> = [
-  { posicio: 1, col: 1, row: 1 }, { posicio: 2, col: 1, row: 2 }, { posicio: 3, col: 1, row: 3 }, { posicio: 4, col: 1, row: 4 },
-  { posicio: 9, col: 2, row: 1 }, { posicio: 10, col: 2, row: 2 }, { posicio: 11, col: 2, row: 3 }, { posicio: 12, col: 2, row: 4 },
-  { posicio: 17, col: 3, row: 1 }, { posicio: 18, col: 3, row: 2 }, { posicio: 19, col: 3, row: 3 }, { posicio: 20, col: 3, row: 4 },
-  { posicio: 21, col: 4, row: 1 }, { posicio: 22, col: 4, row: 2 }, { posicio: 23, col: 4, row: 3 }, { posicio: 24, col: 4, row: 4 },
-  { posicio: 13, col: 5, row: 1 }, { posicio: 14, col: 5, row: 2 }, { posicio: 15, col: 5, row: 3 }, { posicio: 16, col: 5, row: 4 },
-  { posicio: 5, col: 6, row: 1 }, { posicio: 6, col: 6, row: 2 }, { posicio: 7, col: 6, row: 3 }, { posicio: 8, col: 6, row: 4 },
-]
+interface EstatInst {
+  incubadores: IncInst[]
+  naixedores: { id: number; numero: number; capacitat: number; carros: { num_carro_full: number; estirp: string | null }[] }[]
+}
 
-// ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mapatge SS posicio (1-24) a la cel·la visual (col 0-5, row 0-3, on row 0 = porta a baix).
+// Numeració real: paret esq 1-4, paret dre 5-8, central esq 9-12, central dre 13-16,
+// pulsator esq 17-20, pulsator dre 21-24.
+// Columnes visuals: 0=paret esq, 1=central esq, 2=pulsator esq, 3=pulsator dre, 4=central dre, 5=paret dre
+function ssPosToCell(pos: number): { col: number; row: number } {
+  const grup = Math.floor((pos - 1) / 4)
+  const row = (pos - 1) % 4
+  const grupAColumna = [0, 5, 1, 4, 2, 3]
+  return { col: grupAColumna[grup], row }
+}
+
+const MS_ZONES_ESQ: ZonaMS[] = ['paret', 'central', 'pulsator']
+const MS_ZONES_DRE: ZonaMS[] = ['pulsator', 'central', 'paret']
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Helpers
-// ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
-function nomCarro(carro: CarroEstoc) {
-  const lot = carro.lots_reproductores
-  const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
-  const estirp = lot.estirp ? ` ${lot.estirp}` : ''
-  return `${granja}${estirp}`
+function subtipus(tipus: string, cap: number): SubTipus {
+  if (tipus === 'Singlestage') return 'SS'
+  if (tipus === 'Multistage' && cap === 24) return 'MSG'
+  if (tipus === 'Multistage' && cap === 12) return 'MSP'
+  return 'NAIX'
+}
+
+function diaDeFull(dataIso: string): Dia | null {
+  const d = new Date(dataIso + 'T12:00:00').getDay()
+  if (d === 1) return 'dilluns'
+  if (d === 4) return 'dijous'
+  return null
+}
+
+function nomCarroCurt(c: CarroEstoc | AssignacioActual['carros_estoc']): string {
+  const lot = c.lots_reproductores
+  return lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
+}
+
+function keyCell(incId: number, pos: number, zona: ZonaMS | null): string {
+  return `${incId}|${pos}|${zona || '-'}`
 }
 
 function diesEstoc(posta: string, carrega: string): number {
@@ -95,544 +133,885 @@ function diesEstoc(posta: string, carrega: string): number {
   return Math.floor((c.getTime() - p.getTime()) / 86400000)
 }
 
-function setmanesReproductores(posta: string, dataNaixement: string): number {
-  const p = new Date(posta + 'T00:00:00')
-  const n = new Date(dataNaixement + 'T00:00:00')
-  return Math.floor((p.getTime() - n.getTime()) / (86400000 * 7))
+// ─────────────────────────────────────────────────────────────────────────────
+// Algoritme pre-suggerit (v1)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Distribueix els carros encara no col·locats entre les cel·les marcades pel
+// l'usuari (seleccionades en groc), aplicant aquestes regles:
+//
+//   1. Agrupar carros per (granja, estirp, posta). Els grups més grans van primer.
+//   2. Dins d'una incubadora SS, prioritzar columnes pulsator/central abans que paret.
+//   3. Carros del mateix grup tendeixen a anar a la mateixa columna (i incubadora).
+//   4. Costat esquerra primer.
+//
+// Retorna un Map<carro_id, {incId, posicio, zona}>.
+
+interface CellaSel {
+  incId: number
+  pos: number
+  zona: ZonaMS | null
+  // Per a SS, derivem (col, row) i una "prioritat de columna":
+  // 0 = pulsator (esq), 1 = central (esq), 2 = paret (esq), 3 = paret (dre), 4 = central (dre), 5 = pulsator (dre)
+  // Volem pulsator/central abans que paret → ordenar per prioritat ASC.
+  prioritat: number
+  costat: 'esq' | 'dre' | 'cap'
+  columna: number // identificador de columna física (per agrupar lots iguals)
 }
 
-// ───────────────────────────────────────────────────────────────────
-// Component
-// ───────────────────────────────────────────────────────────────────
+function calcularCella(c: CellaSel, sub: SubTipus): CellaSel {
+  return c
+}
 
-export default function Assignacions() {
+function ordreCellesSS(c: CellaSel): number {
+  // Pulsator(esq)=0, Central(esq)=1, Paret(esq)=2, Paret(dre)=3, Central(dre)=4, Pulsator(dre)=5
+  // Per prioritzar pulsator+central abans que paret:
+  // Pulsator esq, Central esq, Pulsator dre, Central dre, Paret esq, Paret dre
+  // → ordre desitjat: 0, 1, 5, 4, 2, 3
+  const mapa: Record<number, number> = { 0: 0, 1: 1, 5: 2, 4: 3, 2: 4, 3: 5 }
+  return mapa[c.prioritat] ?? 99
+}
+
+function preSuggerit(
+  carrosPendents: CarroEstoc[],
+  cellesSel: CellaSel[],
+  incsById: Map<number, Incubadora>
+): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
+  const resultat = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
+  if (carrosPendents.length === 0 || cellesSel.length === 0) return resultat
+
+  // 1. Agrupar carros per (granja+estirp+posta)
+  const grupsCarros = new Map<string, CarroEstoc[]>()
+  for (const c of carrosPendents) {
+    const key = `${c.lots_reproductores.granges_reproductores.granja}|${c.lots_reproductores.estirp || ''}|${c.posta}`
+    if (!grupsCarros.has(key)) grupsCarros.set(key, [])
+    grupsCarros.get(key)!.push(c)
+  }
+  // Ordenar grups: els més grans primer
+  const grupsOrd = Array.from(grupsCarros.entries()).sort((a, b) => b[1].length - a[1].length)
+
+  // 2. Agrupar cel·les per (incubadora, columna)
+  // Per SS, "columna" = grupAColumna a ssPosToCell. Per MS, "columna" = (incId, zona, costat).
+  const grupsCelles = new Map<string, CellaSel[]>()
+  for (const cel of cellesSel) {
+    const inc = incsById.get(cel.incId)
+    if (!inc) continue
+    const sub = subtipus(inc.tipus, inc.capacitat_carros)
+    let groupKey: string
+    if (sub === 'SS') {
+      const { col } = ssPosToCell(cel.pos)
+      groupKey = `${cel.incId}|SS|${col}`
+    } else {
+      // MS: zona + costat (esq=pos 1-4 a MSG / 1-2 MSP, dre=la resta)
+      const costat = (sub === 'MSG' ? (cel.pos <= 4 ? 'esq' : 'dre') : (cel.pos <= 2 ? 'esq' : 'dre'))
+      groupKey = `${cel.incId}|MS|${cel.zona}|${costat}`
+    }
+    if (!grupsCelles.has(groupKey)) grupsCelles.set(groupKey, [])
+    grupsCelles.get(groupKey)!.push(cel)
+  }
+
+  // 3. Ordenar les columnes (grups de cel·les) per prioritat
+  // SS: pulsator + central abans que paret, esquerra primer
+  // MS: central > paret > pulsator (els nous sempre van a central per defecte;
+  //     si l'usuari ha seleccionat paret/pulsator, conscient és)
+  const grupsCellesOrd = Array.from(grupsCelles.entries()).sort((a, b) => {
+    const [keyA, cellsA] = a
+    const [keyB, cellsB] = b
+    const tipusA = keyA.split('|')[1]
+    const tipusB = keyB.split('|')[1]
+    if (tipusA !== tipusB) return tipusA === 'SS' ? -1 : 1
+    if (tipusA === 'SS') {
+      const colA = parseInt(keyA.split('|')[2])
+      const colB = parseInt(keyB.split('|')[2])
+      // ordreCellesSS s'aplica al prioritat de la primera cel·la (que té la mateixa col)
+      const ordA = ordreCellesSS(cellsA[0])
+      const ordB = ordreCellesSS(cellsB[0])
+      if (ordA !== ordB) return ordA - ordB
+      return colA - colB
+    } else {
+      // MS: central abans, després paret, després pulsator. Esquerra abans que dreta.
+      const partsA = keyA.split('|') // incId, MS, zona, costat
+      const partsB = keyB.split('|')
+      const ordZona: Record<string, number> = { central: 0, paret: 1, pulsator: 2 }
+      const za = ordZona[partsA[2]] ?? 3
+      const zb = ordZona[partsB[2]] ?? 3
+      if (za !== zb) return za - zb
+      if (partsA[3] !== partsB[3]) return partsA[3] === 'esq' ? -1 : 1
+      return 0
+    }
+  })
+
+  // 4. Ordenar cel·les dins cada columna: SS per fila ASC (porta primer);
+  //    MS per posicio ASC.
+  for (const [, cells] of grupsCellesOrd) {
+    cells.sort((x, y) => x.pos - y.pos)
+  }
+
+  // 5. Aplanar cel·les en l'ordre final
+  const ordreCelles: CellaSel[] = []
+  for (const [, cells] of grupsCellesOrd) ordreCelles.push(...cells)
+
+  // 6. Aplanar carros: grups grans primer, dins del grup en l'ordre de la llista
+  const ordreCarros: CarroEstoc[] = []
+  for (const [, carros] of grupsOrd) ordreCarros.push(...carros)
+
+  // 7. Assignar 1-a-1
+  const n = Math.min(ordreCarros.length, ordreCelles.length)
+  for (let i = 0; i < n; i++) {
+    const c = ordreCarros[i]
+    const cel = ordreCelles[i]
+    resultat.set(c.id, { incId: cel.incId, pos: cel.pos, zona: cel.zona })
+  }
+  return resultat
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component principal
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function Planificacio() {
   const params = useParams()
+  const router = useRouter()
+
   const [full, setFull] = useState<Full | null>(null)
-  const [carrosDisponibles, setCarrosDisponibles] = useState<CarroEstoc[]>([])
-  const [incubadores, setIncubadores] = useState<Incubadora[]>([])
-  const [estatInstalacions, setEstatInstalacions] = useState<EstatInstalacions | null>(null)
+  const [disponibles, setDisponibles] = useState<CarroEstoc[]>([])
+  const [incs, setIncs] = useState<Incubadora[]>([])
+  const [estatInst, setEstatInst] = useState<EstatInst | null>(null)
   const [loading, setLoading] = useState(true)
-  const [assignant, setAssignant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [guardant, setGuardant] = useState(false)
+  const [resultatGuardar, setResultatGuardar] = useState<string>('')
 
-  const [grupSeleccionat, setGrupSeleccionat] = useState<CarroEstoc[] | null>(null)
-  const [nombreAssignar, setNombreAssignar] = useState(1)
-  const [incubadoraId, setIncubadoraId] = useState('')
-  const [previsioManual, setPrevisioManual] = useState('')
-  const [previsioCalculada, setPrevisioCalculada] = useState<number | null>(null)
-  const [horaEntrada, setHoraEntrada] = useState('')
-  const [posicionsSeleccionades, setPosicionsSeleccionades] = useState<number[]>([])
-  const [zonaSeleccionada, setZonaSeleccionada] = useState<ZonaMS>('central')
+  // Mapa: carro_id → posició planificada (incId+posicio+zona)
+  const [colocats, setColocats] = useState<Map<number, { incId: number; pos: number; zona: ZonaMS | null }>>(new Map())
+  // Set de claus 'incId|pos|zona' marcades com a destí del pre-suggerit
+  const [seleccionades, setSeleccionades] = useState<Set<string>>(new Set())
 
+  const [dia, setDia] = useState<Dia>('dijous')
+  const [mspOrdre, setMspOrdre] = useState<number[]>([8, 9, 10])
+
+  // ── Càrrega inicial
   const carregarDades = useCallback(async () => {
     if (!params.id) return
-    const [fullRes, carrosRes, incRes, instRes] = await Promise.all([
-      fetch(`/api/carrega/${params.id}`).then(r => r.json()),
-      fetch('/api/carros').then(r => r.json()),
-      fetch('/api/incubadores').then(r => r.json()),
-      fetch('/api/instalacions').then(r => r.json()),
-    ])
-    setFull(fullRes)
-    setCarrosDisponibles(carrosRes)
-    setIncubadores(incRes)
-    setEstatInstalacions(instRes)
-    setLoading(false)
+    setLoading(true)
+    try {
+      const [fullRes, carrosRes, incRes, instRes] = await Promise.all([
+        fetch(`/api/carrega/${params.id}`).then(r => r.json()),
+        fetch('/api/carros').then(r => r.json()),
+        fetch('/api/incubadores').then(r => r.json()),
+        fetch('/api/instalacions').then(r => r.json()),
+      ])
+      setFull(fullRes)
+      setDisponibles(Array.isArray(carrosRes) ? carrosRes : [])
+      setIncs(Array.isArray(incRes) ? incRes : [])
+      setEstatInst(instRes)
+
+      // Inicialitzar el mapa de col·locats amb les assignacions existents del full
+      const mapaInicial = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
+      if (fullRes && Array.isArray(fullRes.assignacions)) {
+        for (const a of fullRes.assignacions) {
+          if (a.posicio === null || a.posicio === undefined) continue
+          mapaInicial.set(a.carros_estoc.id, {
+            incId: a.incubadora_id,
+            pos: a.posicio,
+            zona: a.zona,
+          })
+        }
+      }
+      setColocats(mapaInicial)
+      setSeleccionades(new Set())
+
+      // Inferir dia
+      if (fullRes?.carrega) {
+        const d = diaDeFull(fullRes.carrega)
+        if (d) setDia(d)
+      }
+    } catch (e) {
+      setErrorMsg('Error carregant dades: ' + String(e))
+    } finally {
+      setLoading(false)
+    }
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
 
-  // Cascada de previsió
-  useEffect(() => {
-    if (!grupSeleccionat || !full) return
-    const incubadora = incubadores.find(i => i.id === parseInt(incubadoraId))
-    const tipus = incubadora?.tipus || 'Multistage'
-    const primer = grupSeleccionat[0]
-    fetch(`/api/previsio?lot_id=${primer.lots_reproductores.id}&posta=${primer.posta}&tipus=${tipus}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.previsio) {
-          setPrevisioCalculada(data.previsio)
-          setPrevisioManual(String(Math.round(data.previsio * 100)))
+  // ── Derivacions
+  const incsById = useMemo(() => new Map(incs.map(i => [i.id, i])), [incs])
+
+  // Carros que es poden col·locar: disponibles + els assignats al full
+  // (perquè si tornes a la pàgina i en treus algun, ha de tornar a la safata)
+  const carrosLot = useMemo<CarroEstoc[]>(() => {
+    const ja: Map<number, CarroEstoc> = new Map()
+    for (const c of disponibles) ja.set(c.id, c)
+    if (full) {
+      for (const a of full.assignacions) {
+        const ce = a.carros_estoc
+        if (!ja.has(ce.id)) {
+          ja.set(ce.id, {
+            id: ce.id,
+            posta: ce.posta,
+            quantitat_ous: ce.quantitat_ous,
+            estat: 'Assignat',
+            lots_reproductores: ce.lots_reproductores,
+          } as CarroEstoc)
         }
+      }
+    }
+    return Array.from(ja.values())
+  }, [disponibles, full])
+
+  // Carros que encara NO estan col·locats al mapa
+  const carrosPendents = useMemo<CarroEstoc[]>(() => {
+    return carrosLot.filter(c => !colocats.has(c.id))
+  }, [carrosLot, colocats])
+
+  // Map de cel·la → carro_id col·locat
+  const carroPerCella = useMemo(() => {
+    const m = new Map<string, number>()
+    colocats.forEach((p, cid) => {
+      m.set(keyCell(p.incId, p.pos, p.zona), cid)
+    })
+    return m
+  }, [colocats])
+
+  // Ocupació "altres fulls" (per pintar de gris a la cel·la)
+  const ocupatsAltresFullsPerCella = useMemo(() => {
+    const m = new Map<string, { num_carro_full: number; estirp: string | null }>()
+    if (!estatInst || !full) return m
+    for (const inc of estatInst.incubadores) {
+      for (const c of inc.carros) {
+        if (c.posicio === null || c.posicio === undefined) continue
+        // Si aquest carro és del full actual, no compta com a "altres fulls"
+        const esDelFullActual = full.assignacions.some(a => a.id === c.assignacio_id)
+        if (esDelFullActual) continue
+        m.set(keyCell(inc.id, c.posicio, c.zona), { num_carro_full: c.num_carro_full, estirp: c.estirp })
+      }
+    }
+    return m
+  }, [estatInst, full])
+
+  // ── Handlers de cel·la
+  function toggleSeleccio(incId: number, pos: number, zona: ZonaMS | null) {
+    const k = keyCell(incId, pos, zona)
+    if (carroPerCella.has(k) || ocupatsAltresFullsPerCella.has(k)) return
+    setSeleccionades(prev => {
+      const s = new Set(prev)
+      if (s.has(k)) s.delete(k); else s.add(k)
+      return s
+    })
+  }
+
+  function seleccionarLliuresInc(inc: Incubadora) {
+    const sub = subtipus(inc.tipus, inc.capacitat_carros)
+    const next = new Set(seleccionades)
+    const afegir = (pos: number, zona: ZonaMS | null) => {
+      const k = keyCell(inc.id, pos, zona)
+      if (!carroPerCella.has(k) && !ocupatsAltresFullsPerCella.has(k)) next.add(k)
+    }
+    if (sub === 'SS') {
+      for (let p = 1; p <= 24; p++) afegir(p, null)
+    } else if (sub === 'MSG') {
+      for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[]) for (let p = 1; p <= 8; p++) afegir(p, z)
+    } else if (sub === 'MSP') {
+      for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[]) for (let p = 1; p <= 4; p++) afegir(p, z)
+    }
+    setSeleccionades(next)
+  }
+
+  function netejarSeleccio() {
+    setSeleccionades(new Set())
+  }
+
+  function reiniciar() {
+    if (!confirm('Reiniciar tota la planificació? Es perdrà el que has marcat i col·locat.')) return
+    setColocats(new Map())
+    setSeleccionades(new Set())
+  }
+
+  // ── Drag-and-drop
+  function onDragStartCarro(e: React.DragEvent, carroId: number, origenCella: string | null) {
+    e.dataTransfer.setData('carro_id', String(carroId))
+    e.dataTransfer.setData('origen', origenCella || 'safata')
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function onDragOverCell(e: React.DragEvent) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  function onDropCell(e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) {
+    e.preventDefault()
+    const carroId = parseInt(e.dataTransfer.getData('carro_id'), 10)
+    if (!Number.isFinite(carroId)) return
+    const k = keyCell(incId, pos, zona)
+    if (carroPerCella.has(k) || ocupatsAltresFullsPerCella.has(k)) return
+    setColocats(prev => {
+      const m = new Map(prev)
+      m.set(carroId, { incId, pos, zona })
+      return m
+    })
+    // Treure de seleccionades si hi era
+    setSeleccionades(prev => {
+      if (!prev.has(k)) return prev
+      const s = new Set(prev); s.delete(k); return s
+    })
+  }
+
+  function onDropSafata(e: React.DragEvent) {
+    e.preventDefault()
+    const carroId = parseInt(e.dataTransfer.getData('carro_id'), 10)
+    if (!Number.isFinite(carroId)) return
+    setColocats(prev => {
+      const m = new Map(prev)
+      m.delete(carroId)
+      return m
+    })
+  }
+
+  function clicarCarroColocat(carroId: number) {
+    // Click sobre un carro col·locat → el treu i torna a la safata
+    setColocats(prev => {
+      const m = new Map(prev)
+      m.delete(carroId)
+      return m
+    })
+  }
+
+  // ── Pre-suggerit
+  function aplicarPreSuggerit() {
+    const cellesSel: CellaSel[] = []
+    seleccionades.forEach((k) => {
+      const parts = k.split('|')
+      const incId = parseInt(parts[0], 10)
+      const pos = parseInt(parts[1], 10)
+      const zona = parts[2] === '-' ? null : (parts[2] as ZonaMS)
+      const { col } = ssPosToCell(pos)
+      cellesSel.push({
+        incId,
+        pos,
+        zona,
+        prioritat: col,
+        costat: 'cap',
+        columna: col,
       })
-  }, [grupSeleccionat, incubadoraId, incubadores, full])
-
-  // Helpers d'ocupació
-  // Posicions ocupades AL FULL ACTUAL a una inc. concreta.
-  // No mirem altres fulls per permetre planificar a futur sobre incubadores
-  // que físicament estan plenes amb fulls anteriors (es transferiran abans
-  // de la nostra data de càrrega).
-  function ocupacioSS(incId: number): Map<number, number> {
-    const map = new Map<number, number>()
-    if (!full) return map
-    for (const a of full.assignacions) {
-      if (a.incubadora_id === incId && a.posicio !== null) {
-        map.set(a.posicio, a.num_carro_full)
-      }
-    }
-    return map
-  }
-
-  // Ocupació global (totes les incubadores, tots els fulls actius)
-  // només s'usa al desplegable per informar "ara X/cap".
-  function ocupacioGlobalInc(incId: number): number {
-    if (!estatInstalacions) return 0
-    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
-    return inc ? inc.carros.length : 0
-  }
-
-  function ocupacioMSZones(incId: number): { central: number; paret: number; pulsator: number } {
-    const r = { central: 0, paret: 0, pulsator: 0 }
-    if (!estatInstalacions) return r
-    const inc = estatInstalacions.incubadores.find(i => i.id === incId)
-    if (!inc) return r
-    for (const c of inc.carros) {
-      if (c.zona) r[c.zona]++
-    }
-    return r
-  }
-
-  // Pre-selecció de posicions quan canvia la incubadora seleccionada
-  useEffect(() => {
-    setPosicionsSeleccionades([])
-    setZonaSeleccionada('central')
-    if (!incubadoraId) return
-    const inc = incubadores.find(i => i.id === parseInt(incubadoraId))
-    if (!inc) return
-    if (inc.tipus !== 'Singlestage') return
-    const ocupades = ocupacioSS(inc.id)
-    const lliures: number[] = []
-    for (let p = 1; p <= inc.capacitat_carros; p++) {
-      if (!ocupades.has(p)) lliures.push(p)
-      if (lliures.length === nombreAssignar) break
-    }
-    setPosicionsSeleccionades(lliures)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incubadoraId])
-
-  // Retallar selecció si baixa el nombreAssignar
-  useEffect(() => {
-    setPosicionsSeleccionades(prev => prev.slice(0, nombreAssignar))
-  }, [nombreAssignar])
-
-  function seleccionarGrup(carros: CarroEstoc[]) {
-    if (grupSeleccionat && grupSeleccionat[0].id === carros[0].id) {
-      setGrupSeleccionat(null)
-      setNombreAssignar(1)
-    } else {
-      setGrupSeleccionat(carros)
-      setNombreAssignar(1)
-      setErrorMsg('')
-    }
-  }
-
-  function clicarPosicio(p: number, ocupades: Map<number, number>) {
-    if (ocupades.has(p)) return
-    setPosicionsSeleccionades(prev => {
-      if (prev.includes(p)) return prev.filter(x => x !== p)
-      if (prev.length >= nombreAssignar) {
-        return [...prev.slice(1), p]
-      }
-      return [...prev, p]
+    })
+    const sug = preSuggerit(carrosPendents, cellesSel, incsById)
+    setColocats(prev => {
+      const m = new Map(prev)
+      sug.forEach((p, cid) => m.set(cid, p))
+      return m
+    })
+    // Treure de seleccionades les cel·les que s'han omplert
+    setSeleccionades(prev => {
+      const s = new Set(prev)
+      sug.forEach((p) => s.delete(keyCell(p.incId, p.pos, p.zona)))
+      return s
     })
   }
 
-  async function assignar() {
-    if (!grupSeleccionat || !incubadoraId || !full) return
-    setAssignant(true)
+  // ── Guardar
+  async function guardar() {
+    if (!full) return
+    if (colocats.size === 0) {
+      if (!confirm('No hi ha cap carro col·locat. Vols guardar igualment (buidaria el full)?')) return
+    }
+    setGuardant(true)
     setErrorMsg('')
-    const previsio = parseFloat(previsioManual) / 100
-    const carrosAassignar = grupSeleccionat.slice(0, nombreAssignar).map(c => c.id)
-    const inc = incubadores.find(i => i.id === parseInt(incubadoraId))
-    const isSS = inc?.tipus === 'Singlestage'
-
-    const body: Record<string, unknown> = {
-      carro_ids: carrosAassignar,
-      incubadora_id: parseInt(incubadoraId),
-      hora_entrada: horaEntrada || null,
-      previsio_naixement: isNaN(previsio) ? null : previsio,
+    setResultatGuardar('')
+    try {
+      const items = Array.from(colocats.entries()).map(([carro_id, p]) => ({
+        carro_id,
+        incubadora_id: p.incId,
+        posicio: p.pos,
+        zona: p.zona,
+      }))
+      const res = await fetch(`/api/carrega/${full.id}/planificacio`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dia, msp_ordre: mspOrdre, items }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 409 && data.orfes_bloquejades) {
+          const llista = data.orfes_bloquejades.map((o: { num_carro_full: number; te_transferencia: boolean; te_vacuna: boolean }) =>
+            `· Carro #${o.num_carro_full}: ${o.te_transferencia ? 'té transferència' : ''}${o.te_transferencia && o.te_vacuna ? ' i ' : ''}${o.te_vacuna ? 'té vacunes' : ''}`
+          ).join('\n')
+          setErrorMsg(`No es pot guardar:\n${data.error}\n\n${llista}`)
+        } else {
+          setErrorMsg(data.error || 'Error desconegut al guardar')
+        }
+        return
+      }
+      setResultatGuardar(`Guardat: ${data.inserits} nous, ${data.actualitzats} mogudes, ${data.esborrats} esborrades`)
+      // Recarregar dades reals
+      await carregarDades()
+    } catch (e) {
+      setErrorMsg('Error de xarxa: ' + String(e))
+    } finally {
+      setGuardant(false)
     }
-    if (isSS) body.posicions = posicionsSeleccionades
-    else body.zona = zonaSeleccionada
-
-    const res = await fetch(`/api/carrega/${full.id}/assignacions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    const data = await res.json()
-    if (!res.ok) {
-      setErrorMsg(data.error || 'Error desconegut')
-    } else {
-      setGrupSeleccionat(null)
-      setNombreAssignar(1)
-      setIncubadoraId('')
-      setPrevisioManual('')
-      setPrevisioCalculada(null)
-      setHoraEntrada('')
-      setPosicionsSeleccionades([])
-      setZonaSeleccionada('central')
-      carregarDades()
-    }
-    setAssignant(false)
   }
 
-  async function desassignar(assignacio: Assignacio) {
-    await fetch(`/api/carrega/${params.id}/assignacions`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assignacio_id: assignacio.id, carro_id: assignacio.carros_estoc.id }),
-    })
-    carregarDades()
-  }
-
-  if (loading || !full) return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
-    </main>
-  )
-
-  const totalPollets = full.comandes.filter(c => c.tipus === 'Pollets').reduce((s, c) => s + (c.quantitat_pollets || 0), 0)
-  const polletsPrevistos = full.assignacions.reduce((s, a) => s + Math.round(a.carros_estoc.quantitat_ous * (a.previsio_naixement || 0)), 0)
-
-  const grups: Record<string, CarroEstoc[]> = {}
-  carrosDisponibles.forEach(c => {
-    const key = `${c.lots_reproductores.id}-${c.posta}`
-    if (!grups[key]) grups[key] = []
-    grups[key].push(c)
-  })
-  const grupsOrdenats = Object.entries(grups).sort((a, b) => {
-    return diesEstoc(b[1][0].posta, full.carrega) - diesEstoc(a[1][0].posta, full.carrega)
-  })
-
-  const ocupacioPerInc: Record<number, number> = {}
-  full.assignacions.forEach(a => {
-    ocupacioPerInc[a.incubadores.numero] = (ocupacioPerInc[a.incubadores.numero] || 0) + 1
-  })
-
-  const incubadoraSeleccionada = incubadores.find(i => i.id === parseInt(incubadoraId))
-  const ocupacioActual = incubadoraSeleccionada ? (ocupacioPerInc[incubadoraSeleccionada.numero] || 0) : 0
-  const lliuresIncubadora = incubadoraSeleccionada ? incubadoraSeleccionada.capacitat_carros - ocupacioActual : 99
-  const isSinglestage = incubadoraSeleccionada?.tipus === 'Singlestage'
-
-  // Per a la mini-graella SS i el selector MS
-  const ocupadesSS = incubadoraSeleccionada && isSinglestage ? ocupacioSS(incubadoraSeleccionada.id) : new Map<number, number>()
-  const ocupacioZones = incubadoraSeleccionada && !isSinglestage ? ocupacioMSZones(incubadoraSeleccionada.id) : { central: 0, paret: 0, pulsator: 0 }
-
-  // Validació per al botó "Assignar"
-  const posicionsOK = !incubadoraSeleccionada
-    ? false
-    : isSinglestage
-      ? posicionsSeleccionades.length === nombreAssignar
-      : !!zonaSeleccionada
-  const potAssignar = !!incubadoraId && !assignant && lliuresIncubadora >= nombreAssignar && posicionsOK
-
-  const inputStyle = {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
-    padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
-    outline: 'none', fontFamily: 'IBM Plex Sans',
-  }
-  const labelStyle = {
-    display: 'block' as const, fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
-    color: 'var(--text-dim)', textTransform: 'uppercase' as const,
-    letterSpacing: '0.1em', marginBottom: '0.4rem',
+  // ── Render
+  if (loading || !full) {
+    return (
+      <main style={{ padding: '1.5rem' }}>
+        <p style={{ color: '#6b7280', textAlign: 'center' }}>Carregant...</p>
+      </main>
+    )
   }
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+    <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '90px' }}>
+      <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosLot.length} colocats={colocats.size} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-          <Link href={`/carrega/${full.id}`} style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Càrrega #{full.num_carrega}</Link>
-          <div>
-            <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Assignacions</p>
-            <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Assignar carros</h1>
-          </div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: '16px', padding: '16px 20px' }}>
+        <main style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Singlestage */}
+          <SeccioInc titol="Single Stage" badge="SS · cap 24"
+            incs={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'SS')}
+            children={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'SS').map(inc => (
+              <IncubadoraSS key={inc.id} inc={inc}
+                carrosLot={carrosLot}
+                carroPerCella={carroPerCella}
+                ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                colocats={colocats}
+                seleccionades={seleccionades}
+                onClicCella={(p) => toggleSeleccio(inc.id, p, null)}
+                onSelLliures={() => seleccionarLliuresInc(inc)}
+                onDragStartCarro={onDragStartCarro}
+                onDragOverCell={onDragOverCell}
+                onDropCell={(p) => (e: React.DragEvent) => onDropCell(e, inc.id, p, null)}
+                onClicCarroColocat={clicarCarroColocat}
+              />
+            ))} />
 
-        {totalPollets > 0 && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', marginBottom: '0.5rem' }}>
-              <span style={{ color: 'var(--text-dim)' }}>Pollets previstos</span>
-              <span style={{ color: polletsPrevistos >= totalPollets ? 'var(--success)' : 'var(--accent)' }}>
-                {polletsPrevistos.toLocaleString()} / {totalPollets.toLocaleString()}
-              </span>
-            </div>
-            <div style={{ background: 'var(--border)', borderRadius: '4px', height: '6px' }}>
-              <div style={{ background: polletsPrevistos >= totalPollets ? 'var(--success)' : 'var(--accent)', borderRadius: '4px', height: '6px', width: `${Math.min(100, (polletsPrevistos / totalPollets) * 100)}%`, transition: 'width 0.3s' }} />
-            </div>
-          </div>
-        )}
+          {/* MSG */}
+          <SeccioInc titol="Multi Stage grans" badge="MS · cap 24 · 3 zones × 8 posicions"
+            incs={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSG')}
+            children={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSG').map(inc => (
+              <IncubadoraMS key={inc.id} inc={inc} sub="MSG" carrosLot={carrosLot}
+                carroPerCella={carroPerCella}
+                ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                colocats={colocats}
+                seleccionades={seleccionades}
+                onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
+                onSelLliures={() => seleccionarLliuresInc(inc)}
+                onDragStartCarro={onDragStartCarro}
+                onDragOverCell={onDragOverCell}
+                onDropCell={(p, z) => (e: React.DragEvent) => onDropCell(e, inc.id, p, z)}
+                onClicCarroColocat={clicarCarroColocat}
+              />
+            ))} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'start' }}>
+          {/* MSP */}
+          <SeccioInc titol="Multi Stage petites" badge="MS · cap 12 · 3 zones × 4 posicions"
+            incs={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSP')}
+            extra={
+              <OrdreMSP ordre={mspOrdre} onChange={setMspOrdre} />
+            }
+            children={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSP').map(inc => (
+              <IncubadoraMS key={inc.id} inc={inc} sub="MSP" carrosLot={carrosLot}
+                carroPerCella={carroPerCella}
+                ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                colocats={colocats}
+                seleccionades={seleccionades}
+                onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
+                onSelLliures={() => seleccionarLliuresInc(inc)}
+                onDragStartCarro={onDragStartCarro}
+                onDragOverCell={onDragOverCell}
+                onDropCell={(p, z) => (e: React.DragEvent) => onDropCell(e, inc.id, p, z)}
+                onClicCarroColocat={clicarCarroColocat}
+              />
+            ))} />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-            {/* Selector de grup */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
-                Selecciona lot
+          {/* Naixedores només lectura */}
+          {estatInst && estatInst.naixedores.length > 0 && (
+            <section style={cardSeccio()}>
+              <h2 style={h2Seccio()}>Naixedores <span style={badgeStyle()}>només informatives</span></h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {estatInst.naixedores.map(n => (
+                  <div key={n.id} style={cardInc()}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Naix {n.numero} <span style={{ color: '#6b7280', fontSize: 11, fontWeight: 400 }}>{n.carros.length}/{n.capacitat}</span></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: 60 }}>
+                      {n.carros.length === 0
+                        ? <div style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', padding: 8 }}>buida</div>
+                        : n.carros.map((c, i) => <div key={i} style={chipNaix()}>#{c.num_carro_full}</div>)}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '300px', overflowY: 'auto' }}>
-                {grupsOrdenats.map(([key, carros]) => {
-                  const primer = carros[0]
-                  const dies = diesEstoc(primer.posta, full.carrega)
-                  const seleccionat = grupSeleccionat && grupSeleccionat[0].id === carros[0].id
-                  return (
-                    <button key={key} onClick={() => seleccionarGrup(carros)} style={{
-                      padding: '0.6rem 0.75rem', border: '1px solid',
-                      borderColor: seleccionat ? 'var(--accent)' : 'var(--border)',
-                      borderRadius: '8px', textAlign: 'left', cursor: 'pointer',
-                      background: seleccionat ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: seleccionat ? 'var(--accent)' : 'var(--text)' }}>
-                          {nomCarro(primer)}
-                        </span>
-                        <span style={{ fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', background: 'rgba(240,180,41,0.15)', padding: '0.1rem 0.4rem', borderRadius: '10px' }}>
-                          {carros.length}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
-                        {primer.posta} · {dies}d estoc · {setmanesReproductores(primer.posta, primer.lots_reproductores.data_naixement)}s
-                      </div>
-                    </button>
-                  )
-                })}
-                {grupsOrdenats.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem', margin: 0 }}>Sense carros disponibles</p>}
-              </div>
-            </div>
+            </section>
+          )}
+        </main>
 
-            {/* Panell assignació */}
-            {grupSeleccionat && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-                {/* Nombre de carros */}
-                <div>
-                  <label style={labelStyle}>Nombre de carros a assignar</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <button type="button" onClick={() => setNombreAssignar(n => Math.max(1, n - 1))}
-                      style={{ width: '2.25rem', height: '2.25rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg)', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer' }}>−</button>
-                    <input type="number" value={nombreAssignar}
-                      onChange={e => setNombreAssignar(Math.min(grupSeleccionat.length, Math.max(1, parseInt(e.target.value) || 1)))}
-                      min="1" max={grupSeleccionat.length}
-                      style={{ ...inputStyle, width: '4rem', textAlign: 'center', fontFamily: 'IBM Plex Mono', fontWeight: 700 }} />
-                    <button type="button" onClick={() => setNombreAssignar(n => Math.min(grupSeleccionat.length, n + 1))}
-                      style={{ width: '2.25rem', height: '2.25rem', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg)', color: 'var(--text)', fontSize: '1.2rem', cursor: 'pointer' }}>+</button>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>/ {grupSeleccionat.length} disp.</span>
-                  </div>
-                </div>
-
-                {/* Incubadora */}
-                <div>
-                  <label style={labelStyle}>Incubadora</label>
-                  <select value={incubadoraId} onChange={e => setIncubadoraId(e.target.value)} style={{ ...inputStyle, width: '100%', appearance: 'none' }}>
-                    <option value="">Selecciona...</option>
-                    {incubadores.map(i => {
-                      const ocupats = ocupacioPerInc[i.numero] || 0
-                      const lliures = i.capacitat_carros - ocupats
-                      const ocupatsGlobals = ocupacioGlobalInc(i.id)
-                      const sufixGlobal = ocupatsGlobals > 0 ? ` · ara ${ocupatsGlobals}/${i.capacitat_carros}` : ''
-                      return <option key={i.id} value={i.id} disabled={lliures <= 0}>
-                        Inc. {i.numero} — {i.model} ({i.tipus === 'Singlestage' ? 'SS' : 'MS'}) · {ocupats}/{i.capacitat_carros}{sufixGlobal}
-                        {lliures <= 0 ? ' PLE' : ''}
-                      </option>
-                    })}
-                  </select>
-                  {incubadoraSeleccionada && (
-                    <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: lliuresIncubadora < nombreAssignar ? 'var(--danger)' : 'var(--success)' }}>
-                      {lliuresIncubadora} lloc{lliuresIncubadora !== 1 ? 's' : ''} lliure{lliuresIncubadora !== 1 ? 's' : ''}
-                      {lliuresIncubadora < nombreAssignar && ` — necessites ${nombreAssignar} però en tens ${lliuresIncubadora}`}
-                    </div>
-                  )}
-                </div>
-
-                {/* Selector de posició (només SS) */}
-                {incubadoraSeleccionada && isSinglestage && (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
-                      <label style={{ ...labelStyle, marginBottom: 0 }}>Posicions a la SS</label>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: posicionsSeleccionades.length === nombreAssignar ? 'var(--success)' : 'var(--accent)' }}>
-                        {posicionsSeleccionades.length} / {nombreAssignar}
-                      </span>
-                    </div>
-                    {/* Mini-graella 6×4 en U */}
-                    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
-                        {[1, 2, 3, 4].map(row => (
-                          <Fragment key={row}>
-                            {[1, 2, 3].map(col => {
-                              const cell = SS_LAYOUT.find(c => c.col === col && c.row === row)
-                              if (!cell) return null
-                              const p = cell.posicio
-                              const num = ocupadesSS.get(p)
-                              const ocupada = num !== undefined
-                              const seleccionada = posicionsSeleccionades.includes(p)
-                              return (
-                                <button key={`l-${row}-${col}`} type="button"
-                                  onClick={() => clicarPosicio(p, ocupadesSS)}
-                                  disabled={ocupada}
-                                  style={{
-                                    aspectRatio: '1', padding: 0,
-                                    border: '1px solid',
-                                    borderColor: seleccionada ? 'var(--accent)' : ocupada ? 'var(--border)' : 'var(--border)',
-                                    borderRadius: '4px',
-                                    background: seleccionada ? 'var(--accent)' : ocupada ? 'rgba(120,120,120,0.15)' : 'var(--surface)',
-                                    color: seleccionada ? '#0f1117' : ocupada ? 'var(--text-dim)' : 'var(--text)',
-                                    fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', fontWeight: 700,
-                                    cursor: ocupada ? 'not-allowed' : 'pointer',
-                                  }}>
-                                  {ocupada ? `C${num}` : p}
-                                </button>
-                              )
-                            })}
-                            {/* Banda central (pulsator) */}
-                            {row === 1 && (
-                              <div key={`puls-${row}`} style={{
-                                gridRow: '1 / span 4', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                background: 'rgba(80,80,80,0.2)', borderRadius: '4px',
-                                fontFamily: 'IBM Plex Mono', fontSize: '0.6rem', color: 'var(--text-dim)',
-                                writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.15em',
-                              }}>
-                                PULSATOR
-                              </div>
-                            )}
-                            {[4, 5, 6].map(col => {
-                              const cell = SS_LAYOUT.find(c => c.col === col && c.row === row)
-                              if (!cell) return null
-                              const p = cell.posicio
-                              const num = ocupadesSS.get(p)
-                              const ocupada = num !== undefined
-                              const seleccionada = posicionsSeleccionades.includes(p)
-                              return (
-                                <button key={`r-${row}-${col}`} type="button"
-                                  onClick={() => clicarPosicio(p, ocupadesSS)}
-                                  disabled={ocupada}
-                                  style={{
-                                    aspectRatio: '1', padding: 0,
-                                    border: '1px solid',
-                                    borderColor: seleccionada ? 'var(--accent)' : ocupada ? 'var(--border)' : 'var(--border)',
-                                    borderRadius: '4px',
-                                    background: seleccionada ? 'var(--accent)' : ocupada ? 'rgba(120,120,120,0.15)' : 'var(--surface)',
-                                    color: seleccionada ? '#0f1117' : ocupada ? 'var(--text-dim)' : 'var(--text)',
-                                    fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', fontWeight: 700,
-                                    cursor: ocupada ? 'not-allowed' : 'pointer',
-                                  }}>
-                                  {ocupada ? `C${num}` : p}
-                                </button>
-                              )
-                            })}
-                          </Fragment>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: '0.4rem', fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textAlign: 'center' }}>
-                        Paret · Central · Pulsator esq │ Pulsator dre · Central · Paret
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Selector de zona (només MS) */}
-                {incubadoraSeleccionada && !isSinglestage && (
-                  <div>
-                    <label style={labelStyle}>Zona dins de la incubadora</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
-                      {(['central', 'paret', 'pulsator'] as ZonaMS[]).map(z => {
-                        const sel = z === zonaSeleccionada
-                        return (
-                          <button key={z} type="button"
-                            onClick={() => setZonaSeleccionada(z)}
-                            style={{
-                              padding: '0.7rem 0.4rem', border: '1px solid',
-                              borderColor: sel ? 'var(--accent)' : 'var(--border)',
-                              borderRadius: '8px',
-                              background: sel ? 'rgba(240,180,41,0.12)' : 'var(--bg)',
-                              color: sel ? 'var(--accent)' : 'var(--text)',
-                              cursor: 'pointer', textAlign: 'center',
-                            }}>
-                            <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              {z}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                              {ocupacioZones[z]} carro{ocupacioZones[z] !== 1 ? 's' : ''}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <div>
-                    <label style={labelStyle}>
-                      Previsió %
-                      {previsioCalculada && <span style={{ color: 'var(--accent)', marginLeft: '0.3rem' }}>({Math.round(previsioCalculada * 100)}%)</span>}
-                    </label>
-                    <input type="number" value={previsioManual} onChange={e => setPrevisioManual(e.target.value)}
-                      min="0" max="100" step="1" placeholder="75"
-                      style={{ ...inputStyle, width: '100%' }} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Hora entrada</label>
-                    <input type="text" value={horaEntrada} onChange={e => setHoraEntrada(e.target.value)}
-                      placeholder="5:00" style={{ ...inputStyle, width: '100%' }} />
-                  </div>
-                </div>
-
-                {errorMsg && (
-                  <div style={{ padding: '0.6rem 0.75rem', borderRadius: '6px', background: 'rgba(240,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem' }}>
-                    {errorMsg}
-                  </div>
-                )}
-
-                <button onClick={assignar}
-                  disabled={!potAssignar}
-                  style={{
-                    padding: '0.75rem', border: 'none', borderRadius: '8px', fontWeight: 700,
-                    fontFamily: 'IBM Plex Sans', fontSize: '0.9rem', cursor: 'pointer',
-                    background: !potAssignar ? 'var(--border)' : 'var(--accent)',
-                    color: !potAssignar ? 'var(--text-dim)' : '#0f1117',
-                  }}>
-                  {assignant ? 'Assignant...' : `Assignar ${nombreAssignar} carro${nombreAssignar !== 1 ? 's' : ''}`}
-                </button>
-              </div>
-            )}
+        <aside style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 12, alignSelf: 'start', position: 'sticky', top: 16, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
+               onDragOver={onDragOverCell}
+               onDrop={onDropSafata}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Carros a col·locar</h3>
+          <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 10 }}>
+            {carrosPendents.length} pendents · {colocats.size} col·locats
           </div>
-
-          {/* Columna dreta: assignacions actuals */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
-            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
-              Assignats ({full.assignacions.length})
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '550px', overflowY: 'auto' }}>
-              {full.assignacions.sort((a, b) => a.num_carro_full - b.num_carro_full).map(a => {
-                const lot = a.carros_estoc.lots_reproductores
-                const granja = lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
-                return (
-                  <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.6rem', background: 'var(--bg)', borderRadius: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', color: 'var(--text-dim)', minWidth: '1.75rem' }}>C{a.num_carro_full}</span>
-                      <div>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 600 }}>{granja}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
-                          Inc.{a.incubadores.numero} · {a.carros_estoc.posta}
-                          {a.previsio_naixement && ` · ${Math.round(a.previsio_naixement * 100)}%`}
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={() => desassignar(a)}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>✕</button>
-                  </div>
-                )
-              })}
-              {full.assignacions.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem', margin: 0 }}>Sense assignacions</p>}
-            </div>
+          <Safata
+            pendents={carrosPendents}
+            onDragStartCarro={onDragStartCarro}
+            full={full}
+          />
+          <div style={{ marginTop: 12, padding: 8, background: '#f3f4f6', borderRadius: 6, fontSize: 11, color: '#6b7280', lineHeight: 1.4 }}>
+            <b>Com va:</b><br />
+            1) Clica cel·les lliures per seleccionar-les (groc).<br />
+            2) Prem <i>Pre-suggerit</i> per repartir.<br />
+            3) Arrossega per ajustar a mà.<br />
+            4) Click sobre un carro col·locat per treure'l.
           </div>
-
-        </div>
+        </aside>
       </div>
+
+      {/* Errors i resultats */}
+      {(errorMsg || resultatGuardar) && (
+        <div style={{ position: 'fixed', bottom: 60, left: 20, right: 20, zIndex: 50 }}>
+          {errorMsg && (
+            <div style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#991b1b', padding: 10, borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, marginBottom: 6 }}>
+              {errorMsg}
+              <button onClick={() => setErrorMsg('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', fontSize: 16 }}>×</button>
+            </div>
+          )}
+          {resultatGuardar && (
+            <div style={{ background: '#ecfdf5', border: '1px solid #34d399', color: '#065f46', padding: 10, borderRadius: 6, fontSize: 13 }}>
+              {resultatGuardar}
+              <button onClick={() => setResultatGuardar('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', fontSize: 16 }}>×</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <footer style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #d4d4d4', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -2px 8px rgba(0,0,0,0.04)', zIndex: 40 }}>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>
+          {carrosPendents.length > 0 && <>Queden <b style={{ color: '#1f2937' }}>{carrosPendents.length}</b> carros sense ubicar</>}
+          {carrosPendents.length === 0 && colocats.size > 0 && <>Tots els carros estan col·locats ({colocats.size})</>}
+          {' · '}<span>{seleccionades.size} cel·les seleccionades</span>
+        </div>
+        <div>
+          <Link href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none', marginRight: 8 }}>Tornar al full</Link>
+          <button onClick={netejarSeleccio} style={btnStyle(false)}>Netejar selecció</button>
+          <button onClick={reiniciar} style={btnStyle(false)}>Reiniciar</button>
+          <button onClick={aplicarPreSuggerit} style={btnStyle(false)} disabled={seleccionades.size === 0 || carrosPendents.length === 0}>Pre-suggerit sobre seleccionades</button>
+          <button onClick={guardar} style={btnStyle(true)} disabled={guardant}>{guardant ? 'Guardant...' : 'Guardar planificació'}</button>
+        </div>
+      </footer>
     </main>
   )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subcomponents
+// ─────────────────────────────────────────────────────────────────────────────
+
+function HeaderPlan({ full, dia, setDia, pendents, total, colocats }: { full: Full; dia: Dia; setDia: (d: Dia) => void; pendents: number; total: number; colocats: number }) {
+  const diaInferit = diaDeFull(full.carrega)
+  return (
+    <header style={{ background: '#fff', borderBottom: '1px solid #d4d4d4', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 18 }}>Planificació full #{full.num_carrega}</h1>
+        <div style={{ color: '#6b7280', fontSize: 13 }}>
+          Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {total} carros disponibles · {colocats} col·locats · {pendents} pendents
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <label style={{ fontSize: 13, color: '#6b7280' }}>
+          Patró del dia:&nbsp;
+          <select value={dia} onChange={e => setDia(e.target.value as Dia)} style={{ padding: '4px 8px', fontSize: 13 }}>
+            <option value="dijous">Dijous (SS · Inc 1-2 · MSP)</option>
+            <option value="dilluns">Dilluns (Inc 3-6 · MSP)</option>
+          </select>
+          {diaInferit && diaInferit !== dia && (
+            <span style={{ color: '#b45309', fontSize: 12, marginLeft: 8 }}>(el full és {diaInferit}!)</span>
+          )}
+        </label>
+      </div>
+    </header>
+  )
+}
+
+function OrdreMSP({ ordre, onChange }: { ordre: number[]; onChange: (o: number[]) => void }) {
+  function mou(idx: number, dir: -1 | 1) {
+    const novaOrdre = [...ordre]
+    const j = idx + dir
+    if (j < 0 || j >= novaOrdre.length) return
+    ;[novaOrdre[idx], novaOrdre[j]] = [novaOrdre[j], novaOrdre[idx]]
+    onChange(novaOrdre)
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
+      Ordre MSP:
+      {ordre.map((n, i) => (
+        <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          <button onClick={() => mou(i, -1)} disabled={i === 0} style={{ ...miniBtn(), padding: '0 4px' }}>◀</button>
+          <span style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 3, fontWeight: 600 }}>{n}</span>
+          <button onClick={() => mou(i, 1)} disabled={i === ordre.length - 1} style={{ ...miniBtn(), padding: '0 4px' }}>▶</button>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Safata({ pendents, onDragStartCarro, full }: { pendents: CarroEstoc[]; onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void; full: Full }) {
+  // Agrupar per lot (granja+estirp+posta)
+  const grups: { key: string; nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }[] = []
+  const map = new Map<string, { nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }>()
+  for (const c of pendents) {
+    const k = `${c.lots_reproductores.granges_reproductores.granja}|${c.lots_reproductores.estirp || ''}|${c.posta}`
+    if (!map.has(k)) map.set(k, { nom: nomCarroCurt(c), estirp: c.lots_reproductores.estirp, posta: c.posta, carros: [] })
+    map.get(k)!.carros.push(c)
+  }
+  map.forEach((v, k) => grups.push({ key: k, ...v }))
+  grups.sort((a, b) => diesEstoc(b.posta, full.carrega) - diesEstoc(a.posta, full.carrega))
+
+  return (
+    <div>
+      {grups.map(g => (
+        <div key={g.key} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3, fontWeight: 600 }}>
+            {g.nom}{g.estirp ? ` · ${g.estirp}` : ''} · posta {g.posta} · {g.carros.length} carro{g.carros.length !== 1 ? 's' : ''}
+          </div>
+          {g.carros.map(c => (
+            <div key={c.id}
+              draggable
+              onDragStart={(e) => onDragStartCarro(e, c.id, null)}
+              style={{ background: '#bfdbfe', border: '1px solid #2563eb', borderRadius: 6, padding: '6px 8px', marginBottom: 4, cursor: 'grab', fontSize: 12, lineHeight: 1.3, userSelect: 'none' }}>
+              <div style={{ color: '#1e3a8a', fontSize: 11 }}>{c.quantitat_ous.toLocaleString('ca')} ous · estoc {diesEstoc(c.posta, full.carrega)}d</div>
+            </div>
+          ))}
+        </div>
+      ))}
+      {pendents.length === 0 && <div style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center', padding: 12 }}>Cap carro pendent</div>}
+    </div>
+  )
+}
+
+function SeccioInc({ titol, badge, incs, children, extra }: { titol: string; badge: string; incs: Incubadora[]; children: React.ReactNode; extra?: React.ReactNode }) {
+  if (incs.length === 0) return null
+  return (
+    <section style={cardSeccio()}>
+      <h2 style={h2Seccio()}>
+        {titol} <span style={badgeStyle()}>{badge}</span>
+        {extra && <span style={{ marginLeft: 'auto' }}>{extra}</span>}
+      </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(incs.length, 3)}, 1fr)`, gap: 14 }}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
+// ── Singlestage incubadora ────────────────────────────────────────────────
+
+interface CellPropsCommon {
+  carrosLot: CarroEstoc[]
+  carroPerCella: Map<string, number>
+  ocupatsAltresFulls: Map<string, { num_carro_full: number; estirp: string | null }>
+  colocats: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>
+  seleccionades: Set<string>
+  onSelLliures: () => void
+  onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void
+  onDragOverCell: (e: React.DragEvent) => void
+  onClicCarroColocat: (id: number) => void
+}
+
+function IncubadoraSS({ inc, onClicCella, onDropCell, ...p }: CellPropsCommon & {
+  inc: Incubadora
+  onClicCella: (pos: number) => void
+  onDropCell: (pos: number) => (e: React.DragEvent) => void
+}) {
+  const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
+  const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
+  return (
+    <div style={cardInc()}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
+        <span style={{ fontWeight: 600 }}>SS {inc.numero}</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
+          <button onClick={p.onSelLliures} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr', gap: 3 }}>
+        {['Paret esq', 'Central esq', 'Pulsator esq', '', 'Pulsator dre', 'Central dre', 'Paret dre'].map((h, i) => (
+          <div key={i} style={{ gridColumn: i + 1, gridRow: 1, fontSize: 9, textAlign: 'center', color: '#6b7280' }}>{h}</div>
+        ))}
+        <div style={{ gridColumn: 4, gridRow: '2 / 6', background: '#1f2937', borderRadius: 1 }} />
+        {Array.from({ length: 24 }, (_, i) => i + 1).map(pos => {
+          const { col, row } = ssPosToCell(pos)
+          const gridCol = col < 3 ? (col + 1) : (col + 2)
+          const gridRow = 2 + (3 - row)
+          return (
+            <Cell key={pos} {...p}
+              incId={inc.id}
+              pos={pos}
+              zona={null}
+              gridCol={gridCol}
+              gridRow={gridRow}
+              onClick={() => onClicCella(pos)}
+              onDrop={onDropCell(pos)}
+            />
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 9, color: '#6b7280', textAlign: 'center', marginTop: 4 }}>↓ porta frontal ↓</div>
+    </div>
+  )
+}
+
+function IncubadoraMS({ inc, sub, onClicCella, onDropCell, ...p }: CellPropsCommon & {
+  inc: Incubadora
+  sub: 'MSG' | 'MSP'
+  onClicCella: (pos: number, zona: ZonaMS) => void
+  onDropCell: (pos: number, zona: ZonaMS) => (e: React.DragEvent) => void
+}) {
+  const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
+  const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
+  const profunditat = sub === 'MSG' ? 4 : 2
+  const posEsq = sub === 'MSG' ? [1, 2, 3, 4] : [1, 2]
+  const posDre = sub === 'MSG' ? [5, 6, 7, 8] : [3, 4]
+
+  return (
+    <div style={cardInc()}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
+        <span style={{ fontWeight: 600 }}>Inc {inc.numero}</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
+          <button onClick={p.onSelLliures} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr', gap: 3 }}>
+        {/* Capçaleres */}
+        {[{ z: 'paret', d: '~7d', col: 1 }, { z: 'central', d: '~0d', col: 2 }, { z: 'pulsator', d: '~14d', col: 3 },
+          { z: 'pulsator', d: '~14d', col: 5 }, { z: 'central', d: '~0d', col: 6 }, { z: 'paret', d: '~7d', col: 7 }].map((h, i) => (
+          <div key={i} style={{ gridColumn: h.col, gridRow: 1, fontSize: 8, textAlign: 'center', color: '#6b7280', lineHeight: 1.05 }}>
+            {h.z}<br /><span style={{ color: '#9ca3af' }}>{h.d}</span>
+          </div>
+        ))}
+        <div style={{ gridColumn: 4, gridRow: `2 / ${2 + profunditat}`, background: '#1f2937', borderRadius: 1 }} />
+        {/* Costat esq: zones paret/central/pulsator (cols 1-3) */}
+        {MS_ZONES_ESQ.map((z, zi) => posEsq.map(pos => (
+          <Cell key={`esq-${pos}-${z}`} {...p}
+            incId={inc.id} pos={pos} zona={z}
+            gridCol={zi + 1}
+            gridRow={2 + (profunditat - pos)}
+            zonaClass={z}
+            onClick={() => onClicCella(pos, z)}
+            onDrop={onDropCell(pos, z)}
+          />
+        )))}
+        {/* Costat dre: zones pulsator/central/paret (cols 5-7) */}
+        {MS_ZONES_DRE.map((z, zi) => posDre.map(pos => {
+          const posLocal = pos - (sub === 'MSG' ? 4 : 2)
+          return (
+            <Cell key={`dre-${pos}-${z}`} {...p}
+              incId={inc.id} pos={pos} zona={z}
+              gridCol={zi + 5}
+              gridRow={2 + (profunditat - posLocal)}
+              zonaClass={z}
+              onClick={() => onClicCella(pos, z)}
+              onDrop={onDropCell(pos, z)}
+            />
+          )
+        }))}
+      </div>
+      <div style={{ fontSize: 9, color: '#6b7280', textAlign: 'center', marginTop: 4 }}>↓ porta frontal ↓</div>
+    </div>
+  )
+}
+
+// ── Cel·la individual ──────────────────────────────────────────────────────
+
+function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
+  incId: number
+  pos: number
+  zona: ZonaMS | null
+  gridCol: number
+  gridRow: number
+  zonaClass?: ZonaMS
+  onClick: () => void
+  onDrop: (e: React.DragEvent) => void
+}) {
+  const k = keyCell(incId, pos, zona)
+  const carroIdNou = carroPerCella.get(k)
+  const ocupAltre = ocupatsAltresFulls.get(k)
+  const sel = seleccionades.has(k)
+
+  let bg = '#fefefe'
+  let border = '1px dashed #cbd5e1'
+  let color = '#1f2937'
+  let cursor: 'default' | 'pointer' | 'grab' = 'default'
+
+  if (zonaClass) {
+    bg = zonaClass === 'paret' ? '#fee2e2' : zonaClass === 'central' ? '#f3f4f6' : '#fed7aa'
+  }
+  if (ocupAltre) {
+    bg = '#4b5563'
+    color = '#fff'
+    border = '1px solid #4b5563'
+  } else if (carroIdNou !== undefined) {
+    bg = '#bfdbfe'
+    border = '1px solid #2563eb'
+    color = '#1e3a8a'
+    cursor = 'grab'
+  } else if (sel) {
+    bg = '#fde68a'
+    border = '1px solid #f59e0b'
+    color = '#92400e'
+    cursor = 'pointer'
+  } else {
+    cursor = 'pointer'
+  }
+
+  const carroNouObj = carroIdNou !== undefined ? carrosLot.find(c => c.id === carroIdNou) : null
+
+  return (
+    <div
+      style={{ gridColumn: gridCol, gridRow, minHeight: 48, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 10, fontWeight: 600, padding: 2, lineHeight: 1.05, overflow: 'hidden', background: bg, border, color, cursor }}
+      onClick={() => {
+        if (carroIdNou !== undefined) onClicCarroColocat(carroIdNou)
+        else if (!ocupAltre) onClick()
+      }}
+      draggable={carroIdNou !== undefined}
+      onDragStart={(e) => carroIdNou !== undefined && onDragStartCarro(e, carroIdNou, k)}
+      onDragOver={!ocupAltre ? onDragOverCell : undefined}
+      onDrop={!ocupAltre ? onDrop : undefined}
+      title={
+        ocupAltre ? `Càrrega anterior · #${ocupAltre.num_carro_full}`
+        : carroNouObj ? `${nomCarroCurt(carroNouObj)} · ${carroNouObj.quantitat_ous} ous · click per treure`
+        : `Pos ${pos}${zona ? ' · ' + zona : ''}`
+      }
+    >
+      {ocupAltre && <span>#{ocupAltre.num_carro_full}</span>}
+      {carroNouObj && (
+        <>
+          <span style={{ fontSize: 10, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nomCarroCurt(carroNouObj)}</span>
+          <span style={{ fontSize: 9, opacity: 0.75 }}>p{pos}</span>
+        </>
+      )}
+      {!ocupAltre && !carroNouObj && (
+        <span style={{ fontSize: 9, opacity: 0.5 }}>{pos}</span>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estils helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function cardSeccio(): React.CSSProperties { return { background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 } }
+function h2Seccio(): React.CSSProperties { return { margin: '0 0 12px', fontSize: 15, display: 'flex', gap: 8, alignItems: 'center' } }
+function badgeStyle(): React.CSSProperties { return { background: '#f7f7f5', border: '1px solid #d4d4d4', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500, color: '#6b7280' } }
+function cardInc(): React.CSSProperties { return { border: '1px solid #d4d4d4', borderRadius: 6, padding: 8, background: '#fafafa' } }
+function btnSelLliures(): React.CSSProperties { return { background: '#fde68a', border: '1px solid #f59e0b', borderRadius: 4, padding: '2px 6px', fontSize: 10, cursor: 'pointer', color: '#92400e', fontWeight: 600 } }
+function chipNaix(): React.CSSProperties { return { background: '#4b5563', color: '#fff', padding: '4px 6px', borderRadius: 4, fontSize: 11 } }
+function miniBtn(): React.CSSProperties { return { background: '#fff', border: '1px solid #d4d4d4', borderRadius: 3, cursor: 'pointer', fontSize: 10 } }
+function btnStyle(primari: boolean): React.CSSProperties {
+  return primari
+    ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
+    : { padding: '8px 14px', borderRadius: 6, border: '1px solid #d4d4d4', background: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
 }
