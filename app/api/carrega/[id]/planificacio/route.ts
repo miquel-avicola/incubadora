@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { obtenirEclosio, llegirParametresEclosio } from '@/lib/eclosio'
+import { obtenirNaixementPct, llegirParametresPrevisio } from '@/lib/previsio'
 
 // La planificació canvia l'estat dels carros i de les assignacions. Cal que les
 // rutes que llegeixen aquesta info després d'una crida no rebin cache de Next.js.
@@ -31,10 +31,11 @@ interface BodyPlanificacio {
  * offset+posicio, esborrat d'orfes verges, INSERT/UPDATE, marcatge d'estat).
  *
  * Despres de la RPC, recalcula `previsio_naixement` per a totes les assignacions
- * del full que no estiguin marcades com a `previsio_manual=true`. La previsio
- * es calcula amb `obtenirEclosio(estirp, setmanes_vida, tipus_incubadora)`
- * reutilitzant la logica de `lib/eclosio.ts`. Les eclosions calculades es
- * cachegen per (estirp, setmanes, tipus) per evitar crides duplicades.
+ * del full que no estiguin marcades com a `previsio_manual=true`. La previsio es
+ * calcula amb `obtenirNaixementPct(estirp, setmanes_vida, tipus_incubadora)` de
+ * `lib/previsio.ts` (no `obtenirEclosio`, que retorna taxa sobre fertils i no
+ * sobre ous totals!). Les previsions calculades es cachegen per
+ * (estirp, setmanes, tipus) per evitar crides duplicades.
  *
  * Casos d'error rellevants:
  *  - ORFES_BLOQUEJADES: alguna assignacio orfe te transferencia o vacuna -> 409
@@ -150,14 +151,14 @@ async function recalcularPrevisions(fullId: number): Promise<{
     return { previsio_recalculats: 0, previsio_errors: 0, previsio_skipped_manual: 0 }
   }
 
-  const paramsEclosio = await llegirParametresEclosio()
-  const eclosioCache = new Map<string, number>()
+  const paramsPrevisio = await llegirParametresPrevisio()
+  const naixementCache = new Map<string, number>()
 
   let recalculats = 0
   let errors = 0
   let skippedManual = 0
 
-  // Sense paral.lelitzar, per aprofitar la cache d'eclosio per (estirp, setmanes, tipus).
+  // Sense paral.lelitzar, per aprofitar la cache de naixement per (estirp, setmanes, tipus).
   // Volum esperat: <= 80 assignacions per full -> temps total < 2s al pitjor cas.
   const llista = assignacionsActuals as unknown as AssignacioPerRecalcul[]
   for (let i = 0; i < llista.length; i++) {
@@ -188,13 +189,13 @@ async function recalcularPrevisions(fullId: number): Promise<{
     }
 
     const cacheKey = lot.estirp + '|' + setmanes + '|' + inc.tipus
-    let eclosio = eclosioCache.get(cacheKey)
+    let naixement = naixementCache.get(cacheKey)
 
-    if (eclosio === undefined) {
+    if (naixement === undefined) {
       try {
-        const r = await obtenirEclosio(lot.estirp, setmanes, inc.tipus, paramsEclosio)
-        eclosio = r.eclosio
-        eclosioCache.set(cacheKey, eclosio)
+        const r = await obtenirNaixementPct(lot.estirp, setmanes, inc.tipus, paramsPrevisio)
+        naixement = r.previsio
+        naixementCache.set(cacheKey, naixement)
       } catch {
         errors++
         continue
@@ -203,7 +204,7 @@ async function recalcularPrevisions(fullId: number): Promise<{
 
     const { error: errUpd } = await supabase
       .from('assignacions')
-      .update({ previsio_naixement: eclosio })
+      .update({ previsio_naixement: naixement })
       .eq('id', a.id)
 
     if (errUpd) errors++
