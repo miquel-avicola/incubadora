@@ -73,6 +73,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .update({ estat: 'Transferit' })
     .eq('id', assignacio.carro_id)
 
+  // Disparar rotacio automatica de zones si toca. La RPC valida internament
+  // que sigui MS gran (cap 24) i que el pulsator d'aquesta Inc hagi quedat
+  // buit; si no toca, retorna {ok:false, motiu:...} sense modificar res.
+  // Silencios: no bloqueja la resposta ni mostra avis a l'usuari.
+  const { data: assigInc } = await supabase
+    .from('assignacions')
+    .select('incubadora_id')
+    .eq('id', assignacio_id)
+    .single()
+
+  if (assigInc?.incubadora_id) {
+    await supabase.rpc('rotar_zones_ms_gran', { p_incubadora_id: assigInc.incubadora_id })
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
 

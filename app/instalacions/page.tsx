@@ -287,9 +287,37 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
     else zones[c.zona].push(c)
   })
 
+  const mostraRotar = edicio?.actiu === true && inc.capacitat === 24
+  const pulsatorBuit = zones.pulsator.length === 0
   return (
     <div style={cardStyle}>
       <HeaderTargeta numero={inc.numero} tipus="Multistage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
+
+      {mostraRotar && (
+        <div style={{ marginTop: '0.4rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => {
+              if (!pulsatorBuit) return
+              if (!confirm(`Rotar zones d'aquesta MS?\nparet (${zones.paret.length}) -> pulsator\ncentral (${zones.central.length}) -> paret\nCentral quedara buit.`)) return
+              edicio!.onRotar(inc.id)
+            }}
+            disabled={!pulsatorBuit}
+            title={pulsatorBuit ? 'Rotar paret->pulsator i central->paret' : 'Pulsator no esta buit: cal transferir o moure aquests carros primer'}
+            style={{
+              background: pulsatorBuit ? '#1f2933' : 'transparent',
+              border: '1px solid ' + (pulsatorBuit ? 'var(--accent)' : 'var(--border)'),
+              color: pulsatorBuit ? 'var(--accent)' : 'var(--text-dim)',
+              padding: '0.25rem 0.6rem',
+              borderRadius: '4px',
+              fontSize: '0.7rem',
+              cursor: pulsatorBuit ? 'pointer' : 'not-allowed',
+              fontWeight: 600,
+            }}
+          >
+            Rotar zones
+          </button>
+        </div>
+      )}
 
       <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
         <ColumnaZona titol="Central" carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
@@ -458,6 +486,8 @@ interface ContextEdicio {
   setSubTipusArrossegat: (s: SubTipus | null) => void
   // Crida PATCH /api/assignacions/[id]
   onMoure: (assignacioId: number, incIdDesti: number, posDesti: number, zonaDesti: 'central'|'paret'|'pulsator'|null) => void
+  // Crida POST /api/instalacions/rotar-zones/[inc_id] (nomes MS grans amb pulsator buit)
+  onRotar: (incId: number) => void
 }
 
 // Trobar la posició lliure mínima d'una zona MS dins una incubadora destí
@@ -523,11 +553,35 @@ export default function Instalacions() {
     }
   }, [carregar])
 
+  // Mode edicio: handler de rotacio manual de zones (MS gran)
+  const onRotarInc = useCallback(async (incId: number) => {
+    setMissatgeEdicio('')
+    try {
+      const res = await fetch(`/api/instalacions/rotar-zones/${incId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const motiu = (data && typeof data === 'object' && 'motiu' in data) ? String((data as { motiu: unknown }).motiu) : (data?.error ?? res.statusText)
+        setMissatgeEdicio('Error rotant: ' + motiu)
+        return
+      }
+      const np = (data && typeof data === 'object' && 'paret_a_pulsator' in data) ? (data as { paret_a_pulsator: number }).paret_a_pulsator : 0
+      const nc = (data && typeof data === 'object' && 'central_a_paret' in data) ? (data as { central_a_paret: number }).central_a_paret : 0
+      setMissatgeEdicio(`Rotades zones (${np} paret->pulsator, ${nc} central->paret)`)
+      carregar()
+    } catch (e) {
+      setMissatgeEdicio('Error xarxa: ' + String(e))
+    }
+  }, [carregar])
+
   const ctxEdicio: ContextEdicio = {
     actiu: modeEdicio,
     subTipusArrossegat,
     setSubTipusArrossegat,
     onMoure: onMoureCarro,
+    onRotar: onRotarInc,
   }
 
   // Totals globals
