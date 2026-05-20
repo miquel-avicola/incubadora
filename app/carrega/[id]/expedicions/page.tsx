@@ -53,6 +53,7 @@ interface Expedicio {
   observacions: string | null
   num_viatge: number | null
   sexe: string | null
+  grup_sexat_id: string | null
   comandes: { id: number; clients: { id: number; nom: string } }
   destinacions: { id: number; nom_granja: string; nau: string | null; poblacio: string | null; sexe: string | null }
   transportistes: { id: number; nom: string } | null
@@ -214,7 +215,9 @@ export default function Expedicions() {
   const [matricula, setMatricula] = useState('')
   const [horaPrevist, setHoraPrevist] = useState('')
   const [polletsComanda, setPolletsComanda] = useState('')
-  const [sexeForm, setSexeForm] = useState<'M' | 'F' | ''>('')
+  const [sexatToggle, setSexatToggle] = useState(false)
+  const [polletsM, setPolletsM] = useState('')
+  const [polletsF, setPolletsF] = useState('')
   const [cercaDestinacio, setCercaDestinacio] = useState('')
   const [creant, setCreant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -251,20 +254,33 @@ export default function Expedicions() {
 
   async function crearExpedicio() {
     if (!comandaId || !destinacioId) return
+    if (sexatToggle && (!polletsM || !polletsF)) return
     setCreant(true)
     setErrorMsg('')
+    const postBody = sexatToggle
+      ? {
+          comanda_id: parseInt(comandaId),
+          destinacio_id: parseInt(destinacioId),
+          transportista_id: transportistaId ? parseInt(transportistaId) : null,
+          matricula: matricula || null,
+          hora_prevista_naixement: horaPrevist || null,
+          sexat: true,
+          polletsM: parseInt(polletsM) || null,
+          polletsF: parseInt(polletsF) || null,
+        }
+      : {
+          comanda_id: parseInt(comandaId),
+          destinacio_id: parseInt(destinacioId),
+          transportista_id: transportistaId ? parseInt(transportistaId) : null,
+          matricula: matricula || null,
+          hora_prevista_naixement: horaPrevist || null,
+          pollets_comanda: polletsComanda ? parseInt(polletsComanda) : null,
+          sexe: null,
+        }
     const res = await fetch(`/api/carrega/${params.id}/expedicions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        comanda_id: parseInt(comandaId),
-        destinacio_id: parseInt(destinacioId),
-        transportista_id: transportistaId ? parseInt(transportistaId) : null,
-        matricula: matricula || null,
-        hora_prevista_naixement: horaPrevist || null,
-        pollets_comanda: polletsComanda ? parseInt(polletsComanda) : null,
-        sexe: sexeForm || null,
-      }),
+      body: JSON.stringify(postBody),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -277,7 +293,9 @@ export default function Expedicions() {
       setMatricula('')
       setHoraPrevist('')
       setPolletsComanda('')
-      setSexeForm('')
+      setSexatToggle(false)
+      setPolletsM('')
+      setPolletsF('')
       setCercaDestinacio('')
       carregarDades()
     }
@@ -496,24 +514,52 @@ export default function Expedicions() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-              <div>
-                <label style={labelStyle}>Pollets previstos</label>
-                <input type="number" value={polletsComanda} onChange={e => setPolletsComanda(e.target.value)} placeholder="0" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Sexe</label>
-                <select value={sexeForm} onChange={e => setSexeForm(e.target.value as 'M' | 'F' | '')} style={{ ...inputStyle, appearance: 'none' }}>
-                  <option value="">— No sexat</option>
-                  <option value="F">♀ Femelles</option>
-                  <option value="M">♂ Mascles</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Hora prevista</label>
-                <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" style={inputStyle} />
-              </div>
+            {/* Toggle sexat */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ ...labelStyle, margin: 0 }}>Sexat</span>
+              <button
+                type="button"
+                onClick={() => { setSexatToggle(!sexatToggle); setPolletsM(''); setPolletsF('') }}
+                style={{
+                  padding: '0.3rem 0.8rem', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono',
+                  borderRadius: '6px', border: '1px solid',
+                  borderColor: sexatToggle ? 'var(--accent)' : 'var(--border)',
+                  background: sexatToggle ? 'rgba(240,180,41,0.12)' : 'var(--bg)',
+                  color: sexatToggle ? 'var(--accent)' : 'var(--text-dim)',
+                  cursor: 'pointer', fontWeight: sexatToggle ? 700 : 400,
+                }}
+              >
+                {sexatToggle ? '✓ Actiu' : 'No'}
+              </button>
             </div>
+
+            {!sexatToggle ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={labelStyle}>Pollets previstos</label>
+                  <input type="number" value={polletsComanda} onChange={e => setPolletsComanda(e.target.value)} placeholder="0" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Hora prevista</label>
+                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" style={inputStyle} />
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={labelStyle}>♂ Mascles</label>
+                  <input type="number" value={polletsM} onChange={e => setPolletsM(e.target.value)} placeholder="0" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>♀ Femelles</label>
+                  <input type="number" value={polletsF} onChange={e => setPolletsF(e.target.value)} placeholder="0" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Hora prevista</label>
+                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" style={inputStyle} />
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
@@ -539,11 +585,11 @@ export default function Expedicions() {
               <button onClick={() => setMostrarForm(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
                 Cancel·lar
               </button>
-              <button onClick={crearExpedicio} disabled={!comandaId || !destinacioId || creant} style={{
+              <button onClick={crearExpedicio} disabled={!comandaId || !destinacioId || creant || (sexatToggle && (!polletsM || !polletsF))} style={{
                 flex: 2, padding: '0.75rem', border: 'none', borderRadius: '8px', fontWeight: 700,
                 fontFamily: 'IBM Plex Sans', fontSize: '0.9rem', cursor: 'pointer',
-                background: (!comandaId || !destinacioId || creant) ? 'var(--border)' : 'var(--accent)',
-                color: (!comandaId || !destinacioId || creant) ? 'var(--text-dim)' : '#0f1117',
+                background: (!comandaId || !destinacioId || creant || (sexatToggle && (!polletsM || !polletsF))) ? 'var(--border)' : 'var(--accent)',
+                color: (!comandaId || !destinacioId || creant || (sexatToggle && (!polletsM || !polletsF))) ? 'var(--text-dim)' : '#0f1117',
               }}>
                 {creant ? 'Creant...' : 'Crear expedició'}
               </button>

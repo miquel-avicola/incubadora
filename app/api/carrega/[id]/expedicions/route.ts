@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   const { data, error } = await supabase
     .from('expedicions')
     .select(`
-      id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge, sexe,
+      id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge, sexe, grup_sexat_id,
       hora_prevista_naixement, hora_sortida_camio, hora_arribada_camio, observacions,
       comandes (id, clients (id, nom)),
       destinacions (id, nom_granja, nau, poblacio, sexe),
@@ -33,7 +33,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const body = await request.json()
-  const { comanda_id, destinacio_id, transportista_id, matricula, hora_prevista_naixement, pollets_comanda, observacions, sexe } = body
+  const {
+    comanda_id, destinacio_id, transportista_id, matricula,
+    hora_prevista_naixement, pollets_comanda, observacions,
+    sexe, sexat, polletsM, polletsF,
+  } = body
 
   if (!comanda_id || !destinacio_id) {
     return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
@@ -57,6 +61,59 @@ export async function POST(request: Request, { params }: { params: { id: string 
     ? existing[0].ordre + 1
     : 1
 
+  // Si és una expedició sexada, crear les dues (M+F) amb un grup_sexat_id compartit
+  if (sexat === true) {
+    const grupSexatId = crypto.randomUUID()
+
+    const baseFields = {
+      comanda_id,
+      destinacio_id,
+      transportista_id: transportista_id || null,
+      matricula: matricula || null,
+      hora_prevista_naixement: hora_prevista_naixement || null,
+      pollets_servits: null,
+      observacions: observacions || null,
+      grup_sexat_id: grupSexatId,
+    }
+
+    const { data: dataM, error: errM } = await supabase
+      .from('expedicions')
+      .insert({ ...baseFields, pollets_comanda: polletsM || null, ordre: nextOrdre, sexe: 'M' })
+      .select()
+      .single()
+
+    if (errM) return NextResponse.json({ error: errM.message }, { status: 500 })
+
+    const { data: dataF, error: errF } = await supabase
+      .from('expedicions')
+      .insert({ ...baseFields, pollets_comanda: polletsF || null, ordre: nextOrdre + 1, sexe: 'F' })
+      .select()
+      .single()
+
+    if (errF) return NextResponse.json({ error: errF.message }, { status: 500 })
+
+    // Actualitzar client_id de la destinació si cal
+    if (dataM) {
+      const comanda = await supabase
+        .from('comandes')
+        .select('full_carrega_id, clients(id)')
+        .eq('id', comanda_id)
+        .single()
+
+      const client = (comanda.data?.clients as unknown as { id: number } | null)
+      if (client?.id) {
+        await supabase
+          .from('destinacions')
+          .update({ client_id: client.id })
+          .eq('id', destinacio_id)
+          .is('client_id', null)
+      }
+    }
+
+    return NextResponse.json([dataM, dataF], { status: 201 })
+  }
+
+  // Expedició simple
   const { data, error } = await supabase
     .from('expedicions')
     .insert({
@@ -98,7 +155,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
 export async function DELETE(request: Request) {
   const { expedicio_id } = await request.json()
 
-  // Eliminar primer els registres dependents per evitar errors de clau forana
   const { error: errorLots } = await supabase
     .from('expedicio_lots')
     .delete()

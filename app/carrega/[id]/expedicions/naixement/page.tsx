@@ -27,6 +27,8 @@ interface Expedicio {
   transportistes: { id: number; nom: string } | null
   expedicio_lots: ExpedicioLot[]
   expedicio_vacunes: { vacuna_id: number; vacunes: { nom: string } }[]
+  sexe: string | null
+  grup_sexat_id: string | null
 }
 
 interface Assignacio {
@@ -64,6 +66,10 @@ type DistribucioSaved = Record<string, {
     items: Array<{ expedicio_id: number; client: string; caixes: number }>
   }>
 }>
+
+type ColEntry =
+  | { type: 'single'; exp: Expedicio }
+  | { type: 'parella'; expM: Expedicio; expF: Expedicio }
 
 function nomDestinacio(d: { nom_granja: string; nau: string | null }) {
   return d.nau ? `${d.nom_granja} ${d.nau}` : d.nom_granja
@@ -195,6 +201,26 @@ export default function ExpedicionsNaixement() {
     return horaA.localeCompare(horaB)
   })
 
+  // Construir columnes: agrupar expedicions de la mateixa parella sexada
+  const cols: ColEntry[] = []
+  const grupSexatVistos = new Set<string>()
+  expedicionsOrdenades.forEach(e => {
+    if (e.grup_sexat_id) {
+      if (grupSexatVistos.has(e.grup_sexat_id)) return
+      grupSexatVistos.add(e.grup_sexat_id)
+      const parella = expedicionsOrdenades.filter(x => x.grup_sexat_id === e.grup_sexat_id)
+      const expM = parella.find(x => x.sexe === 'M') ?? parella[0]
+      const expF = parella.find(x => x.sexe === 'F') ?? parella[1]
+      if (expM && expF) {
+        cols.push({ type: 'parella', expM, expF })
+      } else {
+        cols.push({ type: 'single', exp: e })
+      }
+    } else {
+      cols.push({ type: 'single', exp: e })
+    }
+  })
+
   const lotIds = Object.keys(statsPerLot).map(Number)
 
   // Helpers per accedir a la distribució d'una expedició
@@ -279,21 +305,44 @@ export default function ExpedicionsNaixement() {
             <tr>
               <th>Lot</th>
               <th>Nascuts</th>
-              {expedicionsOrdenades.map(e => {
-                const distExp = getDistExp(e)
-                const enCompartit = distExp?.en_carro_compartit ?? false
-                return (
-                  <th key={e.id}>
-                    <div>{nomDestinacio(e.destinacions)}{enCompartit ? ' *' : ''}</div>
-                    <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
-                    {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
-                    {e.expedicio_vacunes?.length > 0 && (
-                      <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
-                        {e.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
+              {cols.map((col) => {
+                if (col.type === 'single') {
+                  const e = col.exp
+                  const distExp = getDistExp(e)
+                  const enCompartit = distExp?.en_carro_compartit ?? false
+                  return (
+                    <th key={e.id}>
+                      <div>{nomDestinacio(e.destinacions)}{enCompartit ? ' *' : ''}</div>
+                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
+                      {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
+                      {e.expedicio_vacunes?.length > 0 && (
+                        <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
+                          {e.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
+                        </div>
+                      )}
+                    </th>
+                  )
+                } else {
+                  const { expM, expF } = col
+                  const distM = getDistExp(expM)
+                  const distF = getDistExp(expF)
+                  const enCompartit = (distM?.en_carro_compartit ?? false) || (distF?.en_carro_compartit ?? false)
+                  return (
+                    <th key={`par_${expM.id}`}>
+                      <div>{nomDestinacio(expM.destinacions)}{enCompartit ? ' *' : ''}</div>
+                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{expM.comandes?.clients?.nom}</div>
+                      {expM.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{expM.hora_prevista_naixement}</div>}
+                      <div style={{ fontWeight: 600, fontSize: '9px', color: '#333', marginTop: '2px' }}>
+                        ♂ {(expM.pollets_comanda || 0).toLocaleString()} · ♀ {(expF.pollets_comanda || 0).toLocaleString()}
                       </div>
-                    )}
-                  </th>
-                )
+                      {expM.expedicio_vacunes?.length > 0 && (
+                        <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
+                          {expM.expedicio_vacunes.map(ev => ev.vacunes.nom).join(' · ')}
+                        </div>
+                      )}
+                    </th>
+                  )
+                }
               })}
               <th>Total assignat</th>
             </tr>
@@ -309,9 +358,24 @@ export default function ExpedicionsNaixement() {
                 <tr key={lotId}>
                   <td className="lot-nom">{stats.nom}</td>
                   <td>{stats.nascuts.toLocaleString()}</td>
-                  {expedicionsOrdenades.map(e => {
-                    const el = e.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
-                    return <td key={e.id}>{el ? el.pollets.toLocaleString() : ''}</td>
+                  {cols.map((col) => {
+                    if (col.type === 'single') {
+                      const el = col.exp.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
+                      return <td key={col.exp.id}>{el ? el.pollets.toLocaleString() : ''}</td>
+                    } else {
+                      const elM = col.expM.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
+                      const elF = col.expF.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
+                      const valM = elM?.pollets || 0
+                      const valF = elF?.pollets || 0
+                      if (valM === 0 && valF === 0) return <td key={`par_${col.expM.id}`}></td>
+                      return (
+                        <td key={`par_${col.expM.id}`}>
+                          {valM > 0 && <span>♂ {valM.toLocaleString()}</span>}
+                          {valM > 0 && valF > 0 && <br />}
+                          {valF > 0 && <span>♀ {valF.toLocaleString()}</span>}
+                        </td>
+                      )
+                    }
                   })}
                   <td>{totalLot > 0 ? totalLot.toLocaleString() : ''}</td>
                 </tr>
@@ -320,18 +384,30 @@ export default function ExpedicionsNaixement() {
             <tr className="total-row">
               <td className="lot-nom">TOTAL</td>
               <td>{totalNascuts.toLocaleString()}</td>
-              {expedicionsOrdenades.map(e => (
-                <td key={e.id}>{(e.pollets_servits || e.pollets_comanda || 0).toLocaleString()}</td>
-              ))}
+              {cols.map((col) => {
+                if (col.type === 'single') {
+                  const e = col.exp
+                  return <td key={e.id}>{(e.pollets_servits || e.pollets_comanda || 0).toLocaleString()}</td>
+                } else {
+                  const { expM, expF } = col
+                  return (
+                    <td key={`par_${expM.id}`}>
+                      <span>♂ {(expM.pollets_servits || expM.pollets_comanda || 0).toLocaleString()}</span><br />
+                      <span>♀ {(expF.pollets_servits || expF.pollets_comanda || 0).toLocaleString()}</span>
+                    </td>
+                  )
+                }
+              })}
               <td>{totalAssignats.toLocaleString()}</td>
             </tr>
             {/* Fila: Pollets/caixa */}
             <tr className="dist-row">
               <td className="dist-label">Pollets/caixa</td>
               <td></td>
-              {expedicionsOrdenades.map(e => {
-                const grup = getDistGrup(e)
-                return <td key={e.id}>{grup ? grup.pollets_caixa : '—'}</td>
+              {cols.map((col) => {
+                const grup = col.type === 'single' ? getDistGrup(col.exp) : getDistGrup(col.expM)
+                const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
+                return <td key={key}>{grup ? grup.pollets_caixa : '—'}</td>
               })}
               <td></td>
             </tr>
@@ -339,9 +415,10 @@ export default function ExpedicionsNaixement() {
             <tr className="dist-row">
               <td className="dist-label">Alçada carro</td>
               <td></td>
-              {expedicionsOrdenades.map(e => {
-                const grup = getDistGrup(e)
-                return <td key={e.id}>{grup ? grup.alcada : '—'}</td>
+              {cols.map((col) => {
+                const grup = col.type === 'single' ? getDistGrup(col.exp) : getDistGrup(col.expM)
+                const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
+                return <td key={key}>{grup ? grup.alcada : '—'}</td>
               })}
               <td></td>
             </tr>
@@ -349,13 +426,22 @@ export default function ExpedicionsNaixement() {
             <tr className="dist-row">
               <td className="dist-label">Distribució</td>
               <td></td>
-              {expedicionsOrdenades.map(e => {
-                const distExp = getDistExp(e)
-                const enCompartit = distExp?.en_carro_compartit ?? false
-                const val = distExp
-                  ? `${distExp.carros_sencers}c + ${distExp.pico_caixes}${enCompartit ? ' *' : ''}`
-                  : '—'
-                return <td key={e.id}>{val}</td>
+              {cols.map((col) => {
+                if (col.type === 'single') {
+                  const distExp = getDistExp(col.exp)
+                  const enCompartit = distExp?.en_carro_compartit ?? false
+                  const val = distExp
+                    ? `${distExp.carros_sencers}c + ${distExp.pico_caixes}${enCompartit ? ' *' : ''}`
+                    : '—'
+                  return <td key={col.exp.id}>{val}</td>
+                } else {
+                  const { expM, expF } = col
+                  const distM = getDistExp(expM)
+                  const distF = getDistExp(expF)
+                  const fmtM = distM ? `♂ ${distM.carros_sencers}c+${distM.pico_caixes}${distM.en_carro_compartit ? '*' : ''}` : '♂ —'
+                  const fmtF = distF ? `♀ ${distF.carros_sencers}c+${distF.pico_caixes}${distF.en_carro_compartit ? '*' : ''}` : '♀ —'
+                  return <td key={`par_${expM.id}`}><span>{fmtM}</span><br /><span>{fmtF}</span></td>
+                }
               })}
               <td></td>
             </tr>
