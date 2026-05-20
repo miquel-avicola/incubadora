@@ -11,6 +11,7 @@ interface BodyPatch {
   posicio?: number
   zona?: ZonaMS | null
   previsio_naixement?: number | null
+  es_maquila?: boolean
 }
 
 /**
@@ -59,9 +60,20 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     body.posicio !== undefined ||
     body.zona !== undefined
   const tePrevisio = body.previsio_naixement !== undefined
+  const teMaquila = body.es_maquila !== undefined
 
-  if (!teMoviment && !tePrevisio) {
-    return NextResponse.json({ error: 'Body buit (cal moviment o previsio)' }, { status: 400 })
+  if (!teMoviment && !tePrevisio && !teMaquila) {
+    return NextResponse.json({ error: 'Body buit (cal moviment, previsio o es_maquila)' }, { status: 400 })
+  }
+
+  // -- Mode es_maquila sol --
+  if (teMaquila && !teMoviment && !tePrevisio) {
+    const { error: errUpd } = await supabase
+      .from('assignacions')
+      .update({ es_maquila: body.es_maquila })
+      .eq('id', assignacioId)
+    if (errUpd) return NextResponse.json({ error: errUpd.message }, { status: 500 })
+    return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
   }
 
   // -- Mode previsio manual sol (sense moviment) --

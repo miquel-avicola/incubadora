@@ -27,6 +27,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         hora_entrada,
         previsio_naixement,
         previsio_manual,
+        es_maquila,
         observacions,
         posicio,
         zona,

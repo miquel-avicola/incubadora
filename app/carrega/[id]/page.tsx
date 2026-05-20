@@ -11,6 +11,7 @@ interface Assignacio {
   hora_entrada: string | null
   previsio_naixement: number | null
   previsio_manual: boolean
+  es_maquila: boolean
   carros_estoc: {
     id: number
     posta: string
@@ -58,6 +59,7 @@ export default function DetallCarrega() {
   const [editantGrupKey, setEditantGrupKey] = useState<string | null>(null)
   const [valorEditGrup, setValorEditGrup] = useState<string>('')
   const [desantGrup, setDesantGrup] = useState(false)
+  const [desantMaquila, setDesantMaquila] = useState(false)
 
   const carregarDades = useCallback(() => {
     if (!params.id) return
@@ -67,6 +69,43 @@ export default function DetallCarrega() {
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
+
+  const toggleMaquilaCarro = async (assignacioId: number, actual: boolean) => {
+    if (desantMaquila) return
+    setDesantMaquila(true)
+    const res = await fetch(`/api/assignacions/${assignacioId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ es_maquila: !actual }),
+    })
+    setDesantMaquila(false)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Error: ${data.error || "no s'ha pogut desar"}`)
+      return
+    }
+    carregarDades()
+  }
+
+  const toggleMaquilaGrup = async (lotId: number, incubadoraId: number, actualMaquila: boolean) => {
+    if (desantMaquila) return
+    if (!confirm(actualMaquila
+      ? `Treure marcat com a MAQUILA a tots els carros d'aquest lot?`
+      : `Marcar tots els carros d'aquest lot com a MAQUILA?`)) return
+    setDesantMaquila(true)
+    const res = await fetch(`/api/carrega/${params.id}/maquila-grup`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lot_id: lotId, incubadora_id: incubadoraId, es_maquila: !actualMaquila }),
+    })
+    setDesantMaquila(false)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Error: ${data.error || "no s'ha pogut desar"}`)
+      return
+    }
+    carregarDades()
+  }
 
   const finalitzarFull = async () => {
     if (!full) return
@@ -195,10 +234,19 @@ export default function DetallCarrega() {
 
   // Calcular pollets previstos per les assignacions
   const totalOusAssignats = full.assignacions.reduce((s, a) => s + a.carros_estoc.quantitat_ous, 0)
-  const totalPolletsPrevistos = full.assignacions.reduce((s, a) => {
-    const prev = a.previsio_naixement || 0
-    return s + Math.round(a.carros_estoc.quantitat_ous * prev)
-  }, 0)
+  const totalPolletsPrevistosPropis = full.assignacions
+    .filter(a => !a.es_maquila)
+    .reduce((s, a) => {
+      const prev = a.previsio_naixement || 0
+      return s + Math.round(a.carros_estoc.quantitat_ous * prev)
+    }, 0)
+  const totalPolletsPrevistosMaquila = full.assignacions
+    .filter(a => a.es_maquila)
+    .reduce((s, a) => {
+      const prev = a.previsio_naixement || 0
+      return s + Math.round(a.carros_estoc.quantitat_ous * prev)
+    }, 0)
+  const totalPolletsPrevistos = totalPolletsPrevistosPropis + totalPolletsPrevistosMaquila
 
   // Agrupar assignacions per incubadora
   const perIncubadora: Record<number, Assignacio[]> = {}
@@ -354,7 +402,7 @@ export default function DetallCarrega() {
         {/* Resum pollets */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
           <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Resum</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: 'var(--accent)' }}>{full.assignacions.length}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>carros</div>
@@ -364,10 +412,16 @@ export default function DetallCarrega() {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>ous</div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: totalPolletsPrevistos >= totalPollets ? 'var(--success)' : 'var(--danger)' }}>
-                {totalPolletsPrevistos.toLocaleString()}
+              <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: totalPolletsPrevistosPropis >= totalPollets ? 'var(--success)' : 'var(--danger)' }}>
+                {totalPolletsPrevistosPropis.toLocaleString()}
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>pollets prev.</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>prev. propis</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
+                {totalPolletsPrevistosMaquila.toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>prev. maquila</div>
             </div>
           </div>
           {totalPollets > 0 && (
@@ -437,7 +491,25 @@ export default function DetallCarrega() {
                           <div key={grupKey} style={{ background: 'var(--bg)', borderRadius: 8, padding: '0.5rem 0.75rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
                               <span style={{ fontWeight: 600 }}>{granja} {lot.estirp || ''} · {carrosLot.length} carro{carrosLot.length > 1 ? 's' : ''}</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <button
+                                  onClick={() => toggleMaquilaGrup(lot.id, incubadoraId, carrosLot.every(c => c.es_maquila))}
+                                  disabled={desantMaquila}
+                                  title={carrosLot.every(c => c.es_maquila) ? 'Tots marcats MAQUILA — clica per treure' : carrosLot.some(c => c.es_maquila) ? 'Alguns MAQUILA — clica per marcar tots' : 'Clica per marcar tots com a MAQUILA'}
+                                  style={{
+                                    padding: '0.1rem 0.4rem',
+                                    fontSize: '0.65rem',
+                                    fontFamily: 'IBM Plex Mono',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.05em',
+                                    border: '1px solid',
+                                    borderRadius: '4px',
+                                    cursor: desantMaquila ? 'wait' : 'pointer',
+                                    background: carrosLot.every(c => c.es_maquila) ? '#f59e0b' : carrosLot.some(c => c.es_maquila) ? 'rgba(245,158,11,0.3)' : 'transparent',
+                                    color: carrosLot.every(c => c.es_maquila) ? '#0f1117' : carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--text-dim)',
+                                    borderColor: carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--border)',
+                                  }}
+                                >MAQ</button>
                                 <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem' }}>tot el grup:</span>
                                 {editantGrupKey === grupKey ? (
                                   <input
@@ -484,6 +556,25 @@ export default function DetallCarrega() {
                               {carrosLot.sort((c1, c2) => c1.num_carro_full - c2.num_carro_full).map(a => (
                                 <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}>
                                   <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', minWidth: '2rem' }}>C{a.num_carro_full}</span>
+                                  <button
+                                    onClick={() => toggleMaquilaCarro(a.id, a.es_maquila)}
+                                    disabled={desantMaquila}
+                                    title={a.es_maquila ? 'MAQUILA — clica per treure' : 'Clica per marcar com a maquila'}
+                                    style={{
+                                      marginLeft: '0.3rem',
+                                      padding: '0.05rem 0.3rem',
+                                      fontSize: '0.6rem',
+                                      fontFamily: 'IBM Plex Mono',
+                                      fontWeight: 700,
+                                      border: '1px solid',
+                                      borderRadius: '3px',
+                                      cursor: desantMaquila ? 'wait' : 'pointer',
+                                      background: a.es_maquila ? '#f59e0b' : 'transparent',
+                                      color: a.es_maquila ? '#0f1117' : 'var(--border)',
+                                      borderColor: a.es_maquila ? '#f59e0b' : 'var(--border)',
+                                      lineHeight: 1.2,
+                                    }}
+                                  >M</button>
                                   <span style={{ flex: 1, marginLeft: '0.5rem', color: 'var(--text-dim)' }}>{a.carros_estoc.posta}</span>
                                   {editantPrevisioId === a.id ? (
                                     <input
