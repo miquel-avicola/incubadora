@@ -505,6 +505,8 @@ export default function Planificacio() {
 
   // Subconjunt d'ocupatsAltresFullsPerCella on la transferència és <= data d'entrada del full actual.
   // Aquests slots estaran lliures quan entrin els carros nous → es poden seleccionar/assignar.
+  // ROTACIÓ MS: quan un carro del pulsator (~14d) transfereix, el carro del central es desplaça
+  // cap al pulsator i el passadís central queda buit. Per tant remapegem pulsator → central.
   const lliureAviatPerCella = useMemo(() => {
     const m = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
     if (!full) return m
@@ -515,7 +517,9 @@ export default function Planificacio() {
       const dataTrans = new Date(info.data_transferencia_full + 'T00:00:00').getTime()
       if (dataTrans <= dataCarrega) {
         const diesFins = Math.max(0, Math.floor((dataTrans - avui.getTime()) / 86400000))
-        m.set(k, { diesFins, num_carro_full: info.num_carro_full, num_carrega: info.num_carrega, data_transferencia_full: info.data_transferencia_full })
+        const parts = k.split('|')
+        const targetKey = parts[2] === 'pulsator' ? `${parts[0]}|${parts[1]}|central` : k
+        m.set(targetKey, { diesFins, num_carro_full: info.num_carro_full, num_carrega: info.num_carrega, data_transferencia_full: info.data_transferencia_full })
       }
     })
     return m
