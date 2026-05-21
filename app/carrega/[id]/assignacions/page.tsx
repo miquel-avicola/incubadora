@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, type CarroTermic } from '@/lib/termico'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipus
@@ -67,6 +68,10 @@ interface CarroInst {
   posicio: number | null
   zona: ZonaMS | null
   estirp: string | null
+  // Camps per a la capa tèrmica (venenen de estat_instalacions())
+  quantitat_ous: number
+  setmanes_lot: number | null
+  dia_incubacio: number | null
 }
 
 interface IncInst {
@@ -131,6 +136,94 @@ function diesEstoc(posta: string, carrega: string): number {
   const p = new Date(posta + 'T00:00:00')
   const c = new Date(carrega + 'T00:00:00')
   return Math.floor((c.getTime() - p.getTime()) / 86400000)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers tèrmics
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Setmanes de vida del lot a partir de la data de naixement (ISO)
+function setmanesLot(dataNaixement: string): number {
+  const ms = Date.now() - new Date(dataNaixement + 'T00:00:00').getTime()
+  return Math.floor(ms / (7 * 24 * 60 * 60 * 1000))
+}
+
+// Optimitza les zones (central/paret/pulsator) dels carros MS del full actual
+// deixant les Singlestage i els carros d'altres fulls intactes.
+// Algoritme greedy: per cada MS, tria la zona que minimitza el desequilibri
+// projectat a 21 dies, processant els carros en ordre de calor potencial DESC.
+function optimitzarZonesTermiques(
+  colocatsActuals: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>,
+  carrosLotParam: CarroEstoc[],
+  estatInstParam: EstatInst,
+  incsById: Map<number, Incubadora>,
+  assignacioIdsDelFull: Set<number>
+): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
+  const resultat = new Map(colocatsActuals)
+
+  // Incubadores MS que tenen carros del full actual
+  const msIncIds = new Set<number>()
+  colocatsActuals.forEach((p) => {
+    const inc = incsById.get(p.incId)
+    if (inc && inc.tipus === 'Multistage') msIncIds.add(p.incId)
+  })
+
+  msIncIds.forEach((incId) => {
+    const inc = incsById.get(incId)
+    if (!inc) return
+    const maxPerZona = inc.capacitat_carros === 24 ? 8 : 4
+
+    // Estat fixe: carros d'altres fulls ja a la MS (excloem els del full actual)
+    const incInst = estatInstParam.incubadores.find((i) => i.id === incId)
+    const carrosFixos: CarroTermic[] = []
+    if (incInst) {
+      for (const c of incInst.carros) {
+        if (assignacioIdsDelFull.has(c.assignacio_id)) continue
+        if (!c.zona || c.dia_incubacio === null || c.setmanes_lot === null) continue
+        carrosFixos.push({
+          zona: c.zona as CarroTermic['zona'],
+          quantitat_ous: c.quantitat_ous,
+          setmanes_lot: c.setmanes_lot,
+          dia_incubacio: c.dia_incubacio,
+        })
+      }
+    }
+
+    // Carros del full actual en aquesta MS
+    const carrosDeFull: { carroId: number; carro: CarroEstoc }[] = []
+    colocatsActuals.forEach((p, carroId) => {
+      if (p.incId !== incId) return
+      const carro = carrosLotParam.find((c) => c.id === carroId)
+      if (carro) carrosDeFull.push({ carroId, carro })
+    })
+
+    // Ordenar per calor potencial pic (dia 18) DESC → els carros "calents" primer
+    carrosDeFull.sort((a, b) => {
+      const sa = setmanesLot(a.carro.lots_reproductores.data_naixement)
+      const sb = setmanesLot(b.carro.lots_reproductores.data_naixement)
+      return indexCalorCarro(b.carro.quantitat_ous, sb, 18)
+           - indexCalorCarro(a.carro.quantitat_ous, sa, 18)
+    })
+
+    // Assignació greedy
+    const carrosVirtuals: CarroTermic[] = [...carrosFixos]
+    for (const { carroId, carro } of carrosDeFull) {
+      const setm = setmanesLot(carro.lots_reproductores.data_naixement)
+      // Zones amb capacitat disponible
+      const comptes: Record<ZonaMS, number> = { central: 0, paret: 0, pulsator: 0 }
+      carrosVirtuals.forEach((cv) => { comptes[cv.zona]++ })
+      const zonesDisp = (['central', 'paret', 'pulsator'] as ZonaMS[]).filter(
+        (z) => comptes[z] < maxPerZona
+      )
+      if (zonesDisp.length === 0) continue
+      const zona = suggerirZonaMS(carrosVirtuals, { quantitat_ous: carro.quantitat_ous, setmanes_lot: setm }, zonesDisp)
+      const p = resultat.get(carroId)!
+      resultat.set(carroId, { ...p, zona })
+      carrosVirtuals.push({ zona, quantitat_ous: carro.quantitat_ous, setmanes_lot: setm, dia_incubacio: 0 })
+    }
+  })
+
+  return resultat
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,6 +467,16 @@ export default function Planificacio() {
     return m
   }, [colocats])
 
+  // Té carros MS col·locats al full actual?
+  const hiHaMsColocats = useMemo(() => {
+    let found = false
+    colocats.forEach((p) => {
+      const inc = incsById.get(p.incId)
+      if (inc && inc.tipus === 'Multistage') found = true
+    })
+    return found
+  }, [colocats, incsById])
+
   // Ocupació "altres fulls" (per pintar de gris a la cel·la)
   const ocupatsAltresFullsPerCella = useMemo(() => {
     const m = new Map<string, { num_carro_full: number; estirp: string | null }>()
@@ -508,6 +611,31 @@ export default function Planificacio() {
       sug.forEach((p) => s.delete(keyCell(p.incId, p.pos, p.zona)))
       return s
     })
+  }
+
+  // ── Optimització tèrmica de zones MS
+  function aplicarOptimitzacioTermica() {
+    if (!estatInst || !full) return
+    const msColocats = Array.from(colocats.entries()).filter(([, p]) => {
+      const inc = incsById.get(p.incId)
+      return inc && inc.tipus === 'Multistage'
+    })
+    if (msColocats.length === 0) return
+    if (!confirm(
+      `Redistribuirà les zones (central/paret/pulsator) de ${msColocats.length} carro(s) a les Multistage\nbasat en l'equilibri de calor projectat a 21 dies.\n\nVols continuar?`
+    )) return
+
+    const assignacioIdsDelFull = new Set<number>(
+      full.assignacions.map((a) => a.id)
+    )
+    const novaColocats = optimitzarZonesTermiques(
+      colocats,
+      carrosLot,
+      estatInst,
+      incsById,
+      assignacioIdsDelFull
+    )
+    setColocats(novaColocats)
   }
 
   // ── Guardar
@@ -697,6 +825,19 @@ export default function Planificacio() {
           <button onClick={netejarSeleccio} style={btnStyle(false)}>Netejar selecció</button>
           <button onClick={reiniciar} style={btnStyle(false)}>Reiniciar</button>
           <button onClick={aplicarPreSuggerit} style={btnStyle(false)} disabled={seleccionades.size === 0 || carrosPendents.length === 0}>Pre-suggerit sobre seleccionades</button>
+          <button
+            onClick={aplicarOptimitzacioTermica}
+            disabled={!hiHaMsColocats}
+            title={hiHaMsColocats ? 'Redistribueix zones MS per equilibrar calor projectada a 21 dies' : 'Necessites carros MS col·locats primer'}
+            style={{
+              ...btnStyle(false),
+              background: hiHaMsColocats ? '#ecfdf5' : undefined,
+              border: hiHaMsColocats ? '1px solid #34d399' : undefined,
+              color: hiHaMsColocats ? '#065f46' : undefined,
+            }}
+          >
+            ⚡ Optimitzar zones (calor)
+          </button>
           <button onClick={guardar} style={btnStyle(true)} disabled={guardant}>{guardant ? 'Guardant...' : 'Guardar planificació'}</button>
         </div>
       </footer>

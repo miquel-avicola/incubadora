@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import {
+  calorActualPerZona,
+  indexEquilibri,
+  type CarroTermic,
+  type ZonaMS as ZonaTermic,
+} from '@/lib/termico'
 
 // ───────────────────────────────────────────────────────────────────
 // Tipus retornats per /api/instalacions (estructura que ve de la
@@ -305,6 +311,77 @@ function TargetaSinglestage({ inc, edicio }: { inc: Incubadora; edicio?: Context
   )
 }
 
+
+// ───────────────────────────────────────────────────────────────────
+// Capa tèrmica: barres de calor per zona dins d'una MS
+// ───────────────────────────────────────────────────────────────────
+
+function BarresCalorZones({ carros }: { carros: CarroInc[] }) {
+  // Converteix els CarroInc a CarroTermic, ometent els que no tinguin dades
+  const carrosTermics: CarroTermic[] = carros
+    .filter((c) => c.zona !== null && c.dia_incubacio !== null && c.setmanes_lot !== null)
+    .map((c) => ({
+      zona: c.zona as ZonaTermic,
+      quantitat_ous: c.quantitat_ous,
+      setmanes_lot: c.setmanes_lot!,
+      dia_incubacio: c.dia_incubacio!,
+    }))
+
+  if (carrosTermics.length === 0) return null
+
+  const calors = calorActualPerZona(carrosTermics)
+  const equilibri = indexEquilibri(carrosTermics)
+  const maxCalor = Math.max(calors.central, calors.paret, calors.pulsator, 1)
+
+  const zones: { key: ZonaTermic; label: string; accent: string }[] = [
+    { key: 'central', label: 'Central', accent: '#27ae60' },
+    { key: 'paret',   label: 'Paret',   accent: '#3498db' },
+    { key: 'pulsator',label: 'Pulsator',accent: '#e74c3c' },
+  ]
+
+  const equilibriColor =
+    equilibri >= 0.85 ? '#27ae60'
+    : equilibri >= 0.65 ? '#e67e22'
+    : '#c0392b'
+
+  return (
+    <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.6rem', background: '#10121a', borderRadius: '6px', border: '1px solid #1e2030' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+        <span style={{ fontSize: '0.58rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+          Calor metabòlica
+        </span>
+        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: equilibriColor, fontFamily: 'IBM Plex Mono, monospace' }}>
+          ⚖ {Math.round(equilibri * 100)}%
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+        {zones.map(({ key, label, accent }) => {
+          const val = calors[key]
+          const pct = maxCalor > 0 ? val / maxCalor : 0
+          return (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '0.55rem', color: accent, width: '46px', textAlign: 'right', flexShrink: 0 }}>{label}</span>
+              <div style={{ flex: 1, height: '6px', background: '#1e2030', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.round(pct * 100)}%`,
+                  height: '100%',
+                  background: accent,
+                  opacity: 0.75,
+                  borderRadius: '3px',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <span style={{ fontSize: '0.55rem', color: 'var(--text-dim)', width: '30px', textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>
+                {Math.round(pct * 100)}%
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ───────────────────────────────────────────────────────────────────
 // Subcomponent: targeta d'una Multistage agrupada per zona
 // ───────────────────────────────────────────────────────────────────
@@ -366,6 +443,8 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
         <ColumnaZona titol="Paret" carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
         <ColumnaZona titol="Pulsator" carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
       </div>
+
+      <BarresCalorZones carros={inc.carros} />
 
       {zones.sense.length > 0 && (
         <div style={{ marginTop: '0.5rem' }}>
