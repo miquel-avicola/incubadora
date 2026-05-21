@@ -1244,5 +1244,3 @@ function btnStyle(primari: boolean): React.CSSProperties {
     ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
     : { padding: '8px 14px', borderRadius: 6, border: '1px solid #d4d4d4', background: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
 }
-marginLeft: 8 }
-}
