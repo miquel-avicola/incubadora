@@ -132,8 +132,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       const ous = Number(c.quantitat_ous) || 0
       const fert = transfMap.get(Number(c.id)) ?? null
 
-      ousTotalsPerLot.set(lid, (ousTotalsPerLot.get(lid) || 0) + ous)
+      // Només comptem carros que han estat transferits:
+      // numerador i denominador sobre la mateixa base, evita inflar el denominador
+      // amb carros en estoc o en incubadora sense resultat de fertilitat
       if (fert !== null) {
+        ousTotalsPerLot.set(lid, (ousTotalsPerLot.get(lid) || 0) + ous)
         ousFertilsPerLot.set(lid, (ousFertilsPerLot.get(lid) || 0) + fert)
       }
     }
