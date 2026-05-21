@@ -15,22 +15,37 @@ function semafar(v: number | null, tipus: 'f' | 'e' | 'p') {
 
 interface FullInfo { id: number; num_carrega: number; carrega: string }
 
+interface PrevLot {
+  lot_id: number; nom: string
+  setmanes_vida: number; tipus_incubadora: string; eclosio_esperada: number; eclosio_font: string
+  etapa1: { carros: number; ous: number; pollets_previstos: number; pct_eclosio: number }
+  etapa2: { carros_transferits: number; ous_fertils: number; ous_explosius: number; pollets_previstos: number; pct_fertilitat: number | null; pct_eclosio: number }
+  etapa3: { carros_completats: number; pollets_nascuts: number; pollets_descartats: number; pct_eclosio_real: number | null; pct_taxa_naix: number | null; delta_vs_inicial: number | null; delta_vs_transf: number | null }
+}
+interface PrevisionsData {
+  resum: { ous: number; pollets_previstos_inicial: number; ous_fertils: number; ous_explosius: number; pollets_previstos_transf: number; pollets_nascuts: number; pct_fertilitat: number | null; pct_eclosio_prevista: number | null; pct_eclosio_real: number | null; delta_final: number | null }
+  per_lot: PrevLot[]
+}
+
 export default function Estadistiques() {
   const params = useParams()
   const [full, setFull] = useState<FullInfo | null>(null)
   const [stats, setStats] = useState<EstadistiquesData | null>(null)
+  const [previsions, setPrevisions] = useState<PrevisionsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [generantPDF, setGenerantPDF] = useState(false)
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
-    const [resFull, resStats] = await Promise.all([
+    const [resFull, resStats, resPrev] = await Promise.all([
       fetch(`/api/carrega/${params.id}`),
       fetch(`/api/carrega/${params.id}/estadistiques`),
+      fetch(`/api/carrega/${params.id}/previsions-comparativa`),
     ])
-    const [dataFull, dataStats] = await Promise.all([resFull.json(), resStats.json()])
+    const [dataFull, dataStats, dataPrev] = await Promise.all([resFull.json(), resStats.json(), resPrev.json()])
     setFull(dataFull)
     setStats(dataStats)
+    setPrevisions(dataPrev.error ? null : dataPrev)
     setLoading(false)
   }, [params.id])
 
@@ -230,6 +245,153 @@ export default function Estadistiques() {
                       ))}
                     </Fragment>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* ═══ EVOLUCIÓ DE LA PREVISIÓ ═══════════════════════════════════════ */}
+        {previsions && (
+          <>
+            <div style={{ height: '2rem' }} />
+            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
+              Evolució de la previsió
+            </div>
+
+            {/* Cards resum pipeline */}
+            {(() => {
+              const rv = previsions.resum
+              const fmtN = (n: number) => n > 0 ? n.toLocaleString('ca') : '—'
+              const fmtDelta = (d: number | null) => {
+                if (d === null) return null
+                const color = d >= 0 ? 'var(--success)' : 'var(--danger)'
+                return <span style={{ color, fontSize: '0.7rem', fontFamily: 'IBM Plex Mono' }}>{d >= 0 ? '+' : ''}{d}%</span>
+              }
+              return (
+                <div style={{ display: 'flex', gap: '0', marginBottom: '2rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
+                  {/* Etapa 1 */}
+                  <div style={{ flex: 1, padding: '1rem', borderRight: '1px solid var(--border)', background: 'rgba(100,120,255,0.06)' }}>
+                    <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: '#8899ff', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>1 · Assignació</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>{fmtN(rv.ous)} ous</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>~{fmtN(rv.pollets_previstos_inicial)}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>pollets previstos</div>
+                  </div>
+                  {/* Fletxa */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', color: 'var(--text-dim)', fontSize: '1rem' }}>→</div>
+                  {/* Etapa 2 */}
+                  <div style={{ flex: 1, padding: '1rem', borderRight: '1px solid var(--border)', background: 'rgba(240,180,41,0.06)' }}>
+                    <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>2 · Transferència</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>{fmtN(rv.ous_fertils)} fèrtils ({fmt(rv.pct_fertilitat)})</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>~{fmtN(rv.pollets_previstos_transf)}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>pollets previstos ({fmt(rv.pct_eclosio_prevista)} ecl.)</div>
+                  </div>
+                  {/* Fletxa */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', color: 'var(--text-dim)', fontSize: '1rem' }}>→</div>
+                  {/* Etapa 3 */}
+                  <div style={{ flex: 1, padding: '1rem', background: 'rgba(62,207,142,0.06)' }}>
+                    <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>3 · Naixement</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>ecl. real: {fmt(rv.pct_eclosio_real)}</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: 'var(--success)', marginTop: '0.2rem' }}>
+                      {rv.pollets_nascuts > 0 ? rv.pollets_nascuts.toLocaleString('ca') : '—'}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>
+                      pollets nascuts {rv.delta_final !== null && fmtDelta(rv.delta_final)}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Taula per lot */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                <thead>
+                  {/* Capçaleres de grup */}
+                  <tr>
+                    <th style={{ ...thStyle, textAlign: 'left', width: 160, background: 'transparent' }} rowSpan={2}>Lot</th>
+                    <th colSpan={2} style={{ ...thStyle, background: 'rgba(100,120,255,0.1)', color: '#8899ff', borderBottom: '1px solid var(--border)' }}>1 · Assignació</th>
+                    <th colSpan={3} style={{ ...thStyle, background: 'rgba(240,180,41,0.1)', color: 'var(--accent)', borderBottom: '1px solid var(--border)' }}>2 · Transferència</th>
+                    <th colSpan={3} style={{ ...thStyle, background: 'rgba(62,207,142,0.1)', color: 'var(--success)', borderBottom: '1px solid var(--border)' }}>3 · Naixement</th>
+                  </tr>
+                  <tr>
+                    <th style={{ ...thStyle, background: 'rgba(100,120,255,0.05)' }}>Ous</th>
+                    <th style={{ ...thStyle, background: 'rgba(100,120,255,0.05)' }}>~Pollets</th>
+                    <th style={{ ...thStyle, background: 'rgba(240,180,41,0.05)' }}>Fèrtils</th>
+                    <th style={{ ...thStyle, background: 'rgba(240,180,41,0.05)' }}>Expl.</th>
+                    <th style={{ ...thStyle, background: 'rgba(240,180,41,0.05)' }}>~Pollets</th>
+                    <th style={{ ...thStyle, background: 'rgba(62,207,142,0.05)' }}>Pollets</th>
+                    <th style={{ ...thStyle, background: 'rgba(62,207,142,0.05)' }}>% Ecl.</th>
+                    <th style={{ ...thStyle, background: 'rgba(62,207,142,0.05)' }}>Δ inicial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previsions.per_lot.map((l, i) => (
+                    <tr key={l.lot_id} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                      <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600 }}>
+                        <div>{l.nom}</div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', fontWeight: 400 }}>
+                          {l.setmanes_vida}s · {l.tipus_incubadora.slice(0,2)} · ecl. {l.eclosio_esperada}%
+                        </div>
+                      </td>
+                      {/* Etapa 1 */}
+                      <td style={{ ...tdStyle, background: 'rgba(100,120,255,0.03)' }}>{l.etapa1.ous.toLocaleString('ca')}</td>
+                      <td style={{ ...tdStyle, background: 'rgba(100,120,255,0.03)', color: '#8899ff' }}>~{l.etapa1.pollets_previstos.toLocaleString('ca')}</td>
+                      {/* Etapa 2 */}
+                      <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)' }}>
+                        {l.etapa2.carros_transferits < l.etapa1.carros
+                          ? <span>{l.etapa2.ous_fertils.toLocaleString('ca')} <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>({l.etapa2.carros_transferits}/{l.etapa1.carros})</span></span>
+                          : l.etapa2.ous_fertils > 0 ? l.etapa2.ous_fertils.toLocaleString('ca') : <span style={{ color: 'var(--text-dim)' }}>—</span>
+                        }
+                      </td>
+                      <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)', color: l.etapa2.ous_explosius > 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
+                        {l.etapa2.ous_explosius > 0 ? l.etapa2.ous_explosius : '—'}
+                      </td>
+                      <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)', color: 'var(--accent)' }}>
+                        {l.etapa2.ous_fertils > 0 ? `~${l.etapa2.pollets_previstos.toLocaleString('ca')}` : <span style={{ color: 'var(--text-dim)' }}>—</span>}
+                      </td>
+                      {/* Etapa 3 */}
+                      <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)', color: l.etapa3.pollets_nascuts > 0 ? 'var(--success)' : 'var(--text-dim)' }}>
+                        {l.etapa3.pollets_nascuts > 0
+                          ? l.etapa3.carros_completats < l.etapa2.carros_transferits
+                            ? <span>{l.etapa3.pollets_nascuts.toLocaleString('ca')} <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>({l.etapa3.carros_completats}/{l.etapa2.carros_transferits})</span></span>
+                            : l.etapa3.pollets_nascuts.toLocaleString('ca')
+                          : '—'}
+                      </td>
+                      <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)', color: semafar(l.etapa3.pct_eclosio_real, 'e') }}>
+                        {fmt(l.etapa3.pct_eclosio_real)}
+                      </td>
+                      <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)' }}>
+                        {l.etapa3.delta_vs_inicial !== null
+                          ? <span style={{ color: l.etapa3.delta_vs_inicial >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                              {l.etapa3.delta_vs_inicial >= 0 ? '+' : ''}{l.etapa3.delta_vs_inicial}%
+                            </span>
+                          : <span style={{ color: 'var(--text-dim)' }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Fila total */}
+                  {(() => {
+                    const rv = previsions.resum
+                    return (
+                      <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                        <td style={{ ...tdStyle, textAlign: 'left', color: 'var(--accent)' }}>TOTAL</td>
+                        <td style={{ ...tdStyle, background: 'rgba(100,120,255,0.03)' }}>{rv.ous.toLocaleString('ca')}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(100,120,255,0.03)', color: '#8899ff' }}>~{rv.pollets_previstos_inicial.toLocaleString('ca')}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)' }}>{rv.ous_fertils > 0 ? rv.ous_fertils.toLocaleString('ca') : '—'}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)', color: rv.ous_explosius > 0 ? 'var(--danger)' : 'var(--text-dim)' }}>{rv.ous_explosius > 0 ? rv.ous_explosius : '—'}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(240,180,41,0.03)', color: 'var(--accent)' }}>{rv.pollets_previstos_transf > 0 ? `~${rv.pollets_previstos_transf.toLocaleString('ca')}` : '—'}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)', color: 'var(--success)' }}>{rv.pollets_nascuts > 0 ? rv.pollets_nascuts.toLocaleString('ca') : '—'}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)', color: semafar(rv.pct_eclosio_real, 'e') }}>{fmt(rv.pct_eclosio_real)}</td>
+                        <td style={{ ...tdStyle, background: 'rgba(62,207,142,0.03)' }}>
+                          {rv.delta_final !== null
+                            ? <span style={{ color: rv.delta_final >= 0 ? 'var(--success)' : 'var(--danger)' }}>{rv.delta_final >= 0 ? '+' : ''}{rv.delta_final}%</span>
+                            : <span style={{ color: 'var(--text-dim)' }}>—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })()}
                 </tbody>
               </table>
             </div>
