@@ -72,6 +72,13 @@ interface Estat {
   generat_a: string
 }
 
+interface PendingMove {
+  assignacioId: number
+  incIdDesti: number
+  posDesti: number
+  zonaDesti: 'central' | 'paret' | 'pulsator' | null
+}
+
 // ───────────────────────────────────────────────────────────────────
 // Layout físic de les Singlestage. 6 passadissos × 4 files de
 // profunditat. Els passadissos van d'esquerra a dreta de la sala:
@@ -132,6 +139,34 @@ function ocupacioColor(ocupats: number, capacitat: number): string {
   if (pct >= 0.75) return '#e67e22' // gairebé ple
   if (pct > 0) return '#27ae60' // ocupació parcial
   return 'var(--text-dim)' // buit
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Helper: aplica un moviment localment a una còpia de l'estat
+// ───────────────────────────────────────────────────────────────────
+
+function aplicarMoureLocal(
+  e: Estat,
+  assignacioId: number,
+  incIdDesti: number,
+  posDesti: number,
+  zonaDesti: 'central' | 'paret' | 'pulsator' | null
+): Estat {
+  const nou = JSON.parse(JSON.stringify(e)) as Estat
+  let carroMogut: CarroInc | null = null
+  for (const inc of nou.incubadores) {
+    const idx = inc.carros.findIndex((c) => c.assignacio_id === assignacioId)
+    if (idx >= 0) {
+      carroMogut = inc.carros.splice(idx, 1)[0]
+      break
+    }
+  }
+  if (!carroMogut) return nou
+  carroMogut.posicio = posDesti
+  carroMogut.zona = zonaDesti
+  const incDesti = nou.incubadores.find((i) => i.id === incIdDesti)
+  if (incDesti) incDesti.carros.push(carroMogut)
+  return nou
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -289,6 +324,7 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
 
   const mostraRotar = edicio?.actiu === true && inc.capacitat === 24
   const pulsatorBuit = zones.pulsator.length === 0
+  const hiHaPending = (edicio?.pendingCount ?? 0) > 0
   return (
     <div style={cardStyle}>
       <HeaderTargeta numero={inc.numero} tipus="Multistage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
@@ -297,20 +333,26 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
         <div style={{ marginTop: '0.4rem', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={() => {
-              if (!pulsatorBuit) return
+              if (!pulsatorBuit || hiHaPending) return
               if (!confirm(`Rotar zones d'aquesta MS?\nparet (${zones.paret.length}) -> pulsator\ncentral (${zones.central.length}) -> paret\nCentral quedara buit.`)) return
               edicio!.onRotar(inc.id)
             }}
-            disabled={!pulsatorBuit}
-            title={pulsatorBuit ? 'Rotar paret->pulsator i central->paret' : 'Pulsator no esta buit: cal transferir o moure aquests carros primer'}
+            disabled={!pulsatorBuit || hiHaPending}
+            title={
+              hiHaPending
+                ? 'Confirma o descarta els canvis pendents abans de rotar'
+                : pulsatorBuit
+                ? 'Rotar paret->pulsator i central->paret'
+                : 'Pulsator no esta buit: cal transferir o moure aquests carros primer'
+            }
             style={{
-              background: pulsatorBuit ? '#1f2933' : 'transparent',
-              border: '1px solid ' + (pulsatorBuit ? 'var(--accent)' : 'var(--border)'),
-              color: pulsatorBuit ? 'var(--accent)' : 'var(--text-dim)',
+              background: (!pulsatorBuit || hiHaPending) ? 'transparent' : '#1f2933',
+              border: '1px solid ' + ((!pulsatorBuit || hiHaPending) ? 'var(--border)' : 'var(--accent)'),
+              color: (!pulsatorBuit || hiHaPending) ? 'var(--text-dim)' : 'var(--accent)',
               padding: '0.25rem 0.6rem',
               borderRadius: '4px',
               fontSize: '0.7rem',
-              cursor: pulsatorBuit ? 'pointer' : 'not-allowed',
+              cursor: (!pulsatorBuit || hiHaPending) ? 'not-allowed' : 'pointer',
               fontWeight: 600,
             }}
           >
@@ -481,10 +523,11 @@ function subtipusDe(inc: Incubadora): SubTipus {
 
 interface ContextEdicio {
   actiu: boolean
+  pendingCount: number
   // Subtipus del carro en curs d'arrossegament (per pintar drop targets vàlids)
   subTipusArrossegat: SubTipus | null
   setSubTipusArrossegat: (s: SubTipus | null) => void
-  // Crida PATCH /api/assignacions/[id]
+  // Acumula el moviment localment (sense API)
   onMoure: (assignacioId: number, incIdDesti: number, posDesti: number, zonaDesti: 'central'|'paret'|'pulsator'|null) => void
   // Crida POST /api/instalacions/rotar-zones/[inc_id] (nomes MS grans amb pulsator buit)
   onRotar: (incId: number) => void
@@ -504,7 +547,10 @@ function posicioLliureMSZona(inc: Incubadora, zona: 'central'|'paret'|'pulsator'
 
 export default function Instalacions() {
   const [estat, setEstat] = useState<Estat | null>(null)
+  const [estatLocal, setEstatLocal] = useState<Estat | null>(null)
+  const [pendingMoves, setPendingMoves] = useState<PendingMove[]>([])
   const [loading, setLoading] = useState(true)
+  const [confirmant, setConfirmant] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [modeEdicio, setModeEdicio] = useState(false)
   const [subTipusArrossegat, setSubTipusArrossegat] = useState<SubTipus | null>(null)
@@ -520,6 +566,8 @@ export default function Instalacions() {
       })
       .then((data: Estat) => {
         setEstat(data)
+        setEstatLocal(JSON.parse(JSON.stringify(data)))
+        setPendingMoves([])
         setLoading(false)
       })
       .catch((e: Error) => {
@@ -532,26 +580,74 @@ export default function Instalacions() {
     carregar()
   }, [carregar])
 
-  // ── Mode edició: handler de mou
-  const onMoureCarro = useCallback(async (assignacioId: number, incIdDesti: number, posDesti: number, zonaDesti: 'central'|'paret'|'pulsator'|null) => {
+  // ── Acumula moviment localment, sense fer cap crida API
+  const onMoureCarro = useCallback((
+    assignacioId: number,
+    incIdDesti: number,
+    posDesti: number,
+    zonaDesti: 'central' | 'paret' | 'pulsator' | null
+  ) => {
+    setEstatLocal((prev) =>
+      prev ? aplicarMoureLocal(prev, assignacioId, incIdDesti, posDesti, zonaDesti) : prev
+    )
+    setPendingMoves((prev) => [...prev, { assignacioId, incIdDesti, posDesti, zonaDesti }])
+  }, [])
+
+  // ── Confirmar: envia tots els moviments (deduplicats) i refresca
+  const onConfirmarCanvis = useCallback(async () => {
+    if (pendingMoves.length === 0) return
+    setConfirmant(true)
     setMissatgeEdicio('')
-    try {
-      const res = await fetch(`/api/assignacions/${assignacioId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ incubadora_id: incIdDesti, posicio: posDesti, zona: zonaDesti }),
+
+    // Deduplicació: per cada assignacioId, queda només el darrer moviment
+    const movesMap: Record<number, PendingMove> = {}
+    pendingMoves.forEach((m) => { movesMap[m.assignacioId] = m })
+    const movesDeduplicats = Object.values(movesMap)
+
+    const errors: string[] = []
+    await Promise.all(
+      movesDeduplicats.map(async ({ assignacioId, incIdDesti, posDesti, zonaDesti }) => {
+        try {
+          const res = await fetch(`/api/assignacions/${assignacioId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ incubadora_id: incIdDesti, posicio: posDesti, zona: zonaDesti }),
+          })
+          const data = await res.json()
+          if (!res.ok) errors.push(data.error || res.statusText)
+        } catch (e) {
+          errors.push(String(e))
+        }
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setMissatgeEdicio('Error: ' + (data.error || res.statusText))
-        return
-      }
-      setMissatgeEdicio('✓ Mogut')
+    )
+
+    setConfirmant(false)
+    if (errors.length > 0) {
+      setMissatgeEdicio('Errors: ' + errors.join(', '))
+      // Recarrega igualment per tenir l'estat real de la BD
       carregar()
-    } catch (e) {
-      setMissatgeEdicio('Error xarxa: ' + String(e))
+    } else {
+      setMissatgeEdicio(`✓ ${movesDeduplicats.length} canvi(s) guardats`)
+      carregar()
     }
-  }, [carregar])
+  }, [pendingMoves, carregar])
+
+  // ── Descartar: torna a l'estat de la darrera càrrega de la BD
+  const onDescartarCanvis = useCallback(() => {
+    if (estat) setEstatLocal(JSON.parse(JSON.stringify(estat)))
+    setPendingMoves([])
+    setMissatgeEdicio('')
+  }, [estat])
+
+  // ── Toggle mode edició: si hi ha canvis pendents, pregunta
+  const toggleEdicio = useCallback(() => {
+    if (modeEdicio && pendingMoves.length > 0) {
+      if (!confirm(`Hi ha ${pendingMoves.length} canvi(s) sense confirmar. Vols descartar-los i tancar l'edició?`)) return
+      onDescartarCanvis()
+    }
+    setModeEdicio((v) => !v)
+    setMissatgeEdicio('')
+  }, [modeEdicio, pendingMoves.length, onDescartarCanvis])
 
   // Mode edicio: handler de rotacio manual de zones (MS gran)
   const onRotarInc = useCallback(async (incId: number) => {
@@ -578,17 +674,21 @@ export default function Instalacions() {
 
   const ctxEdicio: ContextEdicio = {
     actiu: modeEdicio,
+    pendingCount: pendingMoves.length,
     subTipusArrossegat,
     setSubTipusArrossegat,
     onMoure: onMoureCarro,
     onRotar: onRotarInc,
   }
 
+  // Usem l'estat local (amb els moviments pendents aplicats) per al render
+  const estatRender = estatLocal ?? estat
+
   // Totals globals
-  const totalCarrosInc = estat?.incubadores.reduce((s, i) => s + i.carros.length, 0) ?? 0
-  const totalCapacitatInc = estat?.incubadores.reduce((s, i) => s + i.capacitat, 0) ?? 0
-  const totalCarrosNx = estat?.naixedores.reduce((s, n) => s + n.carros.length, 0) ?? 0
-  const totalCapacitatNx = estat?.naixedores.reduce((s, n) => s + n.capacitat, 0) ?? 0
+  const totalCarrosInc = estatRender?.incubadores.reduce((s, i) => s + i.carros.length, 0) ?? 0
+  const totalCapacitatInc = estatRender?.incubadores.reduce((s, i) => s + i.capacitat, 0) ?? 0
+  const totalCarrosNx = estatRender?.naixedores.reduce((s, n) => s + n.carros.length, 0) ?? 0
+  const totalCapacitatNx = estatRender?.naixedores.reduce((s, n) => s + n.capacitat, 0) ?? 0
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
@@ -620,26 +720,77 @@ export default function Instalacions() {
           </div>
         )}
 
-        {estat && !loading && (
+        {estatRender && !loading && (
           <>
             {/* Resum global + toggle edició */}
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              <KpiBox titol="Incubadores" valor={`${totalCarrosInc}/${totalCapacitatInc}`} subtitol={`${estat.incubadores.length} màquines`} />
-              <KpiBox titol="Naixedores" valor={`${totalCarrosNx}/${totalCapacitatNx}`} subtitol={`${estat.naixedores.length} màquines`} />
-              <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <KpiBox titol="Incubadores" valor={`${totalCarrosInc}/${totalCapacitatInc}`} subtitol={`${estatRender.incubadores.length} màquines`} />
+              <KpiBox titol="Naixedores" valor={`${totalCarrosNx}/${totalCapacitatNx}`} subtitol={`${estatRender.naixedores.length} màquines`} />
+              <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                {/* Botó Editar / Tancar edició */}
                 <button
-                  onClick={() => setModeEdicio(v => !v)}
-                  style={{ background: modeEdicio ? '#c0392b' : 'var(--surface)', border: '1px solid ' + (modeEdicio ? '#c0392b' : 'var(--border)'), color: modeEdicio ? '#fff' : 'var(--text)', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                  onClick={toggleEdicio}
+                  style={{
+                    background: modeEdicio ? '#c0392b' : 'var(--surface)',
+                    border: '1px solid ' + (modeEdicio ? '#c0392b' : 'var(--border)'),
+                    color: modeEdicio ? '#fff' : 'var(--text)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                  }}
                 >
-                  {modeEdicio ? '✓ Tancar edició' : '✎ Editar'}
+                  {modeEdicio ? '✕ Tancar edició' : '✎ Editar'}
                 </button>
-                {modeEdicio && (
+
+                {/* Botons de canvis pendents */}
+                {modeEdicio && pendingMoves.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#f0b429', fontWeight: 600 }}>
+                      {pendingMoves.length} canvi(s) sense guardar
+                    </span>
+                    <button
+                      onClick={onDescartarCanvis}
+                      disabled={confirmant}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-dim)',
+                        padding: '0.3rem 0.7rem',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      Descartar
+                    </button>
+                    <button
+                      onClick={onConfirmarCanvis}
+                      disabled={confirmant}
+                      style={{
+                        background: confirmant ? '#1a3a1a' : '#1e4620',
+                        border: '1px solid #27ae60',
+                        color: '#86efac',
+                        padding: '0.3rem 0.9rem',
+                        borderRadius: '5px',
+                        cursor: confirmant ? 'wait' : 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {confirmant ? 'Guardant...' : `✓ Confirmar ${pendingMoves.length} canvi(s)`}
+                    </button>
+                  </div>
+                )}
+
+                {modeEdicio && pendingMoves.length === 0 && (
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', maxWidth: 240, textAlign: 'right' }}>
                     Arrossega els carros a una cel·la lliure del mateix tipus. SS↔SS, MSG↔MSG, MSP↔MSP.
                   </div>
                 )}
                 {missatgeEdicio && (
-                  <div style={{ fontSize: '0.7rem', color: missatgeEdicio.startsWith('Error') ? '#ffb3b3' : '#86efac', maxWidth: 240, textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.7rem', color: missatgeEdicio.startsWith('Error') ? '#ffb3b3' : '#86efac', maxWidth: 280, textAlign: 'right' }}>
                     {missatgeEdicio}
                   </div>
                 )}
@@ -652,7 +803,7 @@ export default function Instalacions() {
                 Incubadores
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
-                {estat.incubadores.map((inc) =>
+                {estatRender.incubadores.map((inc) =>
                   inc.tipus === 'Singlestage' ? <TargetaSinglestage key={inc.id} inc={inc} edicio={ctxEdicio} /> : <TargetaMultistage key={inc.id} inc={inc} edicio={ctxEdicio} />
                 )}
               </div>
@@ -664,14 +815,14 @@ export default function Instalacions() {
                 Naixedores
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
-                {estat.naixedores.map((nx) => (
+                {estatRender.naixedores.map((nx) => (
                   <TargetaNaixedora key={nx.id} nx={nx} />
                 ))}
               </div>
             </section>
 
             <p style={{ marginTop: '2rem', fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'center' }}>
-              Generat: {new Date(estat.generat_a).toLocaleString('ca-ES')}
+              Generat: {new Date(estat!.generat_a).toLocaleString('ca-ES')}
             </p>
           </>
         )}
