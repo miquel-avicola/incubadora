@@ -55,16 +55,6 @@ export default async function Home() {
           )}
 
           {role === 'admin' && (
-            <Link href="/estadistiques" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📊</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estadístiques globals</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Previsions, fertilitat i resultats per lot, incubadora i naixedora</div>
-              </div>
-            </Link>
-          )}
-
-          {role === 'admin' && (
             <Link href="/previsio-comercial" style={{ textDecoration: 'none' }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
                 <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📅</div>
