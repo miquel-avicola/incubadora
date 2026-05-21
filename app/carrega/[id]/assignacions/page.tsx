@@ -386,6 +386,7 @@ export default function Planificacio() {
 
   const [dia, setDia] = useState<Dia>('dijous')
   const [mspOrdre, setMspOrdre] = useState<number[]>([8, 9, 10])
+  const [mostrarProjectat, setMostrarProjectat] = useState(true)
 
   // ── Càrrega inicial
   const carregarDades = useCallback(async () => {
@@ -723,6 +724,26 @@ export default function Planificacio() {
     <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '90px' }}>
       <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosLot.length} colocats={colocats.size} />
 
+      {/* Toggle vista projectada */}
+      {lliureAviatPerCella.size > 0 && (
+        <div style={{ padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 8, background: mostrarProjectat ? '#f0fdf4' : '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: mostrarProjectat ? '#15803d' : '#6b7280', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={mostrarProjectat}
+              onChange={e => setMostrarProjectat(e.target.checked)}
+              style={{ width: 14, height: 14, accentColor: '#16a34a', cursor: 'pointer' }}
+            />
+            Mostra estat post-transferència ({lliureAviatPerCella.size} slot{lliureAviatPerCella.size !== 1 ? 's' : ''} s&apos;alliberaran a temps)
+          </label>
+          {!mostrarProjectat && (
+            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>
+              Els slots en verd s&apos;alliberaran abans de la càrrega
+            </span>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: '16px', padding: '16px 20px' }}>
         <main style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Singlestage */}
@@ -734,6 +755,7 @@ export default function Planificacio() {
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
                 lliureAviatPerCella={lliureAviatPerCella}
+                mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p) => toggleSeleccio(inc.id, p, null)}
@@ -753,6 +775,7 @@ export default function Planificacio() {
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
                 lliureAviatPerCella={lliureAviatPerCella}
+                mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
@@ -775,6 +798,7 @@ export default function Planificacio() {
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
                 lliureAviatPerCella={lliureAviatPerCella}
+                mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
@@ -991,6 +1015,7 @@ interface CellPropsCommon {
   onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void
   onDragOverCell: (e: React.DragEvent) => void
   onClicCarroColocat: (id: number) => void
+  mostrarProjectat: boolean
 }
 
 function IncubadoraSS({ inc, onClicCella, onDropCell, ...p }: CellPropsCommon & {
@@ -1116,6 +1141,8 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
   const sel = seleccionades.has(k)
 
   // lliureAviat té prioritat sobre ocupAltre (és un subconjunt que permet interacció)
+  // En mode projectat, les cel·les "lliure aviat" es mostren com a buides
+  const tractarComBuit = mostrarProjectat && !!lliureAviat && carroIdNou === undefined
   const blocat = !!ocupAltre && !lliureAviat
 
   let bg = '#fefefe'
@@ -1130,8 +1157,8 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
     bg = '#4b5563'
     color = '#fff'
     border = '1px solid #4b5563'
-  } else if (lliureAviat && !carroIdNou) {
-    // Ocupat ara però lliure a temps — verd suau
+  } else if (lliureAviat && !carroIdNou && !tractarComBuit) {
+    // Ocupat ara però lliure a temps — verd suau (mode no projectat)
     bg = '#dcfce7'
     border = '1px dashed #16a34a'
     color = '#14532d'
@@ -1182,7 +1209,7 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
       title={titleText}
     >
       {blocat && ocupAltre && <span>#{ocupAltre.num_carro_full}</span>}
-      {lliureAviat && !carroIdNou && (
+      {lliureAviat && !carroIdNou && !tractarComBuit && (
         <>
           <span style={{ fontSize: 8, opacity: 0.7, textAlign: 'center' }}>#{lliureAviat.num_carro_full}</span>
           <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d' }}>{textDiesFins(lliureAviat.diesFins)}</span>
@@ -1194,7 +1221,7 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
           <span style={{ fontSize: 9, opacity: 0.75 }}>p{pos}</span>
         </>
       )}
-      {!blocat && !lliureAviat && !carroNouObj && (
+      {!blocat && (tractarComBuit || !lliureAviat) && !carroNouObj && (
         <span style={{ fontSize: 9, opacity: 0.5 }}>{pos}</span>
       )}
     </div>
