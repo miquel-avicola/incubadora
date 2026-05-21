@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { obtenirEclosio, llegirParametresEclosio } from '@/lib/eclosio'
 
 export const dynamic = 'force-dynamic'
 
@@ -114,36 +113,14 @@ export async function GET(request: Request) {
     assignacions = assignacions.filter(a => a.carros_estoc?.lots_reproductores?.id === lotId)
   }
 
-  // 3. Identificar els carros en estadi 2 (transferits però sense resultat)
-  //    i calcular eclosió per cada combinació única (estirp, setmanes, tipus)
-  const params = await llegirParametresEclosio()
-  const combsToCalc = new Map<string, { estirp: string; setmanes: number; tipus: string }>()
-
-  for (const a of assignacions) {
-    const t = a.transferencies?.[0]
-    if (!t || t.resultats_naix?.[0]) continue  // Estadi 1 o 3: no cal càlcul
-
-    const carro = a.carros_estoc
-    const lot = carro?.lots_reproductores
-    const inc = a.incubadores
-    if (!lot?.estirp || !lot?.data_naixement || !carro?.posta || !inc?.tipus) continue
-
-    const setmanes = Math.floor(
-      (new Date(carro.posta).getTime() - new Date(lot.data_naixement).getTime()) /
-      (7 * 24 * 60 * 60 * 1000)
-    )
-    const key = `${lot.estirp}__${setmanes}__${inc.tipus}`
-    if (!combsToCalc.has(key)) {
-      combsToCalc.set(key, { estirp: lot.estirp, setmanes, tipus: inc.tipus })
-    }
-  }
-
-  // Crida batch (una per combinació única, no per carro)
-  const eclosioCache = new Map<string, number>()
-  for (const [key, { estirp, setmanes, tipus }] of Array.from(combsToCalc.entries())) {
-    const res = await obtenirEclosio(estirp, setmanes, tipus, params)
-    eclosioCache.set(key, res.eclosio)
-  }
+  // 3. Llegir taxa d'eclosió de fallback (una sola query — prou per una pàgina global)
+  //    Per als carros en estadi 2 (transferits sense resultat), pollets_previstos = fertils × eclosio_fallback
+  const { data: paramRows } = await supabase
+    .from('parametres')
+    .select('valor')
+    .eq('clau', 'eclosio_fallback')
+    .single()
+  const eclosioFallback: number = paramRows ? Number(paramRows.valor) : 0.9
 
   // 4. Acumular
   const perLot = new Map<number, LotAcum>()
@@ -176,15 +153,9 @@ export async function GET(request: Request) {
     if (rn) {
       // Estadi 3: resultat real
       reals = Number(rn.pollets_nascuts) || 0
-    } else if (t && lot.estirp && lot.data_naixement && carro.posta && inc.tipus) {
-      // Estadi 2: previsió calculada
-      const setmanes = Math.floor(
-        (new Date(carro.posta).getTime() - new Date(lot.data_naixement).getTime()) /
-        (7 * 24 * 60 * 60 * 1000)
-      )
-      const key = `${lot.estirp}__${setmanes}__${inc.tipus}`
-      const ecl = eclosioCache.get(key) ?? params.eclosio_fallback
-      prev = Math.round(fertils * ecl)
+    } else if (t) {
+      // Estadi 2: previsió amb taxa de fallback (evita N+1 queries per la pàgina global)
+      prev = Math.round(fertils * eclosioFallback)
     }
     // Estadi 1: sense transferència → tots els comptadors queden a 0 excepte ous
 
