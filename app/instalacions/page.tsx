@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import {
   calorActualPerZona,
+  indexCalorCarro,
   indexEquilibri,
   type CarroTermic,
   type ZonaMS as ZonaTermic,
@@ -132,6 +133,28 @@ function colorOcupat(): { bg: string; text: string; border: string } {
   return { bg: '#2a2c35', text: '#e0e0e0', border: '#3a3c45' }
 }
 
+// Gradient blau (fred) → vermell (calent) per a la capa tèrmica visual.
+// t=0 → blau fosc; t=1 → vermell fosc. Escala global (maxCalor = màxim de tots els carros).
+function heatColor(calor: number, maxCalor: number): { bg: string; text: string; border: string } {
+  if (maxCalor <= 0 || calor <= 0) return { bg: '#1e2030', text: '#666', border: '#2a2c35' }
+  const t = Math.min(1, calor / maxCalor)
+  // Hue: 230 (blau) → 0 (vermell)
+  const hue = Math.round(230 * (1 - t))
+  const sat = Math.round(55 + 25 * t)
+  const light = Math.round(16 + 14 * Math.sin(Math.PI * t)) // pic de lluentor al mig
+  const bg = `hsl(${hue}, ${sat}%, ${light}%)`
+  const textLight = Math.round(60 + 25 * t)
+  const text = `hsl(${hue}, 15%, ${textLight}%)`
+  const border = `hsl(${hue}, ${sat}%, ${light + 10}%)`
+  return { bg, text, border }
+}
+
+function fmtCalor(calor: number): string {
+  if (calor <= 0) return '—'
+  if (calor >= 1000) return `${(calor / 1000).toFixed(1)}k`
+  return Math.round(calor).toString()
+}
+
 function fmtData(s: string | null): string {
   if (!s) return '—'
   const d = new Date(s)
@@ -187,10 +210,21 @@ function TargetaSinglestage({ inc, edicio }: { inc: Incubadora; edicio?: Context
     if (c.posicio !== null) carrosPerPosicio.set(c.posicio, c)
     else sensePosicio.push(c)
   })
+  // Calor per posició i total de la incubadora
+  const maxCalorGlobal = edicio?.maxCalorGlobal ?? 0
+  const calorPerPosicio = new Map<number, number>()
+  let totalCalorInc = 0
+  inc.carros.forEach((c) => {
+    if (c.posicio !== null && c.setmanes_lot !== null && c.dia_incubacio !== null) {
+      const cal = indexCalorCarro(c.quantitat_ous, c.setmanes_lot, c.dia_incubacio)
+      calorPerPosicio.set(c.posicio, cal)
+      totalCalorInc += cal
+    }
+  })
 
   return (
     <div style={cardStyle}>
-      <HeaderTargeta numero={inc.numero} tipus="Singlestage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
+      <HeaderTargeta numero={inc.numero} tipus="Singlestage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} totalCalor={totalCalorInc} maxCalorTotalInc={edicio?.maxCalorTotalInc} />
 
       <div style={{ marginTop: '0.75rem' }}>
         {/* Capçaleres per columna */}
@@ -230,7 +264,8 @@ function TargetaSinglestage({ inc, edicio }: { inc: Incubadora; edicio?: Context
         >
           {SS_LAYOUT.map(({ posicio, col, row }) => {
             const carro = carrosPerPosicio.get(posicio)
-            const c = colorOcupat()
+            const calCell = carro ? (calorPerPosicio.get(posicio) ?? 0) : 0
+            const c = carro ? heatColor(calCell, maxCalorGlobal) : colorOcupat()
             // Insereix el separador del pulsator central a la columna 4 visual
             const colVisual = col <= 3 ? col : col + 1
             // Inverteix l'eix Y perquè el carro 1 (i la resta de "primers" de cada
@@ -398,13 +433,24 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
     if (c.zona === null) zones.sense.push(c)
     else zones[c.zona].push(c)
   })
+  // Calor per assignació i total de la incubadora
+  const maxCalorGlobal = edicio?.maxCalorGlobal ?? 0
+  const calorPerAssignacio = new Map<number, number>()
+  let totalCalorInc = 0
+  inc.carros.forEach((c) => {
+    if (c.setmanes_lot !== null && c.dia_incubacio !== null) {
+      const cal = indexCalorCarro(c.quantitat_ous, c.setmanes_lot, c.dia_incubacio)
+      calorPerAssignacio.set(c.assignacio_id, cal)
+      totalCalorInc += cal
+    }
+  })
 
   const mostraRotar = edicio?.actiu === true && inc.capacitat === 24
   const pulsatorBuit = zones.pulsator.length === 0
   const hiHaPending = (edicio?.pendingCount ?? 0) > 0
   return (
     <div style={cardStyle}>
-      <HeaderTargeta numero={inc.numero} tipus="Multistage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} />
+      <HeaderTargeta numero={inc.numero} tipus="Multistage" model={inc.model} ocupats={inc.carros.length} capacitat={inc.capacitat} totalCalor={totalCalorInc} maxCalorTotalInc={edicio?.maxCalorTotalInc} />
 
       {mostraRotar && (
         <div style={{ marginTop: '0.4rem', display: 'flex', justifyContent: 'flex-end' }}>
@@ -439,9 +485,9 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
       )}
 
       <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
-        <ColumnaZona titol="Central" carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
-        <ColumnaZona titol="Paret" carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
-        <ColumnaZona titol="Pulsator" carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
+        <ColumnaZona titol="Central" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
+        <ColumnaZona titol="Paret" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
+        <ColumnaZona titol="Pulsator" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
       </div>
 
       <BarresCalorZones carros={inc.carros} />
@@ -462,7 +508,7 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
   )
 }
 
-function ColumnaZona({ titol, carros, accent, inc, zona, edicio, sub }: { titol: string; carros: CarroInc[]; accent: string; inc?: Incubadora; zona?: 'central'|'paret'|'pulsator'; edicio?: ContextEdicio; sub?: SubTipus }) {
+function ColumnaZona({ titol, carros, accent, inc, zona, edicio, sub, calorPerAssignacio, maxCalorGlobal }: { titol: string; carros: CarroInc[]; accent: string; inc?: Incubadora; zona?: 'central'|'paret'|'pulsator'; edicio?: ContextEdicio; sub?: SubTipus; calorPerAssignacio?: Map<number, number>; maxCalorGlobal?: number }) {
   const acceptaDrop = edicio?.actiu && inc && zona && sub && edicio.subTipusArrossegat === sub
   const lliureEnZona = inc && zona ? (carros.length < (inc.capacitat === 24 ? 8 : 4)) : false
   return (
@@ -484,15 +530,15 @@ function ColumnaZona({ titol, carros, accent, inc, zona, edicio, sub }: { titol:
         {carros.length === 0 ? (
           <div style={{ fontSize: '0.65rem', color: '#444', textAlign: 'center', padding: '0.5rem 0' }}>—</div>
         ) : (
-          carros.map((c) => <ChipCarro key={c.assignacio_id} carro={c} edicio={edicio} sub={sub} />)
+          carros.map((c) => <ChipCarro key={c.assignacio_id} carro={c} edicio={edicio} sub={sub} calor={calorPerAssignacio?.get(c.assignacio_id)} maxCalor={maxCalorGlobal} />)
         )}
       </div>
     </div>
   )
 }
 
-function ChipCarro({ carro, edicio, sub }: { carro: CarroInc | CarroNx; edicio?: ContextEdicio; sub?: SubTipus }) {
-  const c = colorOcupat()
+function ChipCarro({ carro, edicio, sub, calor, maxCalor }: { carro: CarroInc | CarroNx; edicio?: ContextEdicio; sub?: SubTipus; calor?: number; maxCalor?: number }) {
+  const c = (calor !== undefined && maxCalor !== undefined && maxCalor > 0) ? heatColor(calor, maxCalor) : colorOcupat()
   const isInc = (carro as CarroInc).assignacio_id !== undefined && (carro as CarroNx).transferencia_id === undefined
   const arrosegable = edicio?.actiu && isInc && sub !== undefined
   return (
@@ -557,26 +603,48 @@ function TargetaNaixedora({ nx }: { nx: Naixedora }) {
 // Capçalera comuna de targeta
 // ───────────────────────────────────────────────────────────────────
 
-function HeaderTargeta({ numero, tipus, model, ocupats, capacitat }: { numero: number; tipus: string; model: string | null; ocupats: number; capacitat: number }) {
+function HeaderTargeta({ numero, tipus, model, ocupats, capacitat, totalCalor, maxCalorTotalInc }: { numero: number; tipus: string; model: string | null; ocupats: number; capacitat: number; totalCalor?: number; maxCalorTotalInc?: number }) {
   const colorOcup = ocupacioColor(ocupats, capacitat)
   const tipusBadge = tipus === 'Singlestage' ? { bg: '#5d4037', txt: '#fff' } : tipus === 'Multistage' ? { bg: '#1565c0', txt: '#fff' } : { bg: '#2e7d32', txt: '#fff' }
+  const heatPct = (totalCalor && maxCalorTotalInc && maxCalorTotalInc > 0) ? Math.round(totalCalor / maxCalorTotalInc * 100) : null
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem' }}>
-      <div>
-        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>
-          {tipus === 'Naixedora' ? `N${numero}` : `#${numero}`}
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem' }}>
+        <div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>
+            {tipus === 'Naixedora' ? `N${numero}` : `#${numero}`}
+          </div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>{model ?? '—'}</div>
         </div>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>{model ?? '—'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+          <span style={{ background: tipusBadge.bg, color: tipusBadge.txt, fontSize: '0.6rem', padding: '1px 6px', borderRadius: '3px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+            {tipus}
+          </span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: colorOcup, fontFamily: 'IBM Plex Mono, monospace' }}>
+            {ocupats}/{capacitat}
+          </span>
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-        <span style={{ background: tipusBadge.bg, color: tipusBadge.txt, fontSize: '0.6rem', padding: '1px 6px', borderRadius: '3px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-          {tipus}
-        </span>
-        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: colorOcup, fontFamily: 'IBM Plex Mono, monospace' }}>
-          {ocupats}/{capacitat}
-        </span>
-      </div>
+      {totalCalor !== undefined && totalCalor > 0 && (
+        <div style={{ marginTop: '0.35rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+            <span style={{ fontSize: '0.55rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Calor total</span>
+            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text)', fontFamily: 'IBM Plex Mono, monospace' }}>{fmtCalor(totalCalor)}</span>
+          </div>
+          {heatPct !== null && (
+            <div style={{ height: '4px', background: '#1e2030', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{
+                width: `${heatPct}%`,
+                height: '100%',
+                background: `hsl(${Math.round(230 * (1 - heatPct / 100))}, 70%, 45%)`,
+                borderRadius: '2px',
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -603,6 +671,8 @@ function subtipusDe(inc: Incubadora): SubTipus {
 interface ContextEdicio {
   actiu: boolean
   pendingCount: number
+  maxCalorGlobal: number      // màxim de calor d'un sol carro a totes les incubadores (per normalitzar colors)
+  maxCalorTotalInc: number  // màxim de calor total d'una incubadora (per la barra comparativa)
   // Subtipus del carro en curs d'arrossegament (per pintar drop targets vàlids)
   subTipusArrossegat: SubTipus | null
   setSubTipusArrossegat: (s: SubTipus | null) => void
@@ -634,6 +704,25 @@ export default function Instalacions() {
   const [modeEdicio, setModeEdicio] = useState(false)
   const [subTipusArrossegat, setSubTipusArrossegat] = useState<SubTipus | null>(null)
   const [missatgeEdicio, setMissatgeEdicio] = useState<string>('')
+
+  // Calor màxima per carro (per normalitzar colors) i per incubadora total (per barra comparativa)
+  const { maxCalorGlobal, maxCalorTotalInc } = useMemo(() => {
+    const er = estatLocal ?? estat
+    if (!er) return { maxCalorGlobal: 0, maxCalorTotalInc: 0 }
+    let maxCarro = 0
+    let maxInc = 0
+    for (const inc of er.incubadores) {
+      let totalInc = 0
+      for (const c of inc.carros) {
+        if (c.setmanes_lot === null || c.dia_incubacio === null) continue
+        const cal = indexCalorCarro(c.quantitat_ous, c.setmanes_lot, c.dia_incubacio)
+        if (cal > maxCarro) maxCarro = cal
+        totalInc += cal
+      }
+      if (totalInc > maxInc) maxInc = totalInc
+    }
+    return { maxCalorGlobal: maxCarro, maxCalorTotalInc: maxInc }
+  }, [estatLocal, estat])
 
   const carregar = useCallback(() => {
     setLoading(true)
@@ -754,6 +843,8 @@ export default function Instalacions() {
   const ctxEdicio: ContextEdicio = {
     actiu: modeEdicio,
     pendingCount: pendingMoves.length,
+    maxCalorGlobal,
+    maxCalorTotalInc,
     subTipusArrossegat,
     setSubTipusArrossegat,
     onMoure: onMoureCarro,
