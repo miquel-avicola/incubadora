@@ -77,11 +77,11 @@ export function fertilitatEstimada(setmanes: number): number {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pes estimat de l'ou (grams) en funció de les setmanes de vida de les
-// reproductores. Polinomi ajustat per Ross 308 i Cobb 500.
+// reproductores. Polinomi ajustat per Ross 308.
 // Rang típic: 52–72 g (pic ~65–68 g a setmanes 40–45).
 // ─────────────────────────────────────────────────────────────────────────────
 export function pesOuEstimat(setmanes: number): number {
-  // Polinomi Ross 308: W0(A) = -0.0115·A² + 1.48·A + 22.5 (A = setmanes)
+  // W0(A) = -0.0115·A² + 1.48·A + 22.5  (A = setmanes)
   return Math.max(40, Math.min(80, -0.0115 * setmanes * setmanes + 1.48 * setmanes + 22.5))
 }
 
@@ -98,8 +98,6 @@ export function factorCorreccioPes(pesOu: number): number {
 // ─────────────────────────────────────────────────────────────────────────────
 // Índex de calor absolut d'un carro al dia `dia` d'incubació.
 // Fórmula: n_ous × fertilitat(setmanes) × f_metab(dia) × S_pes(setmanes)
-// El factor de pes (S_pes) corregeix que ous de reproductores joves o velles
-// pesen menys i produeixen menys calor per ou que l'estàndard de 62 g.
 // ─────────────────────────────────────────────────────────────────────────────
 export function indexCalorCarro(
   quantitat_ous: number,
@@ -210,74 +208,6 @@ export function suggerirZonaMS(
       millorZona = z
     }
   }
-
-  return millorZona
-}
-ies.
-// ─────────────────────────────────────────────────────────────────────────────
-export function indexEquilibri(carros: CarroTermic[]): number {
-  if (carros.length === 0) return 1
-  const zones: ZonaMS[] = ['central', 'paret', 'pulsator']
-  const proj = projectarCalorZones(carros, 21)
-  let sumDeseq = 0
-  let countDies = 0
-  for (let k = 0; k <= 21; k++) {
-    const heats = zones.map((z) => proj[z][k])
-    const total = heats.reduce((s, h) => s + h, 0)
-    if (total === 0) continue
-    const avg = total / 3
-    const maxDiff = Math.max(...heats.map((h) => Math.abs(h - avg)))
-    sumDeseq += maxDiff / total
-    countDies++
-  }
-  if (countDies === 0) return 1
-  return Math.max(0, 1 - sumDeseq / countDies)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Suggerir la zona òptima per a un nou carro (dia=0) dins d'una MS.
-//
-// Algoritme greedy: prova cadascuna de les `zonesDisponibles` i tria la que
-// minimitza el màxim desequilibri relatiu en tot el perfil de 21 dies futurs.
-// ─────────────────────────────────────────────────────────────────────────────
-export function suggerirZonaMS(
-  carrosActuals: CarroTermic[],
-  nouCarro: { quantitat_ous: number; setmanes_lot: number },
-  zonesDisponibles: ZonaMS[] = ['central', 'paret', 'pulsator']
-): ZonaMS {
-  if (zonesDisponibles.length === 0) return 'central'
-  if (zonesDisponibles.length === 1) return zonesDisponibles[0]
-
-  const zones: ZonaMS[] = ['central', 'paret', 'pulsator']
-  let millorZona: ZonaMS = zonesDisponibles[0]
-  let millorScore = Infinity
-
-  for (const z of zonesDisponibles) {
-    const carrosAmb: CarroTermic[] = [
-      ...carrosActuals,
-      { zona: z, quantitat_ous: nouCarro.quantitat_ous, setmanes_lot: nouCarro.setmanes_lot, dia_incubacio: 0 },
-    ]
-    const proj = projectarCalorZones(carrosAmb, 21)
-
-    let maxDeseq = 0
-    for (let k = 0; k <= 21; k++) {
-      const heats = zones.map((zz) => proj[zz][k])
-      const total = heats.reduce((s, h) => s + h, 0)
-      if (total === 0) continue
-      const avg = total / 3
-      const maxDiff = Math.max(...heats.map((h) => Math.abs(h - avg)))
-      const deseq = maxDiff / total
-      if (deseq > maxDeseq) maxDeseq = deseq
-    }
-
-    if (maxDeseq < millorScore) {
-      millorScore = maxDeseq
-      millorZona = z
-    }
-  }
-
-  return millorZona
-}
 
   return millorZona
 }
