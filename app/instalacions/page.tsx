@@ -445,6 +445,19 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
     }
   })
 
+  // Per MSG: dividir cada zona en costat esq (pos 1-4) i dre (pos 5-8)
+  const esMSG = inc.capacitat === 24
+  const zonesESQ: Record<'central'|'paret'|'pulsator', CarroInc[]> = { central: [], paret: [], pulsator: [] }
+  const zonesDRE: Record<'central'|'paret'|'pulsator', CarroInc[]> = { central: [], paret: [], pulsator: [] }
+  if (esMSG) {
+    inc.carros.forEach((c) => {
+      if (!c.zona) return
+      const z = c.zona as 'central'|'paret'|'pulsator'
+      if (c.posicio !== null && c.posicio >= 1 && c.posicio <= 4) zonesESQ[z].push(c)
+      else if (c.posicio !== null && c.posicio >= 5 && c.posicio <= 8) zonesDRE[z].push(c)
+    })
+  }
+
   const mostraRotar = edicio?.actiu === true && inc.capacitat === 24
   const pulsatorBuit = zones.pulsator.length === 0
   const hiHaPending = (edicio?.pendingCount ?? 0) > 0
@@ -484,11 +497,75 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
         </div>
       )}
 
-      <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
-        <ColumnaZona titol="Central" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
-        <ColumnaZona titol="Paret" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
-        <ColumnaZona titol="Pulsator" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
-      </div>
+      {esMSG ? (
+        /* MSG: layout físic 2 costats */
+        <div style={{ marginTop: '0.75rem' }}>
+          {/* Capçaleres de columna */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr 16px 1fr 1fr 1fr',
+            gap: '0 3px',
+            marginBottom: '0.25rem',
+            fontSize: '0.48rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            textAlign: 'center',
+            fontFamily: 'IBM Plex Mono, monospace',
+            fontWeight: 700,
+          }}>
+            <div style={{ color: '#3498db' }}>Paret</div>
+            <div style={{ color: '#27ae60' }}>Ctral</div>
+            <div style={{ color: '#e74c3c' }}>Puls</div>
+            <div />
+            <div style={{ color: '#e74c3c' }}>Puls</div>
+            <div style={{ color: '#27ae60' }}>Ctral</div>
+            <div style={{ color: '#3498db' }}>Paret</div>
+          </div>
+          {/* Subetiqueta ESQ / DRE */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr 16px 1fr 1fr 1fr',
+            gap: '0 3px',
+            marginBottom: '0.3rem',
+            fontSize: '0.44rem',
+            color: 'var(--text-dim)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            textAlign: 'center',
+            fontFamily: 'IBM Plex Mono, monospace',
+          }}>
+            <div>esq</div><div>esq</div><div>esq</div>
+            <div />
+            <div>dre</div><div>dre</div><div>dre</div>
+          </div>
+          {/* Grid 7 columnes */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 16px 1fr 1fr 1fr', gap: '0.25rem 3px', alignItems: 'start' }}>
+            <ColumnaZona titol="Paret esq" carros={zonesESQ.paret} accent="#3498db" inc={inc} zona="paret" costat="esq" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+            <ColumnaZona titol="Central esq" carros={zonesESQ.central} accent="#27ae60" inc={inc} zona="central" costat="esq" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+            <ColumnaZona titol="Pulsator esq" carros={zonesESQ.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" costat="esq" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+            {/* Separador pulsator central */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#2a2c35', borderRadius: '4px', minHeight: '80px',
+              color: '#666', fontSize: '0.85rem', fontWeight: 900, userSelect: 'none',
+              writingMode: 'vertical-rl',
+              letterSpacing: '0.1em',
+            }}>
+              ×
+            </div>
+            <ColumnaZona titol="Pulsator dre" carros={zonesDRE.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" costat="dre" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+            <ColumnaZona titol="Central dre" carros={zonesDRE.central} accent="#27ae60" inc={inc} zona="central" costat="dre" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+            <ColumnaZona titol="Paret dre" carros={zonesDRE.paret} accent="#3498db" inc={inc} zona="paret" costat="dre" edicio={edicio} sub={sub} calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} />
+          </div>
+        </div>
+      ) : (
+        /* MSP: layout simple 3 columnes */
+        <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
+          <ColumnaZona titol="Central" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.central} accent="#27ae60" inc={inc} zona="central" edicio={edicio} sub={sub} />
+          <ColumnaZona titol="Paret" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.paret} accent="#3498db" inc={inc} zona="paret" edicio={edicio} sub={sub} />
+          <ColumnaZona titol="Pulsator" calorPerAssignacio={calorPerAssignacio} maxCalorGlobal={maxCalorGlobal} carros={zones.pulsator} accent="#e74c3c" inc={inc} zona="pulsator" edicio={edicio} sub={sub} />
+        </div>
+      )}
 
       <BarresCalorZones carros={inc.carros} />
 
@@ -508,23 +585,25 @@ function TargetaMultistage({ inc, edicio }: { inc: Incubadora; edicio?: ContextE
   )
 }
 
-function ColumnaZona({ titol, carros, accent, inc, zona, edicio, sub, calorPerAssignacio, maxCalorGlobal }: { titol: string; carros: CarroInc[]; accent: string; inc?: Incubadora; zona?: 'central'|'paret'|'pulsator'; edicio?: ContextEdicio; sub?: SubTipus; calorPerAssignacio?: Map<number, number>; maxCalorGlobal?: number }) {
+function ColumnaZona({ titol, carros, accent, inc, zona, costat, edicio, sub, calorPerAssignacio, maxCalorGlobal }: { titol: string; carros: CarroInc[]; accent: string; inc?: Incubadora; zona?: 'central'|'paret'|'pulsator'; costat?: 'esq'|'dre'; edicio?: ContextEdicio; sub?: SubTipus; calorPerAssignacio?: Map<number, number>; maxCalorGlobal?: number }) {
   const acceptaDrop = edicio?.actiu && inc && zona && sub && edicio.subTipusArrossegat === sub
-  const lliureEnZona = inc && zona ? (carros.length < (inc.capacitat === 24 ? 8 : 4)) : false
+  // Per MSG amb costat definit: max 4 per semibanda. MSP o sense costat: límit per zona completa.
+  const maxPerColumna = costat !== undefined ? 4 : (inc && zona ? (inc.capacitat === 24 ? 8 : 4) : 4)
+  const lliureEnZona = inc && zona ? (carros.length < maxPerColumna) : false
   return (
     <div
-      style={{ background: '#1a1c25', borderRadius: '6px', padding: '0.4rem', minHeight: '120px', border: acceptaDrop && lliureEnZona ? '2px dashed ' + accent : '2px solid transparent', transition: 'border 0.1s' }}
+      style={{ background: '#1a1c25', borderRadius: '6px', padding: '0.4rem', minHeight: '80px', border: acceptaDrop && lliureEnZona ? '2px dashed ' + accent : '2px solid transparent', transition: 'border 0.1s' }}
       onDragOver={acceptaDrop && lliureEnZona ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } : undefined}
       onDrop={acceptaDrop && lliureEnZona && inc && zona && edicio ? (e) => {
         e.preventDefault()
         const aid = parseInt(e.dataTransfer.getData('assignacio_id'), 10)
-        const pos = posicioLliureMSZona(inc, zona)
+        const pos = posicioLliureMSZona(inc, zona, costat)
         if (!Number.isFinite(aid) || pos === null) return
         edicio.onMoure(aid, inc.id, pos, zona)
       } : undefined}
     >
-      <div style={{ fontSize: '0.65rem', color: accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem', fontWeight: 600 }}>
-        {titol} <span style={{ color: 'var(--text-dim)' }}>({carros.length})</span>
+      <div style={{ fontSize: costat !== undefined ? '0.58rem' : '0.65rem', color: accent, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600, textAlign: costat !== undefined ? 'center' : 'left' }}>
+        {costat === undefined ? `${titol} ` : ''}<span style={{ color: 'var(--text-dim)' }}>({carros.length})</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {carros.length === 0 ? (
@@ -682,8 +761,16 @@ interface ContextEdicio {
   onRotar: (incId: number) => void
 }
 
-// Trobar la posició lliure mínima d'una zona MS dins una incubadora destí
-function posicioLliureMSZona(inc: Incubadora, zona: 'central'|'paret'|'pulsator'): number | null {
+// Trobar la posició lliure mínima d'una zona MS dins una incubadora destí.
+// Per MSG (cap=24) amb costat definit: 'esq' cerca en pos 1-4, 'dre' en 5-8.
+function posicioLliureMSZona(inc: Incubadora, zona: 'central'|'paret'|'pulsator', costat?: 'esq'|'dre'): number | null {
+  if (inc.capacitat === 24 && costat) {
+    const rangeMin = costat === 'esq' ? 1 : 5
+    const rangeMax = costat === 'esq' ? 4 : 8
+    const ocupades = new Set(inc.carros.filter(c => c.zona === zona && c.posicio !== null).map(c => c.posicio as number))
+    for (let p = rangeMin; p <= rangeMax; p++) if (!ocupades.has(p)) return p
+    return null
+  }
   const max = inc.capacitat === 24 ? 8 : 4
   const ocupades = new Set(inc.carros.filter(c => c.zona === zona && c.posicio !== null).map(c => c.posicio as number))
   for (let p = 1; p <= max; p++) if (!ocupades.has(p)) return p
