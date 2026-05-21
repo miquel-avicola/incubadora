@@ -1124,7 +1124,7 @@ function IncubadoraMS({ inc, sub, onClicCella, onDropCell, ...p }: CellPropsComm
 
 // ── Cel·la individual ──────────────────────────────────────────────────────
 
-function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, lliureAviatPerCella, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
+function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, lliureAviatPerCella, mostrarProjectat, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
   incId: number
   pos: number
   zona: ZonaMS | null
@@ -1243,4 +1243,6 @@ function btnStyle(primari: boolean): React.CSSProperties {
   return primari
     ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
     : { padding: '8px 14px', borderRadius: 6, border: '1px solid #d4d4d4', background: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
+}
+marginLeft: 8 }
 }
