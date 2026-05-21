@@ -19,9 +19,7 @@ interface PrevLot {
   lot_id: number; nom: string
   setmanes_vida: number; tipus_incubadora: string
   eclosio_esperada: number; eclosio_font: string
-  fertilitat_esperada: number; fertilitat_font: 'historic' | 'fallback'
-  taxa_naix_esperada: number
-  etapa1: { carros: number; ous: number; pollets_previstos: number; pct_taxa_naix: number }
+  etapa1: { carros: number; carros_sense_previsio: number; ous: number; pollets_previstos: number; pct_taxa_naix: number | null }
   etapa2: { carros_transferits: number; ous_fertils: number; ous_explosius: number; pollets_previstos: number; pct_fertilitat: number | null; pct_eclosio: number }
   etapa3: { carros_completats: number; pollets_nascuts: number; pollets_descartats: number; pct_eclosio_real: number | null; pct_taxa_naix_real: number | null; delta_vs_inicial: number | null; delta_vs_transf: number | null }
 }
@@ -278,7 +276,7 @@ export default function Estadistiques() {
                     <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: '#8899ff', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>1 · Assignació</div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>{fmtN(rv.ous)} ous</div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>~{fmtN(rv.pollets_previstos_inicial)}</div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>pollets previstos (fert.×ecl. / ous totals)</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>pollets previstos (previsió assignació)</div>
                   </div>
                   {/* Fletxa */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', color: 'var(--text-dim)', fontSize: '1rem' }}>→</div>
@@ -330,12 +328,13 @@ export default function Estadistiques() {
                 </thead>
                 <tbody>
                   {previsions.per_lot.map((l, i) => (
-                    <tr key={l.lot_id} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                    <tr key={`${l.lot_id}_${l.tipus_incubadora}`} style={{ background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
                       <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600 }}>
                         <div>{l.nom}</div>
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', fontWeight: 400 }}>
-                          {l.setmanes_vida}s · {l.tipus_incubadora.slice(0,2)} · naix. {l.taxa_naix_esperada}%
-                          {l.fertilitat_font === 'fallback' && <span style={{ color: '#f59e0b', marginLeft: '0.3rem' }} title="Sense historial, s'usa fertilitat de referència (85%)">*</span>}
+                          {l.setmanes_vida}s · {l.tipus_incubadora}
+                          {l.etapa1.pct_taxa_naix !== null && <span> · naix. prev. {l.etapa1.pct_taxa_naix}%</span>}
+                          {l.etapa1.carros_sense_previsio > 0 && <span style={{ color: '#f59e0b', marginLeft: '0.3rem' }} title={`${l.etapa1.carros_sense_previsio} carro(s) sense previsió registrada`}>*</span>}
                         </div>
                       </td>
                       {/* Etapa 1 */}
