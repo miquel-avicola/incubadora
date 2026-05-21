@@ -52,6 +52,8 @@ export function canAccess(role: string, path: string): boolean {
   // Pages that require admin
   const requiresAdmin = [
     /^\/lots($|\/)/,
+    /^\/estadistiques($|\/)/,
+    /^\/api\/estadistiques($|\/)/,
     /^\/carrega\/nova($|\/)/,
     /^\/carrega\/[^/]+\/assignacions($|\/)/,
     /^\/carrega\/[^/]+\/vacunes($|\/)/,
