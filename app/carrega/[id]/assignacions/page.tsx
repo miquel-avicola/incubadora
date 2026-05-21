@@ -65,6 +65,8 @@ interface Full {
 interface CarroInst {
   assignacio_id: number
   num_carro_full: number
+  full_id: number
+  num_carrega: number
   posicio: number | null
   zona: ZonaMS | null
   estirp: string | null
@@ -72,6 +74,8 @@ interface CarroInst {
   quantitat_ous: number
   setmanes_lot: number | null
   dia_incubacio: number | null
+  // Data de transferència planificada del full al qual pertany el carro
+  data_transferencia_full: string | null
 }
 
 interface IncInst {
@@ -479,7 +483,7 @@ export default function Planificacio() {
 
   // Ocupació "altres fulls" (per pintar de gris a la cel·la)
   const ocupatsAltresFullsPerCella = useMemo(() => {
-    const m = new Map<string, { num_carro_full: number; estirp: string | null }>()
+    const m = new Map<string, { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null }>()
     if (!estatInst || !full) return m
     for (const inc of estatInst.incubadores) {
       for (const c of inc.carros) {
@@ -487,16 +491,40 @@ export default function Planificacio() {
         // Si aquest carro és del full actual, no compta com a "altres fulls"
         const esDelFullActual = full.assignacions.some(a => a.id === c.assignacio_id)
         if (esDelFullActual) continue
-        m.set(keyCell(inc.id, c.posicio, c.zona), { num_carro_full: c.num_carro_full, estirp: c.estirp })
+        m.set(keyCell(inc.id, c.posicio, c.zona), {
+          num_carro_full: c.num_carro_full,
+          num_carrega: c.num_carrega,
+          estirp: c.estirp,
+          data_transferencia_full: c.data_transferencia_full ?? null,
+        })
       }
     }
     return m
   }, [estatInst, full])
 
+  // Subconjunt d'ocupatsAltresFullsPerCella on la transferència és <= data d'entrada del full actual.
+  // Aquests slots estaran lliures quan entrin els carros nous → es poden seleccionar/assignar.
+  const lliureAviatPerCella = useMemo(() => {
+    const m = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
+    if (!full) return m
+    const dataCarrega = new Date(full.carrega + 'T00:00:00').getTime()
+    const avui = new Date(); avui.setHours(0, 0, 0, 0)
+    ocupatsAltresFullsPerCella.forEach((info, k) => {
+      if (!info.data_transferencia_full) return
+      const dataTrans = new Date(info.data_transferencia_full + 'T00:00:00').getTime()
+      if (dataTrans <= dataCarrega) {
+        const diesFins = Math.max(0, Math.floor((dataTrans - avui.getTime()) / 86400000))
+        m.set(k, { diesFins, num_carro_full: info.num_carro_full, num_carrega: info.num_carrega, data_transferencia_full: info.data_transferencia_full })
+      }
+    })
+    return m
+  }, [ocupatsAltresFullsPerCella, full])
+
   // ── Handlers de cel·la
   function toggleSeleccio(incId: number, pos: number, zona: ZonaMS | null) {
     const k = keyCell(incId, pos, zona)
-    if (carroPerCella.has(k) || ocupatsAltresFullsPerCella.has(k)) return
+    if (carroPerCella.has(k)) return
+    if (ocupatsAltresFullsPerCella.has(k) && !lliureAviatPerCella.has(k)) return
     setSeleccionades(prev => {
       const s = new Set(prev)
       if (s.has(k)) s.delete(k); else s.add(k)
@@ -509,7 +537,7 @@ export default function Planificacio() {
     const next = new Set(seleccionades)
     const afegir = (pos: number, zona: ZonaMS | null) => {
       const k = keyCell(inc.id, pos, zona)
-      if (!carroPerCella.has(k) && !ocupatsAltresFullsPerCella.has(k)) next.add(k)
+      if (!carroPerCella.has(k) && (!ocupatsAltresFullsPerCella.has(k) || lliureAviatPerCella.has(k))) next.add(k)
     }
     if (sub === 'SS') {
       for (let p = 1; p <= 24; p++) afegir(p, null)
@@ -548,7 +576,8 @@ export default function Planificacio() {
     const carroId = parseInt(e.dataTransfer.getData('carro_id'), 10)
     if (!Number.isFinite(carroId)) return
     const k = keyCell(incId, pos, zona)
-    if (carroPerCella.has(k) || ocupatsAltresFullsPerCella.has(k)) return
+    if (carroPerCella.has(k)) return
+    if (ocupatsAltresFullsPerCella.has(k) && !lliureAviatPerCella.has(k)) return
     setColocats(prev => {
       const m = new Map(prev)
       m.set(carroId, { incId, pos, zona })
@@ -704,6 +733,7 @@ export default function Planificacio() {
                 carrosLot={carrosLot}
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                lliureAviatPerCella={lliureAviatPerCella}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p) => toggleSeleccio(inc.id, p, null)}
@@ -722,6 +752,7 @@ export default function Planificacio() {
               <IncubadoraMS key={inc.id} inc={inc} sub="MSG" carrosLot={carrosLot}
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                lliureAviatPerCella={lliureAviatPerCella}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
@@ -743,6 +774,7 @@ export default function Planificacio() {
               <IncubadoraMS key={inc.id} inc={inc} sub="MSP" carrosLot={carrosLot}
                 carroPerCella={carroPerCella}
                 ocupatsAltresFulls={ocupatsAltresFullsPerCella}
+                lliureAviatPerCella={lliureAviatPerCella}
                 colocats={colocats}
                 seleccionades={seleccionades}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
@@ -951,7 +983,8 @@ function SeccioInc({ titol, badge, incs, children, extra }: { titol: string; bad
 interface CellPropsCommon {
   carrosLot: CarroEstoc[]
   carroPerCella: Map<string, number>
-  ocupatsAltresFulls: Map<string, { num_carro_full: number; estirp: string | null }>
+  ocupatsAltresFulls: Map<string, { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null }>
+  lliureAviatPerCella: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>
   colocats: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>
   seleccionades: Set<string>
   onSelLliures: () => void
@@ -1066,7 +1099,7 @@ function IncubadoraMS({ inc, sub, onClicCella, onDropCell, ...p }: CellPropsComm
 
 // ── Cel·la individual ──────────────────────────────────────────────────────
 
-function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
+function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, lliureAviatPerCella, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
   incId: number
   pos: number
   zona: ZonaMS | null
@@ -1079,7 +1112,11 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
   const k = keyCell(incId, pos, zona)
   const carroIdNou = carroPerCella.get(k)
   const ocupAltre = ocupatsAltresFulls.get(k)
+  const lliureAviat = lliureAviatPerCella.get(k)
   const sel = seleccionades.has(k)
+
+  // lliureAviat té prioritat sobre ocupAltre (és un subconjunt que permet interacció)
+  const blocat = !!ocupAltre && !lliureAviat
 
   let bg = '#fefefe'
   let border = '1px dashed #cbd5e1'
@@ -1089,10 +1126,16 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
   if (zonaClass) {
     bg = zonaClass === 'paret' ? '#fee2e2' : zonaClass === 'central' ? '#f3f4f6' : '#fed7aa'
   }
-  if (ocupAltre) {
+  if (blocat) {
     bg = '#4b5563'
     color = '#fff'
     border = '1px solid #4b5563'
+  } else if (lliureAviat && !carroIdNou) {
+    // Ocupat ara però lliure a temps — verd suau
+    bg = '#dcfce7'
+    border = '1px dashed #16a34a'
+    color = '#14532d'
+    cursor = 'pointer'
   } else if (carroIdNou !== undefined) {
     bg = '#bfdbfe'
     border = '1px solid #2563eb'
@@ -1109,31 +1152,49 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
 
   const carroNouObj = carroIdNou !== undefined ? carrosLot.find(c => c.id === carroIdNou) : null
 
+  // Text del comptador de dies per a cel·les "lliure aviat"
+  function textDiesFins(dies: number): string {
+    if (dies <= 0) return 'avui'
+    if (dies === 1) return 'demà'
+    return `${dies}d`
+  }
+
+  // Tooltip detallat
+  const titleText = blocat
+    ? `Ocupat · càrrega ${ocupAltre!.num_carrega}/#${ocupAltre!.num_carro_full}`
+    : lliureAviat && !carroIdNou
+    ? `Lliure en ${textDiesFins(lliureAviat.diesFins)} · transferència ${lliureAviat.data_transferencia_full} · carrega ${lliureAviat.num_carrega}/#${lliureAviat.num_carro_full} · click o arrossega per assignar`
+    : carroNouObj
+    ? `${nomCarroCurt(carroNouObj)} · ${carroNouObj.quantitat_ous} ous · click per treure`
+    : `Pos ${pos}${zona ? ' · ' + zona : ''}`
+
   return (
     <div
       style={{ gridColumn: gridCol, gridRow, minHeight: 48, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 10, fontWeight: 600, padding: 2, lineHeight: 1.05, overflow: 'hidden', background: bg, border, color, cursor }}
       onClick={() => {
         if (carroIdNou !== undefined) onClicCarroColocat(carroIdNou)
-        else if (!ocupAltre) onClick()
+        else if (!blocat) onClick()
       }}
       draggable={carroIdNou !== undefined}
       onDragStart={(e) => carroIdNou !== undefined && onDragStartCarro(e, carroIdNou, k)}
-      onDragOver={!ocupAltre ? onDragOverCell : undefined}
-      onDrop={!ocupAltre ? onDrop : undefined}
-      title={
-        ocupAltre ? `Càrrega anterior · #${ocupAltre.num_carro_full}`
-        : carroNouObj ? `${nomCarroCurt(carroNouObj)} · ${carroNouObj.quantitat_ous} ous · click per treure`
-        : `Pos ${pos}${zona ? ' · ' + zona : ''}`
-      }
+      onDragOver={!blocat ? onDragOverCell : undefined}
+      onDrop={!blocat ? onDrop : undefined}
+      title={titleText}
     >
-      {ocupAltre && <span>#{ocupAltre.num_carro_full}</span>}
+      {blocat && ocupAltre && <span>#{ocupAltre.num_carro_full}</span>}
+      {lliureAviat && !carroIdNou && (
+        <>
+          <span style={{ fontSize: 8, opacity: 0.7, textAlign: 'center' }}>#{lliureAviat.num_carro_full}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d' }}>{textDiesFins(lliureAviat.diesFins)}</span>
+        </>
+      )}
       {carroNouObj && (
         <>
           <span style={{ fontSize: 10, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nomCarroCurt(carroNouObj)}</span>
           <span style={{ fontSize: 9, opacity: 0.75 }}>p{pos}</span>
         </>
       )}
-      {!ocupAltre && !carroNouObj && (
+      {!blocat && !lliureAviat && !carroNouObj && (
         <span style={{ fontSize: 9, opacity: 0.5 }}>{pos}</span>
       )}
     </div>
