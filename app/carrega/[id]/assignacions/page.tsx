@@ -401,13 +401,24 @@ function suggerirAssignacioCompleta(
     .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
     .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
 
-  // Ordenar per posta ASC (més antic primer), secundari per lot_id (lots junts)
-  const carrosOrd = [...carrosPendents].sort((a, b) => {
-    const pA = new Date(a.posta + 'T00:00:00').getTime()
-    const pB = new Date(b.posta + 'T00:00:00').getTime()
-    if (pA !== pB) return pA - pB
-    return a.lots_reproductores.id - b.lots_reproductores.id
-  })
+  // Ordenar: primer agrupar per lot (per garantir lots consecutius a les MS),
+  // lots ordenats per la seva posta més antiga ASC (dies d'estoc DESC).
+  // Dins de cada lot, carros ordenats per posta ASC.
+  const carrosOrd = (() => {
+    const byLot = new Map<number, CarroEstoc[]>()
+    for (const c of carrosPendents) {
+      const lid = c.lots_reproductores.id
+      if (!byLot.has(lid)) byLot.set(lid, [])
+      byLot.get(lid)!.push(c)
+    }
+    byLot.forEach(cs => cs.sort((a, b) =>
+      new Date(a.posta + 'T00:00:00').getTime() - new Date(b.posta + 'T00:00:00').getTime()
+    ))
+    const lotsOrds = Array.from(byLot.values()).sort((a, b) =>
+      new Date(a[0].posta + 'T00:00:00').getTime() - new Date(b[0].posta + 'T00:00:00').getTime()
+    )
+    return lotsOrds.flat()
+  })()
 
   let pool: CarroEstoc[]
   if (comandaPollets > 0) {
@@ -416,7 +427,8 @@ function suggerirAssignacioCompleta(
     for (const c of carrosOrd) {
       const setm = setmanesLot(c.lots_reproductores.data_naixement)
       const pred = c.quantitat_ous * fertilitatEstimada(setm) * ECLOSIO_EST
-      if (polletsPrev + pred > comandaPollets + 4000) continue
+      // Si ja tenim prou pollets i afegir aquest carro passaria del màxim, parem
+      if (polletsPrev >= comandaPollets - 500 && polletsPrev + pred > comandaPollets + 4000) break
       pool.push(c)
       polletsPrev += pred
     }
