@@ -9,6 +9,7 @@ interface Destinacio {
   nom_granja: string
   nau: string | null
   poblacio: string | null
+  codi_rega: string | null
   client_id: number | null
 }
 
@@ -226,6 +227,7 @@ export default function Expedicions() {
   const [novaGranjaNom, setNovaGranjaNom] = useState('')
   const [novaGranjaNau, setNovaGranjaNau] = useState('')
   const [novaGranjaPoblacio, setNovaGranjaPoblacio] = useState('')
+  const [novaGranjaRega, setNovaGranjaRega] = useState('')
   const [creantGranja, setCreantGranja] = useState(false)
   const [errorGranja, setErrorGranja] = useState('')
 
@@ -271,6 +273,7 @@ export default function Expedicions() {
         nom_granja: novaGranjaNom.trim(),
         nau: novaGranjaNau.trim() || null,
         poblacio: novaGranjaPoblacio.trim() || null,
+        codi_rega: novaGranjaRega.trim() || null,
         client_id: comanda?.clients.id || null,
       }),
     })
@@ -285,6 +288,7 @@ export default function Expedicions() {
       setNovaGranjaNom('')
       setNovaGranjaNau('')
       setNovaGranjaPoblacio('')
+      setNovaGranjaRega('')
     }
     setCreantGranja(false)
   }
@@ -338,6 +342,7 @@ export default function Expedicions() {
       setNovaGranjaNom('')
       setNovaGranjaNau('')
       setNovaGranjaPoblacio('')
+      setNovaGranjaRega('')
       carregarDades()
     }
     setCreant(false)
@@ -564,7 +569,7 @@ export default function Expedicions() {
                 {mostrarNovaGranja && (
                   <div style={{ background: 'rgba(240,180,41,0.07)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nova granja</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.5rem' }}>
                       <div>
                         <label style={labelStyle}>Nom granja *</label>
                         <input
@@ -586,6 +591,8 @@ export default function Expedicions() {
                           style={inputStyle}
                         />
                       </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                       <div>
                         <label style={labelStyle}>Població</label>
                         <input
@@ -593,6 +600,16 @@ export default function Expedicions() {
                           value={novaGranjaPoblacio}
                           onChange={e => setNovaGranjaPoblacio(e.target.value)}
                           placeholder="Ex: Girona"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Codi REGA</label>
+                        <input
+                          type="text"
+                          value={novaGranjaRega}
+                          onChange={e => setNovaGranjaRega(e.target.value)}
+                          placeholder="Ex: ES170120000012"
                           style={inputStyle}
                         />
                       </div>
@@ -605,7 +622,7 @@ export default function Expedicions() {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         type="button"
-                        onClick={() => { setMostrarNovaGranja(false); setNovaGranjaNom(''); setNovaGranjaNau(''); setNovaGranjaPoblacio(''); setErrorGranja('') }}
+                        onClick={() => { setMostrarNovaGranja(false); setNovaGranjaNom(''); setNovaGranjaNau(''); setNovaGranjaPoblacio(''); setNovaGranjaRega(''); setErrorGranja('') }}
                         style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans', fontSize: '0.82rem' }}
                       >
                         Cancel·lar
