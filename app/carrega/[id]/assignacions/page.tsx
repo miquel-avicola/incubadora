@@ -543,11 +543,22 @@ function suggerirAssignacioCompleta(
         const { col } = ssPosToCell(p)
         slots.push({ pos: p, zona: null, costat: col <= 2 ? 'esq' : 'dre' })
       }
-    } else {
-      const maxEsq = sub === 'MSG' ? 4 : 2
-      const maxDre = sub === 'MSG' ? 8 : 4
+    } else if (sub === 'MSG') {
+      // MSG: nous carros sempre al central (paret/pulsator es reserven per a la rotació)
+      const maxEsq = 4
+      const maxDre = 8
       for (let p = 1; p <= maxEsq; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'esq' })
       for (let p = maxEsq + 1; p <= maxDre; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'dre' })
+    } else {
+      // MSP: llibertat total — qualsevol zona disponible.
+      // Ordre de preferència: central > paret > pulsator dins de cada costat.
+      const maxEsq = 2
+      const maxDre = 4
+      const zonesPreferides: ZonaMS[] = ['central', 'paret', 'pulsator']
+      for (const z of zonesPreferides) {
+        for (let p = 1; p <= maxEsq; p++) if (esDisp(p, z)) slots.push({ pos: p, zona: z, costat: 'esq' })
+        for (let p = maxEsq + 1; p <= maxDre; p++) if (esDisp(p, z)) slots.push({ pos: p, zona: z, costat: 'dre' })
+      }
     }
     return slots
   }
@@ -682,8 +693,18 @@ function suggerirAssignacioCompleta(
       const carrosAquiMS = poolMS.filter(c => !assignats.has(c.id))
       if (carrosAquiMS.length === 0) continue
 
-      const slotsEsq = slots.filter(s => s.costat === 'esq').sort((a, b) => a.pos - b.pos)
-      const slotsDre = slots.filter(s => s.costat === 'dre').sort((a, b) => a.pos - b.pos)
+      // Ordre dels slots dins de cada costat: per zona (central > paret > pulsator) i,
+      // dins de la mateixa zona, per pos ASC. Així omplim primer tot el central abans
+      // de tocar el paret, i el paret abans del pulsator (només rellevant a MSP, on
+      // poden haver-hi slots a totes tres zones).
+      const ordreZona = (z: ZonaMS | null): number => z === 'central' ? 0 : z === 'paret' ? 1 : z === 'pulsator' ? 2 : 3
+      const cmpSlots = (a: { pos: number; zona: ZonaMS | null }, b: { pos: number; zona: ZonaMS | null }) => {
+        const dz = ordreZona(a.zona) - ordreZona(b.zona)
+        if (dz !== 0) return dz
+        return a.pos - b.pos
+      }
+      const slotsEsq = slots.filter(s => s.costat === 'esq').sort(cmpSlots)
+      const slotsDre = slots.filter(s => s.costat === 'dre').sort(cmpSlots)
       if (slotsEsq.length === 0 && slotsDre.length === 0) continue
 
       // Opció A: primer lot → esq (fins a omplir o acabar lot), continuació → dre
