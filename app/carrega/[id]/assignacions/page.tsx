@@ -756,10 +756,10 @@ export default function Planificacio() {
     setLoading(true)
     try {
       const [fullRes, carrosRes, incRes, instRes] = await Promise.all([
-        fetch(`/api/carrega/${params.id}`).then(r => r.json()),
-        fetch('/api/carros').then(r => r.json()),
-        fetch('/api/incubadores').then(r => r.json()),
-        fetch('/api/instalacions').then(r => r.json()),
+        fetch(`/api/carrega/${params.id}`, { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/carros', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/incubadores', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/instalacions', { cache: 'no-store' }).then(r => r.json()),
       ])
       setFull(fullRes)
       setDisponibles(Array.isArray(carrosRes) ? carrosRes : [])
