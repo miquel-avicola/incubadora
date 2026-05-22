@@ -231,6 +231,89 @@ function optimitzarZonesTermiques(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Projecció de l'estat de les instal·lacions al moment del load futur
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Donat l'estat real actual i la data del load actual, retorna un nou EstatInst
+// que reflecteix com estaran les màquines just abans del load: amb totes les
+// transferències intermèdies aplicades (carros eliminats) i les rotacions MSG
+// (paret→pulsator, central→paret) executades automàticament cada vegada que el
+// pulsator d'una MSG queda buit. Replica el comportament del botó manual
+// "Rotar zones" + la funció SQL rotar_zones_ms_gran.
+//
+// Regles:
+//   · Es processen totes les transferències amb data_transferencia_full ≤ data
+//     de càrrega del full actual i que no pertanyen al full actual.
+//   · Les transferències s'apliquen en ordre cronològic ASC.
+//   · Després de cada transferència, per cada MSG (cap=24) afectada: si el
+//     pulsator d'aquella MS queda completament buit, s'aplica la rotació.
+//   · Les MSP (cap=12) i les SS NO roten — només es treuen els carros
+//     transferits.
+//   · La rotació manté la `posicio` numèrica del carro, només canvia la `zona`.
+
+function projectarEstatInst(
+  estatInst: EstatInst,
+  dataCarrega: string,
+  assignacioIdsDelFull: Set<number>
+): EstatInst {
+  // Còpia profunda per no mutar l'estat original
+  const nou: EstatInst = JSON.parse(JSON.stringify(estatInst))
+  const dataLoad = new Date(dataCarrega + 'T00:00:00').getTime()
+
+  // 1. Recopilar transferències pendents (clau única per carrega+data)
+  type TransfEvent = { numCarrega: number; dataTransf: string }
+  const transfMap = new Map<string, TransfEvent>()
+  for (const inc of nou.incubadores) {
+    for (const c of inc.carros) {
+      if (assignacioIdsDelFull.has(c.assignacio_id)) continue
+      if (!c.data_transferencia_full) continue
+      const dataTrans = new Date(c.data_transferencia_full + 'T00:00:00').getTime()
+      if (dataTrans > dataLoad) continue
+      const key = `${c.num_carrega}|${c.data_transferencia_full}`
+      if (!transfMap.has(key)) {
+        transfMap.set(key, { numCarrega: c.num_carrega, dataTransf: c.data_transferencia_full })
+      }
+    }
+  }
+
+  // 2. Ordenar cronològicament ASC
+  const transfsOrdenades = Array.from(transfMap.values()).sort(
+    (a, b) => new Date(a.dataTransf + 'T00:00:00').getTime() - new Date(b.dataTransf + 'T00:00:00').getTime()
+  )
+
+  // 3. Aplicar cada transferència i rotar les MSG que quedin amb pulsator buit
+  for (const ev of transfsOrdenades) {
+    const incsAfectades = new Set<number>()
+
+    for (const inc of nou.incubadores) {
+      const abans = inc.carros.length
+      inc.carros = inc.carros.filter((c) => {
+        if (c.num_carrega !== ev.numCarrega) return true
+        if (c.data_transferencia_full !== ev.dataTransf) return true
+        return false
+      })
+      if (inc.carros.length !== abans) incsAfectades.add(inc.id)
+    }
+
+    // Rotació automàtica de MSG amb pulsator buit
+    for (const incId of incsAfectades) {
+      const inc = nou.incubadores.find((i) => i.id === incId)
+      if (!inc) continue
+      if (inc.tipus !== 'Multistage' || inc.capacitat !== 24) continue
+      const hiHaPulsator = inc.carros.some((c) => c.zona === 'pulsator')
+      if (hiHaPulsator) continue
+      // paret → pulsator, central → paret (manté `posicio`)
+      for (const c of inc.carros) {
+        if (c.zona === 'paret') c.zona = 'pulsator'
+        else if (c.zona === 'central') c.zona = 'paret'
+      }
+    }
+  }
+
+  return nou
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Algoritme pre-suggerit (v1)
 // ─────────────────────────────────────────────────────────────────────────────
 //
@@ -761,11 +844,23 @@ export default function Planificacio() {
     return found
   }, [colocats, incsById])
 
-  // Ocupació "altres fulls" (per pintar de gris a la cel·la)
+  // Estat projectat: aplica transferències pendents fins a la data del load actual
+  // i les rotacions MSG que se'n derivin. Sempre es calcula; el toggle
+  // `mostrarProjectat` decideix si la UI l'utilitza o veu l'estat real.
+  const estatInstProjectat = useMemo<EstatInst | null>(() => {
+    if (!estatInst || !full) return null
+    const assignacioIdsDelFull = new Set<number>(full.assignacions.map((a) => a.id))
+    return projectarEstatInst(estatInst, full.carrega, assignacioIdsDelFull)
+  }, [estatInst, full])
+
+  // Quin estat utilitzem per pintar les cel·les "altres fulls" depèn del toggle.
+  const estatInstEffectiu = (mostrarProjectat ? estatInstProjectat : estatInst) ?? estatInst
+
+  // Ocupació "altres fulls" (per pintar de gris a la cel·la) — deriva de l'estat efectiu
   const ocupatsAltresFullsPerCella = useMemo(() => {
     const m = new Map<string, { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null }>()
-    if (!estatInst || !full) return m
-    for (const inc of estatInst.incubadores) {
+    if (!estatInstEffectiu || !full) return m
+    for (const inc of estatInstEffectiu.incubadores) {
       for (const c of inc.carros) {
         if (c.posicio === null || c.posicio === undefined) continue
         // Si aquest carro és del full actual, no compta com a "altres fulls"
@@ -780,29 +875,70 @@ export default function Planificacio() {
       }
     }
     return m
-  }, [estatInst, full])
+  }, [estatInstEffectiu, full])
 
-  // Subconjunt d'ocupatsAltresFullsPerCella on la transferència és <= data d'entrada del full actual.
-  // Aquests slots estaran lliures quan entrin els carros nous → es poden seleccionar/assignar.
-  // ROTACIÓ MS: quan un carro del pulsator (~14d) transfereix, el carro del central es desplaça
-  // cap al pulsator i el passadís central queda buit. Per tant remapegem pulsator → central.
+  // Diferències entre estat real i projectat (per al banner de toggle).
+  // Útil per saber si hi ha alguna cosa a projectar tot i estar en mode
+  // projectat (en el qual lliureAviatPerCella ja és buit).
+  const nCanvisProjeccio = useMemo(() => {
+    if (!estatInst || !estatInstProjectat) return 0
+    const claus = (e: EstatInst) => {
+      const s = new Set<string>()
+      for (const inc of e.incubadores) {
+        for (const c of inc.carros) {
+          if (c.posicio === null || c.posicio === undefined) continue
+          s.add(`${c.assignacio_id}|${inc.id}|${c.posicio}|${c.zona ?? '-'}`)
+        }
+      }
+      return s
+    }
+    const a = claus(estatInst)
+    const b = claus(estatInstProjectat)
+    let diff = 0
+    a.forEach((k) => { if (!b.has(k)) diff++ })
+    b.forEach((k) => { if (!a.has(k)) diff++ })
+    return diff
+  }, [estatInst, estatInstProjectat])
+
+  // Slots "lliure aviat":
+  //  · En mode PROJECTAT, l'estat efectiu ja té les transferències i rotacions
+  //    aplicades, així que les cel·les realment buides es renderitzen com a
+  //    lliures normals — no cal cap remap. Per tant retornem un mapa buit.
+  //  · En mode NO PROJECTAT (real), marquem amb badge verd les cel·les que
+  //    estan ocupades ARA però buides al projectat (es buidaran a temps).
   const lliureAviatPerCella = useMemo(() => {
     const m = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
-    if (!full) return m
-    const dataCarrega = new Date(full.carrega + 'T00:00:00').getTime()
+    if (mostrarProjectat) return m
+    if (!estatInst || !estatInstProjectat || !full) return m
     const avui = new Date(); avui.setHours(0, 0, 0, 0)
-    ocupatsAltresFullsPerCella.forEach((info, k) => {
-      if (!info.data_transferencia_full) return
-      const dataTrans = new Date(info.data_transferencia_full + 'T00:00:00').getTime()
-      if (dataTrans <= dataCarrega) {
-        const diesFins = Math.max(0, Math.floor((dataTrans - avui.getTime()) / 86400000))
-        const parts = k.split('|')
-        const targetKey = parts[2] === 'pulsator' ? `${parts[0]}|${parts[1]}|central` : k
-        m.set(targetKey, { diesFins, num_carro_full: info.num_carro_full, num_carrega: info.num_carrega, data_transferencia_full: info.data_transferencia_full })
+    // Mapa de cel·les ocupades al projectat (per saber quines s'han alliberat)
+    const ocupadesProjectat = new Set<string>()
+    for (const inc of estatInstProjectat.incubadores) {
+      for (const c of inc.carros) {
+        if (c.posicio === null || c.posicio === undefined) continue
+        ocupadesProjectat.add(keyCell(inc.id, c.posicio, c.zona))
       }
-    })
+    }
+    for (const inc of estatInst.incubadores) {
+      for (const c of inc.carros) {
+        if (c.posicio === null || c.posicio === undefined) continue
+        if (!c.data_transferencia_full) continue
+        const esDelFullActual = full.assignacions.some(a => a.id === c.assignacio_id)
+        if (esDelFullActual) continue
+        const k = keyCell(inc.id, c.posicio, c.zona)
+        if (ocupadesProjectat.has(k)) continue // encara ocupada al projectat (rotada)
+        const dataTrans = new Date(c.data_transferencia_full + 'T00:00:00').getTime()
+        const diesFins = Math.max(0, Math.floor((dataTrans - avui.getTime()) / 86400000))
+        m.set(k, {
+          diesFins,
+          num_carro_full: c.num_carro_full,
+          num_carrega: c.num_carrega,
+          data_transferencia_full: c.data_transferencia_full,
+        })
+      }
+    }
     return m
-  }, [ocupatsAltresFullsPerCella, full])
+  }, [mostrarProjectat, estatInst, estatInstProjectat, full])
 
   // ── Handlers de cel·la
   function toggleSeleccio(incId: number, pos: number, zona: ZonaMS | null) {
@@ -897,13 +1033,19 @@ export default function Planificacio() {
   // ── Pre-suggerit
   function aplicarPreSuggerit() {
     if (!full || !estatInst) return
+    // El suggeriment ha de raonar sobre l'estat post-transferència (rotacions
+    // incloses). Si la projecció no es pot calcular, fem fallback a l'estat
+    // real. En passar el projectat, els carros transferits ja no hi són i les
+    // rotacions ja s'han aplicat, així que no cal el mapa lliureAviat.
+    const estatPerSuggerir = estatInstProjectat ?? estatInst
+    const lliureAviatBuit = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
     const sug = suggerirAssignacioCompleta(
       carrosPendents,
       full,
       incs,
-      estatInst,
+      estatPerSuggerir,
       dia,
-      lliureAviatPerCella,
+      lliureAviatBuit,
       carroPerCella,
       incsFiltrades
     )
@@ -951,10 +1093,13 @@ export default function Planificacio() {
     const assignacioIdsDelFull = new Set<number>(
       full.assignacions.map((a) => a.id)
     )
+    // L'optimització ha de considerar només els carros que ENCARA hi seran
+    // quan entri el load actual (post-transferències + rotacions).
+    const estatPerOptimitzar = estatInstProjectat ?? estatInst
     const novaColocats = optimitzarZonesTermiques(
       colocats,
       carrosLot,
-      estatInst,
+      estatPerOptimitzar,
       incsById,
       assignacioIdsDelFull
     )
@@ -1017,8 +1162,9 @@ export default function Planificacio() {
     <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '90px' }}>
       <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosLot.length} colocats={colocats.size} />
 
-      {/* Toggle vista projectada */}
-      {lliureAviatPerCella.size > 0 && (
+      {/* Toggle vista projectada — apareix quan hi ha qualsevol diferència
+          entre l'estat real i el projectat (transferències i/o rotacions) */}
+      {nCanvisProjeccio > 0 && (
         <div style={{ padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 8, background: mostrarProjectat ? '#f0fdf4' : '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: mostrarProjectat ? '#15803d' : '#6b7280', userSelect: 'none' }}>
             <input
@@ -1027,9 +1173,9 @@ export default function Planificacio() {
               onChange={e => setMostrarProjectat(e.target.checked)}
               style={{ width: 14, height: 14, accentColor: '#16a34a', cursor: 'pointer' }}
             />
-            Mostra estat post-transferència ({lliureAviatPerCella.size} slot{lliureAviatPerCella.size !== 1 ? 's' : ''} s&apos;alliberaran a temps)
+            Mostra estat post-transferència (transferències + rotacions MSG aplicades)
           </label>
-          {!mostrarProjectat && (
+          {!mostrarProjectat && lliureAviatPerCella.size > 0 && (
             <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>
               Els slots en verd s&apos;alliberaran abans de la càrrega
             </span>
@@ -1508,7 +1654,7 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
 
   // Tooltip detallat
   const titleText = blocat
-    ? `Ocupat · càrrega ${ocupAltre!.num_carrega}/#${ocupAltre!.num_carro_full}`
+    ? `Ocupat · càrrega ${ocupAltre!.num_carrega}/#${ocupAltre!.num_carro_full}${ocupAltre!.data_transferencia_full ? ' · transf ' + ocupAltre!.data_transferencia_full : ''}`
     : lliureAviat && !carroIdNou
     ? `Lliure en ${textDiesFins(lliureAviat.diesFins)} · transferència ${lliureAviat.data_transferencia_full} · carrega ${lliureAviat.num_carrega}/#${lliureAviat.num_carro_full} · click o arrossega per assignar`
     : carroNouObj
