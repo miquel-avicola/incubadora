@@ -296,18 +296,18 @@ function projectarEstatInst(
     }
 
     // Rotació automàtica de MSG amb pulsator buit
-    for (const incId of incsAfectades) {
+    Array.from(incsAfectades).forEach((incId) => {
       const inc = nou.incubadores.find((i) => i.id === incId)
-      if (!inc) continue
-      if (inc.tipus !== 'Multistage' || inc.capacitat !== 24) continue
+      if (!inc) return
+      if (inc.tipus !== 'Multistage' || inc.capacitat !== 24) return
       const hiHaPulsator = inc.carros.some((c) => c.zona === 'pulsator')
-      if (hiHaPulsator) continue
+      if (hiHaPulsator) return
       // paret → pulsator, central → paret (manté `posicio`)
       for (const c of inc.carros) {
         if (c.zona === 'paret') c.zona = 'pulsator'
         else if (c.zona === 'central') c.zona = 'paret'
       }
-    }
+    })
   }
 
   return nou
