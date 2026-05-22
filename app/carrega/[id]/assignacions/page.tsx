@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, type CarroTermic } from '@/lib/termico'
+import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, calorFuturaCarro, type CarroTermic } from '@/lib/termico'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipus
@@ -363,6 +363,244 @@ function preSuggerit(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Algorisme de suggeriment complet (v2)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Regles implementades:
+//   MS  · Tots els nous carros van al passadís central (única zona buida).
+//       · Ompliment lineal esq→dre. Lots consecutius (garantit per l'ordre del pool).
+//       · Equilibri tèrmic ESQ/DRE: prova esq-first vs dre-first; tria la millor.
+//       · Considera tots els carros de la màquina (paret+pulsator existents).
+//   SS  · Del pool, els K carros amb més setmanes_lot van a SS.
+//       · Menys calor futura → posicions centrals (9-16); més calor → paret/pulsator.
+//   Pool· Ordenat per posta ASC (dies_estoc DESC), agrupat per lot (lot_id).
+//       · Selecció fins [comanda_pollets−500, comanda_pollets+4000].
+//       · Si la comanda és de maquila (tipus='maquila'), s'usen tots els carros.
+
+const ECLOSIO_EST = 0.88
+
+function suggerirAssignacioCompleta(
+  carrosPendents: CarroEstoc[],
+  full: Full,
+  incs: Incubadora[],
+  estatInstParam: EstatInst,
+  diaCarrega: Dia,
+  lliureAviatPerCellaParam: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>,
+  carroPerCellaParam: Map<string, number>
+): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
+  const resultat = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
+  if (carrosPendents.length === 0) return resultat
+
+  const incsById = new Map(incs.map(i => [i.id, i]))
+  const instById = new Map(estatInstParam.incubadores.map(ii => [ii.id, ii]))
+  const incByNumero = new Map(incs.map(i => [i.numero, i]))
+
+  // ── 1. Construir pool ───────────────────────────────────────────────────
+  // Comanda pollets propis
+  const comandaPollets = full.comandes
+    .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
+    .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
+
+  // Ordenar per posta ASC (més antic primer), secundari per lot_id (lots junts)
+  const carrosOrd = [...carrosPendents].sort((a, b) => {
+    const pA = new Date(a.posta + 'T00:00:00').getTime()
+    const pB = new Date(b.posta + 'T00:00:00').getTime()
+    if (pA !== pB) return pA - pB
+    return a.lots_reproductores.id - b.lots_reproductores.id
+  })
+
+  let pool: CarroEstoc[]
+  if (comandaPollets > 0) {
+    let polletsPrev = 0
+    pool = []
+    for (const c of carrosOrd) {
+      const setm = setmanesLot(c.lots_reproductores.data_naixement)
+      const pred = c.quantitat_ous * fertilitatEstimada(setm) * ECLOSIO_EST
+      if (polletsPrev + pred > comandaPollets + 4000) continue
+      pool.push(c)
+      polletsPrev += pred
+    }
+    if (polletsPrev < comandaPollets - 500) pool = carrosOrd
+  } else {
+    pool = carrosOrd
+  }
+
+  // ── 2. Helper: slots disponibles per incubadora ─────────────────────────
+  function slotsDisponibles(incInst: IncInst): { pos: number; zona: ZonaMS | null; costat: 'esq' | 'dre' | 'cap' }[] {
+    const inc = incsById.get(incInst.id)
+    if (!inc) return []
+    const sub = subtipus(inc.tipus, inc.capacitat_carros)
+    const ocupatsInst = new Set(
+      incInst.carros.filter(c => c.posicio !== null).map(c => `${c.posicio}|${c.zona ?? '-'}`)
+    )
+    function esDisp(pos: number, zona: ZonaMS | null): boolean {
+      const k = keyCell(incInst.id, pos, zona)
+      const ocupatInst = ocupatsInst.has(`${pos}|${zona ?? '-'}`)
+      const ocupatFull = carroPerCellaParam.has(k)
+      const llAviat = lliureAviatPerCellaParam.has(k)
+      return (!ocupatInst && !ocupatFull) || llAviat
+    }
+    const slots: { pos: number; zona: ZonaMS | null; costat: 'esq' | 'dre' | 'cap' }[] = []
+    if (sub === 'SS') {
+      for (let p = 1; p <= 24; p++) {
+        if (!esDisp(p, null)) continue
+        const { col } = ssPosToCell(p)
+        slots.push({ pos: p, zona: null, costat: col <= 2 ? 'esq' : 'dre' })
+      }
+    } else {
+      const maxEsq = sub === 'MSG' ? 4 : 2
+      const maxDre = sub === 'MSG' ? 8 : 4
+      for (let p = 1; p <= maxEsq; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'esq' })
+      for (let p = maxEsq + 1; p <= maxDre; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'dre' })
+    }
+    return slots
+  }
+
+  // ── 3. Helper: calor futura d'un costat MS (existents + nous) ──────────
+  function calorCostatMS(
+    incInst: IncInst,
+    sub: SubTipus,
+    costat: 'esq' | 'dre',
+    novsCarros: { ous: number; setm: number }[]
+  ): number {
+    const [minP, maxP] = costat === 'esq'
+      ? (sub === 'MSG' ? [1, 4] : [1, 2])
+      : (sub === 'MSG' ? [5, 8] : [3, 4])
+    let calor = 0
+    for (const c of incInst.carros) {
+      if (c.posicio === null || c.dia_incubacio === null || c.setmanes_lot === null) continue
+      if (c.posicio < minP || c.posicio > maxP) continue
+      calor += calorFuturaCarro(c.quantitat_ous, c.setmanes_lot, c.dia_incubacio)
+    }
+    for (const nc of novsCarros) calor += calorFuturaCarro(nc.ous, nc.setm, 0)
+    return calor
+  }
+
+  // ── 4. Ordre d'incubadores per dia ──────────────────────────────────────
+  let ordreIncs: number[]
+  if (diaCarrega === 'dijous') {
+    const ssInsts = estatInstParam.incubadores
+      .filter(ii => { const inc = incsById.get(ii.id); return inc && subtipus(inc.tipus, inc.capacitat_carros) === 'SS' })
+      .sort((a, b) => slotsDisponibles(b).length - slotsDisponibles(a).length)
+    const ssNums = ssInsts.map(ii => incsById.get(ii.id)!.numero)
+    ordreIncs = [...ssNums, 1, 2, 8]
+  } else {
+    ordreIncs = [3, 4, 5, 6, 9, 10, 8]
+  }
+
+  // ── 5. Separar carros per SS i MS (dijous) ──────────────────────────────
+  let poolSS: CarroEstoc[] = []
+  let poolMS: CarroEstoc[] = [...pool]
+
+  if (diaCarrega === 'dijous') {
+    // Trobar SS disponible i quants slots té
+    const ssNum = ordreIncs.find(n => {
+      const inc = incByNumero.get(n)
+      if (!inc || subtipus(inc.tipus, inc.capacitat_carros) !== 'SS') return false
+      const inst = instById.get(inc.id)
+      return inst && slotsDisponibles(inst).length > 0
+    })
+    if (ssNum !== undefined) {
+      const ssInc = incByNumero.get(ssNum)!
+      const ssInst = instById.get(ssInc.id)!
+      const nSlotsSS = slotsDisponibles(ssInst).length
+      // Del pool, agafar els K carros amb més setmanes_lot per a SS
+      const poolOrdenatPerSetm = [...pool].sort((a, b) =>
+        setmanesLot(b.lots_reproductores.data_naixement) - setmanesLot(a.lots_reproductores.data_naixement)
+      )
+      poolSS = poolOrdenatPerSetm.slice(0, nSlotsSS)
+      const idsSS = new Set(poolSS.map(c => c.id))
+      poolMS = pool.filter(c => !idsSS.has(c.id))
+    }
+  }
+
+  // ── 6. Assignació ────────────────────────────────────────────────────────
+  const assignats = new Set<number>()
+
+  for (const num of ordreIncs) {
+    const inc = incByNumero.get(num)
+    if (!inc) continue
+    const incInst = instById.get(inc.id)
+    if (!incInst) continue
+    const sub = subtipus(inc.tipus, inc.capacitat_carros)
+    const slots = slotsDisponibles(incInst)
+    if (slots.length === 0) continue
+
+    if (sub === 'SS') {
+      // Carros per SS: els preseleccionats (poolSS), menys calor → central
+      const carrosAquiSS = poolSS.filter(c => !assignats.has(c.id))
+      if (carrosAquiSS.length === 0) continue
+
+      // Calcular calor futura per cada carro
+      const ambCalor = carrosAquiSS.map(c => {
+        const setm = setmanesLot(c.lots_reproductores.data_naixement)
+        return { c, calor: calorFuturaCarro(c.quantitat_ous, setm, 0) }
+      })
+
+      // Slots SS ordenats: central (9-16) primer → paret (1-8) → pulsator (17-24)
+      const slotsSSOrds = [...slots].sort((a, b) => {
+        const ord = (p: number) => p >= 9 && p <= 16 ? 0 : p >= 1 && p <= 8 ? 1 : 2
+        if (ord(a.pos) !== ord(b.pos)) return ord(a.pos) - ord(b.pos)
+        // Dins la mateixa zona: alternar esq/dre (parelles)
+        const costatOrd = (p: number) => {
+          const { col } = ssPosToCell(p)
+          return col <= 2 ? 0 : 1
+        }
+        if (costatOrd(a.pos) !== costatOrd(b.pos)) return costatOrd(a.pos) - costatOrd(b.pos)
+        return a.pos - b.pos
+      })
+
+      // Carros de menys calor → posicions centrals (menys calor)
+      // Assignar parelles: 1 esq + 1 dre per mantenir equilibri
+      ambCalor.sort((a, b) => a.calor - b.calor)
+      const n = Math.min(ambCalor.length, slotsSSOrds.length)
+      for (let i = 0; i < n; i++) {
+        const carro = ambCalor[i].c
+        const slot = slotsSSOrds[i]
+        resultat.set(carro.id, { incId: incInst.id, pos: slot.pos, zona: slot.zona })
+        assignats.add(carro.id)
+      }
+
+    } else {
+      // MS: lots consecutius (garantit per l'ordre del pool), equilibri ESQ/DRE
+      const carrosAquiMS = poolMS.filter(c => !assignats.has(c.id))
+      if (carrosAquiMS.length === 0) continue
+
+      const slotsEsq = slots.filter(s => s.costat === 'esq').sort((a, b) => a.pos - b.pos)
+      const slotsDre = slots.filter(s => s.costat === 'dre').sort((a, b) => a.pos - b.pos)
+      const nTotal = Math.min(carrosAquiMS.length, slots.length)
+      const nEsq = Math.min(Math.ceil(nTotal / 2), slotsEsq.length)
+      const nDre = Math.min(nTotal - nEsq, slotsDre.length)
+      const carrosAquiTallats = carrosAquiMS.slice(0, nEsq + nDre)
+
+      // Opció A: primers carros → esq, resta → dre
+      const esqA = carrosAquiTallats.slice(0, nEsq)
+      const dreA = carrosAquiTallats.slice(nEsq, nEsq + nDre)
+      // Opció B: primers carros → dre, resta → esq
+      const dreB = carrosAquiTallats.slice(0, nDre)
+      const esqB = carrosAquiTallats.slice(nDre, nDre + nEsq)
+
+      const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
+      const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
+      const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqB)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreB)))
+
+      const [esqFinal, dreFinal] = deseqA <= deseqB ? [esqA, dreA] : [esqB, dreB]
+
+      for (let i = 0; i < esqFinal.length && i < slotsEsq.length; i++) {
+        resultat.set(esqFinal[i].id, { incId: incInst.id, pos: slotsEsq[i].pos, zona: slotsEsq[i].zona })
+        assignats.add(esqFinal[i].id)
+      }
+      for (let i = 0; i < dreFinal.length && i < slotsDre.length; i++) {
+        resultat.set(dreFinal[i].id, { incId: incInst.id, pos: slotsDre[i].pos, zona: slotsDre[i].zona })
+        assignats.add(dreFinal[i].id)
+      }
+    }
+  }
+
+  return resultat
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Component principal
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -617,34 +855,23 @@ export default function Planificacio() {
 
   // ── Pre-suggerit
   function aplicarPreSuggerit() {
-    const cellesSel: CellaSel[] = []
-    seleccionades.forEach((k) => {
-      const parts = k.split('|')
-      const incId = parseInt(parts[0], 10)
-      const pos = parseInt(parts[1], 10)
-      const zona = parts[2] === '-' ? null : (parts[2] as ZonaMS)
-      const { col } = ssPosToCell(pos)
-      cellesSel.push({
-        incId,
-        pos,
-        zona,
-        prioritat: col,
-        costat: 'cap',
-        columna: col,
-      })
-    })
-    const sug = preSuggerit(carrosPendents, cellesSel, incsById)
+    if (!full || !estatInst) return
+    const sug = suggerirAssignacioCompleta(
+      carrosPendents,
+      full,
+      incs,
+      estatInst,
+      dia,
+      lliureAviatPerCella,
+      carroPerCella
+    )
+    if (sug.size === 0) return
     setColocats(prev => {
       const m = new Map(prev)
       sug.forEach((p, cid) => m.set(cid, p))
       return m
     })
-    // Treure de seleccionades les cel·les que s'han omplert
-    setSeleccionades(prev => {
-      const s = new Set(prev)
-      sug.forEach((p) => s.delete(keyCell(p.incId, p.pos, p.zona)))
-      return s
-    })
+    setSeleccionades(new Set())
   }
 
   // ── Optimització tèrmica de zones MS
@@ -884,7 +1111,7 @@ export default function Planificacio() {
           <Link href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none', marginRight: 8 }}>Tornar al full</Link>
           <button onClick={netejarSeleccio} style={btnStyle(false)}>Netejar selecció</button>
           <button onClick={reiniciar} style={btnStyle(false)}>Reiniciar</button>
-          <button onClick={aplicarPreSuggerit} style={btnStyle(false)} disabled={seleccionades.size === 0 || carrosPendents.length === 0}>Pre-suggerit sobre seleccionades</button>
+          <button onClick={aplicarPreSuggerit} style={btnStyle(false)} disabled={carrosPendents.length === 0 || !full || !estatInst}>Suggereix assignació</button>
           <button
             onClick={aplicarOptimitzacioTermica}
             disabled={!hiHaMsColocats}

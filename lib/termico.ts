@@ -211,3 +211,19 @@ export function suggerirZonaMS(
 
   return millorZona
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calor futura total d'un carro des del dia actual fins al dia 19.
+// Útil per comparar càrregues tèrmiques entre costats d'una incubadora.
+// ─────────────────────────────────────────────────────────────────────────────
+export function calorFuturaCarro(
+  quantitat_ous: number,
+  setmanes_lot: number,
+  diaActual: number
+): number {
+  let total = 0
+  for (let d = Math.max(0, Math.round(diaActual)); d <= 19; d++) {
+    total += indexCalorCarro(quantitat_ous, setmanes_lot, d)
+  }
+  return total
+}
