@@ -222,6 +222,13 @@ export default function Expedicions() {
   const [creant, setCreant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
+  const [mostrarNovaGranja, setMostrarNovaGranja] = useState(false)
+  const [novaGranjaNom, setNovaGranjaNom] = useState('')
+  const [novaGranjaNau, setNovaGranjaNau] = useState('')
+  const [novaGranjaPoblacio, setNovaGranjaPoblacio] = useState('')
+  const [creantGranja, setCreantGranja] = useState(false)
+  const [errorGranja, setErrorGranja] = useState('')
+
   const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
   const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
 
@@ -251,6 +258,36 @@ export default function Expedicions() {
       .then(r => r.json())
       .then(setDestinacions)
   }, [comandaId, full])
+
+  async function crearNovaGranja() {
+    if (!novaGranjaNom.trim()) return
+    setCreantGranja(true)
+    setErrorGranja('')
+    const comanda = full?.comandes.find(c => c.id === parseInt(comandaId))
+    const res = await fetch('/api/destinacions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nom_granja: novaGranjaNom.trim(),
+        nau: novaGranjaNau.trim() || null,
+        poblacio: novaGranjaPoblacio.trim() || null,
+        client_id: comanda?.clients.id || null,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setErrorGranja(data.error || 'Error desconegut')
+    } else {
+      setDestinacions(prev => [...prev, data].sort((a, b) => a.nom_granja.localeCompare(b.nom_granja)))
+      setDestinacioId(String(data.id))
+      setCercaDestinacio(data.nom_granja)
+      setMostrarNovaGranja(false)
+      setNovaGranjaNom('')
+      setNovaGranjaNau('')
+      setNovaGranjaPoblacio('')
+    }
+    setCreantGranja(false)
+  }
 
   async function crearExpedicio() {
     if (!comandaId || !destinacioId) return
@@ -297,6 +334,10 @@ export default function Expedicions() {
       setPolletsM('')
       setPolletsF('')
       setCercaDestinacio('')
+      setMostrarNovaGranja(false)
+      setNovaGranjaNom('')
+      setNovaGranjaNau('')
+      setNovaGranjaPoblacio('')
       carregarDades()
     }
     setCreant(false)
@@ -503,7 +544,89 @@ export default function Expedicions() {
 
             {comandaId && (
               <div>
-                <label style={labelStyle}>Destinació</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Destinació</label>
+                  <button
+                    type="button"
+                    onClick={() => { setMostrarNovaGranja(!mostrarNovaGranja); setErrorGranja('') }}
+                    style={{
+                      fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', padding: '0.2rem 0.6rem',
+                      borderRadius: '5px', cursor: 'pointer', border: '1px solid',
+                      borderColor: mostrarNovaGranja ? 'var(--accent)' : 'var(--border)',
+                      background: mostrarNovaGranja ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
+                      color: mostrarNovaGranja ? 'var(--accent)' : 'var(--text-dim)',
+                    }}
+                  >
+                    + Nova granja
+                  </button>
+                </div>
+
+                {mostrarNovaGranja && (
+                  <div style={{ background: 'rgba(240,180,41,0.07)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nova granja</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.5rem' }}>
+                      <div>
+                        <label style={labelStyle}>Nom granja *</label>
+                        <input
+                          type="text"
+                          value={novaGranjaNom}
+                          onChange={e => setNovaGranjaNom(e.target.value)}
+                          placeholder="Ex: Can Puig"
+                          style={inputStyle}
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Nau</label>
+                        <input
+                          type="text"
+                          value={novaGranjaNau}
+                          onChange={e => setNovaGranjaNau(e.target.value)}
+                          placeholder="Ex: A"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Població</label>
+                        <input
+                          type="text"
+                          value={novaGranjaPoblacio}
+                          onChange={e => setNovaGranjaPoblacio(e.target.value)}
+                          placeholder="Ex: Girona"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                    {errorGranja && (
+                      <div style={{ padding: '0.4rem 0.6rem', borderRadius: '5px', background: 'rgba(240,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
+                        {errorGranja}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setMostrarNovaGranja(false); setNovaGranjaNom(''); setNovaGranjaNau(''); setNovaGranjaPoblacio(''); setErrorGranja('') }}
+                        style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans', fontSize: '0.82rem' }}
+                      >
+                        Cancel·lar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={crearNovaGranja}
+                        disabled={!novaGranjaNom.trim() || creantGranja}
+                        style={{
+                          flex: 2, padding: '0.5rem', border: 'none', borderRadius: '6px', fontWeight: 700,
+                          fontFamily: 'IBM Plex Sans', fontSize: '0.82rem', cursor: 'pointer',
+                          background: (!novaGranjaNom.trim() || creantGranja) ? 'var(--border)' : 'var(--accent)',
+                          color: (!novaGranjaNom.trim() || creantGranja) ? 'var(--text-dim)' : '#0f1117',
+                        }}
+                      >
+                        {creantGranja ? 'Creant...' : 'Crear granja'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <input type="text" placeholder="Cerca granja..." value={cercaDestinacio} onChange={e => setCercaDestinacio(e.target.value)} style={{ ...inputStyle, marginBottom: '0.4rem' }} />
                 <select value={destinacioId} onChange={e => setDestinacioId(e.target.value)} style={{ ...inputStyle, appearance: 'none' }} size={5}>
                   <option value="">Selecciona destinació...</option>
