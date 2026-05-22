@@ -386,7 +386,8 @@ function suggerirAssignacioCompleta(
   estatInstParam: EstatInst,
   diaCarrega: Dia,
   lliureAviatPerCellaParam: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>,
-  carroPerCellaParam: Map<string, number>
+  carroPerCellaParam: Map<string, number>,
+  incsFiltrades: Set<number> = new Set()
 ): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
   const resultat = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
   if (carrosPendents.length === 0) return resultat
@@ -468,7 +469,19 @@ function suggerirAssignacioCompleta(
     return slots
   }
 
-  // ── 3. Helper: calor futura d'un costat MS (existents + nous) ──────────
+  // ── 3a. Helper: un lot consecutiu des de la posició `start` fins a `maxN` ─
+  function nextLotSlice(arr: CarroEstoc[], start: number, maxN: number): CarroEstoc[] {
+    if (start >= arr.length || maxN === 0) return []
+    const lotId = arr[start].lots_reproductores.id
+    const res: CarroEstoc[] = []
+    for (let i = start; i < arr.length && res.length < maxN; i++) {
+      if (arr[i].lots_reproductores.id !== lotId) break
+      res.push(arr[i])
+    }
+    return res
+  }
+
+  // ── 3b. Helper: calor futura d'un costat MS (existents + nous) ──────────
   function calorCostatMS(
     incInst: IncInst,
     sub: SubTipus,
@@ -527,9 +540,17 @@ function suggerirAssignacioCompleta(
   }
 
   // ── 6. Assignació ────────────────────────────────────────────────────────
+  // Si l'usuari ha pre-seleccionat incubadores, filtrar ordreIncs per elles
+  const ordreIncsFiltrat = incsFiltrades.size > 0
+    ? ordreIncs.filter(n => {
+        const inc = incByNumero.get(n)
+        return inc && incsFiltrades.has(inc.id)
+      })
+    : ordreIncs
+
   const assignats = new Set<number>()
 
-  for (const num of ordreIncs) {
+  for (const num of ordreIncsFiltrat) {
     const inc = incByNumero.get(num)
     if (!inc) continue
     const incInst = instById.get(inc.id)
@@ -574,23 +595,20 @@ function suggerirAssignacioCompleta(
       }
 
     } else {
-      // MS: lots consecutius (garantit per l'ordre del pool), equilibri ESQ/DRE
+      // MS: un sol lot per costat, equilibri ESQ/DRE
       const carrosAquiMS = poolMS.filter(c => !assignats.has(c.id))
       if (carrosAquiMS.length === 0) continue
 
       const slotsEsq = slots.filter(s => s.costat === 'esq').sort((a, b) => a.pos - b.pos)
       const slotsDre = slots.filter(s => s.costat === 'dre').sort((a, b) => a.pos - b.pos)
-      const nTotal = Math.min(carrosAquiMS.length, slots.length)
-      const nEsq = Math.min(Math.ceil(nTotal / 2), slotsEsq.length)
-      const nDre = Math.min(nTotal - nEsq, slotsDre.length)
-      const carrosAquiTallats = carrosAquiMS.slice(0, nEsq + nDre)
+      if (slotsEsq.length === 0 && slotsDre.length === 0) continue
 
-      // Opció A: primers carros → esq, resta → dre
-      const esqA = carrosAquiTallats.slice(0, nEsq)
-      const dreA = carrosAquiTallats.slice(nEsq, nEsq + nDre)
-      // Opció B: primers carros → dre, resta → esq
-      const dreB = carrosAquiTallats.slice(0, nDre)
-      const esqB = carrosAquiTallats.slice(nDre, nDre + nEsq)
+      // Opció A: primer lot → esq (fins a omplir o acabar lot), continuació → dre
+      const esqA = nextLotSlice(carrosAquiMS, 0, slotsEsq.length)
+      const dreA = nextLotSlice(carrosAquiMS, esqA.length, slotsDre.length)
+      // Opció B: primer lot → dre, continuació → esq
+      const dreB = nextLotSlice(carrosAquiMS, 0, slotsDre.length)
+      const esqB = nextLotSlice(carrosAquiMS, dreB.length, slotsEsq.length)
 
       const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
       const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
@@ -637,6 +655,17 @@ export default function Planificacio() {
   const [dia, setDia] = useState<Dia>('dijous')
   const [mspOrdre, setMspOrdre] = useState<number[]>([8, 9, 10])
   const [mostrarProjectat, setMostrarProjectat] = useState(true)
+  // Pre-selecció d'incubadores per al suggeriment (buit = totes)
+  const [incsFiltrades, setIncsFiltrades] = useState<Set<number>>(new Set())
+
+  function toggleIncFiltrada(incId: number) {
+    setIncsFiltrades(prev => {
+      const s = new Set(prev)
+      if (s.has(incId)) s.delete(incId)
+      else s.add(incId)
+      return s
+    })
+  }
 
   // ── Càrrega inicial
   const carregarDades = useCallback(async () => {
@@ -875,7 +904,8 @@ export default function Planificacio() {
       estatInst,
       dia,
       lliureAviatPerCella,
-      carroPerCella
+      carroPerCella,
+      incsFiltrades
     )
     if (sug.size === 0) return
     setColocats(prev => {
@@ -884,6 +914,26 @@ export default function Planificacio() {
       return m
     })
     setSeleccionades(new Set())
+
+    // Avís si pollets previstos per sota de la comanda
+    const comandaPollets = full.comandes
+      .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
+      .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
+    if (comandaPollets > 0) {
+      const polletsSug = Array.from(sug.keys()).reduce((acc, cid) => {
+        const c = carrosPendents.find(x => x.id === cid)
+        if (!c) return acc
+        const setm = setmanesLot(c.lots_reproductores.data_naixement)
+        return acc + c.quantitat_ous * fertilitatEstimada(setm) * ECLOSIO_EST
+      }, 0)
+      if (polletsSug < comandaPollets - 500) {
+        setErrorMsg(
+          `⚠️ Atenció: els ${sug.size} carros assignats preveuen ~${Math.round(polletsSug).toLocaleString('ca')} pollets, ` +
+          `per sota de la comanda (${comandaPollets.toLocaleString('ca')}). ` +
+          `Necessites seleccionar més incubadores o afegir carros.`
+        )
+      }
+    }
   }
 
   // ── Optimització tèrmica de zones MS
@@ -1001,6 +1051,9 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                filtrada={incsFiltrades.has(inc.id)}
+                anyFiltrada={incsFiltrades.size > 0}
+                onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
                 onClicCella={(p) => toggleSeleccio(inc.id, p, null)}
                 onSelLliures={() => seleccionarLliuresInc(inc)}
                 onDragStartCarro={onDragStartCarro}
@@ -1021,6 +1074,9 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                filtrada={incsFiltrades.has(inc.id)}
+                anyFiltrada={incsFiltrades.size > 0}
+                onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
                 onSelLliures={() => seleccionarLliuresInc(inc)}
                 onDragStartCarro={onDragStartCarro}
@@ -1044,6 +1100,9 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                filtrada={incsFiltrades.has(inc.id)}
+                anyFiltrada={incsFiltrades.size > 0}
+                onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
                 onClicCella={(p, z) => toggleSeleccio(inc.id, p, z)}
                 onSelLliures={() => seleccionarLliuresInc(inc)}
                 onDragStartCarro={onDragStartCarro}
@@ -1114,10 +1173,16 @@ export default function Planificacio() {
       )}
 
       <footer style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #d4d4d4', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -2px 8px rgba(0,0,0,0.04)', zIndex: 40 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>
+        <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 8 }}>
           {carrosPendents.length > 0 && <>Queden <b style={{ color: '#1f2937' }}>{carrosPendents.length}</b> carros sense ubicar</>}
           {carrosPendents.length === 0 && colocats.size > 0 && <>Tots els carros estan col·locats ({colocats.size})</>}
           {' · '}<span>{seleccionades.size} cel·les seleccionades</span>
+          {incsFiltrades.size > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#dbeafe', color: '#1d4ed8', borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>
+              ✓ {incsFiltrades.size} inc. seleccionades
+              <button onClick={() => setIncsFiltrades(new Set())} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', fontSize: 14, padding: '0 2px', lineHeight: 1 }} title="Esborra filtre">×</button>
+            </span>
+          )}
         </div>
         <div>
           <Link href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none', marginRight: 8 }}>Tornar al full</Link>
@@ -1261,17 +1326,23 @@ interface CellPropsCommon {
   mostrarProjectat: boolean
 }
 
-function IncubadoraSS({ inc, onClicCella, onDropCell, ...p }: CellPropsCommon & {
+function IncubadoraSS({ inc, onClicCella, onDropCell, filtrada, anyFiltrada, onToggleFiltrada, ...p }: CellPropsCommon & {
   inc: Incubadora
   onClicCella: (pos: number) => void
   onDropCell: (pos: number) => (e: React.DragEvent) => void
+  filtrada: boolean
+  anyFiltrada: boolean
+  onToggleFiltrada: () => void
 }) {
   const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
   const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
+  const exclosa = anyFiltrada && !filtrada
   return (
-    <div style={cardInc()}>
+    <div style={{ ...cardInc(), outline: filtrada ? '2px solid #2563eb' : exclosa ? '1px solid #e5e7eb' : undefined, opacity: exclosa ? 0.5 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
-        <span style={{ fontWeight: 600 }}>SS {inc.numero}</span>
+        <button onClick={onToggleFiltrada} title={filtrada ? 'Exclou del suggeriment' : 'Inclou al suggeriment'} style={{ fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: filtrada ? '#2563eb' : '#1f2937', fontSize: 13 }}>
+          {filtrada ? '✓ ' : ''}SS {inc.numero}
+        </button>
         <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
           <button onClick={p.onSelLliures} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
@@ -1304,22 +1375,28 @@ function IncubadoraSS({ inc, onClicCella, onDropCell, ...p }: CellPropsCommon & 
   )
 }
 
-function IncubadoraMS({ inc, sub, onClicCella, onDropCell, ...p }: CellPropsCommon & {
+function IncubadoraMS({ inc, sub, onClicCella, onDropCell, filtrada, anyFiltrada, onToggleFiltrada, ...p }: CellPropsCommon & {
   inc: Incubadora
   sub: 'MSG' | 'MSP'
   onClicCella: (pos: number, zona: ZonaMS) => void
   onDropCell: (pos: number, zona: ZonaMS) => (e: React.DragEvent) => void
+  filtrada: boolean
+  anyFiltrada: boolean
+  onToggleFiltrada: () => void
 }) {
   const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
   const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
   const profunditat = sub === 'MSG' ? 4 : 2
   const posEsq = sub === 'MSG' ? [1, 2, 3, 4] : [1, 2]
   const posDre = sub === 'MSG' ? [5, 6, 7, 8] : [3, 4]
+  const exclosa = anyFiltrada && !filtrada
 
   return (
-    <div style={cardInc()}>
+    <div style={{ ...cardInc(), outline: filtrada ? '2px solid #2563eb' : exclosa ? '1px solid #e5e7eb' : undefined, opacity: exclosa ? 0.5 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
-        <span style={{ fontWeight: 600 }}>Inc {inc.numero}</span>
+        <button onClick={onToggleFiltrada} title={filtrada ? 'Exclou del suggeriment' : 'Inclou al suggeriment'} style={{ fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: filtrada ? '#2563eb' : '#1f2937', fontSize: 13 }}>
+          {filtrada ? '✓ ' : ''}Inc {inc.numero}
+        </button>
         <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
           <button onClick={p.onSelLliures} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
@@ -1484,6 +1561,6 @@ function chipNaix(): React.CSSProperties { return { background: '#4b5563', color
 function miniBtn(): React.CSSProperties { return { background: '#fff', border: '1px solid #d4d4d4', borderRadius: 3, cursor: 'pointer', fontSize: 10 } }
 function btnStyle(primari: boolean): React.CSSProperties {
   return primari
-    ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
-    : { padding: '8px 14px', borderRadius: 6, border: '1px solid #d4d4d4', background: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8 }
+    ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8, fontWeight: 600 }
+    : { padding: '8px 14px', borderRadius: 6, border: '1px solid #6b7280', background: '#f3f4f6', color: '#1f2937', cursor: 'pointer', fontSize: 13, marginLeft: 8, fontWeight: 500 }
 }
