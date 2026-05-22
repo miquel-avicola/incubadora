@@ -61,6 +61,16 @@ export default function DetallCarrega() {
   const [desantGrup, setDesantGrup] = useState(false)
   const [desantMaquila, setDesantMaquila] = useState(false)
 
+  // Afegir comanda a posteriori
+  const [clients, setClients] = useState<{ id: number; nom: string }[]>([])
+  const [mostrarFormComanda, setMostrarFormComanda] = useState(false)
+  const [nouClientId, setNouClientId] = useState('')
+  const [nouTipus, setNouTipus] = useState<'Pollets' | 'Maquila'>('Pollets')
+  const [nouQuantitat, setNouQuantitat] = useState('')
+  const [nouSexat, setNouSexat] = useState(false)
+  const [desantComanda, setDesantComanda] = useState(false)
+  const [errorComanda, setErrorComanda] = useState('')
+
   const carregarDades = useCallback(() => {
     if (!params.id) return
     fetch(`/api/carrega/${params.id}`)
@@ -69,6 +79,46 @@ export default function DetallCarrega() {
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
+
+  useEffect(() => {
+    fetch('/api/clients-list').then(r => r.json()).then(setClients)
+  }, [])
+
+  async function afegirComanda() {
+    if (!full || !nouClientId || !nouQuantitat) { setErrorComanda('Omple tots els camps'); return }
+    const q = parseInt(nouQuantitat)
+    if (!q || q <= 0) { setErrorComanda('La quantitat ha de ser positiva'); return }
+    setDesantComanda(true)
+    setErrorComanda('')
+    const body: Record<string, unknown> = {
+      full_carrega_id: full.id,
+      client_id: parseInt(nouClientId),
+      tipus: nouTipus,
+      sexat: nouSexat,
+    }
+    if (nouTipus === 'Pollets') body.quantitat_pollets = q
+    else body.quantitat_ous_maquila = q
+    const res = await fetch('/api/comandes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const d = await res.json()
+      setErrorComanda(d.error || 'Error desconegut')
+    } else {
+      setMostrarFormComanda(false)
+      setNouClientId(''); setNouQuantitat(''); setNouSexat(false); setNouTipus('Pollets')
+      carregarDades()
+    }
+    setDesantComanda(false)
+  }
+
+  async function eliminarComanda(id: number) {
+    if (!confirm('Vols eliminar aquesta comanda?')) return
+    await fetch(`/api/comandes/${id}`, { method: 'DELETE' })
+    carregarDades()
+  }
 
   const toggleMaquilaCarro = async (assignacioId: number, actual: boolean) => {
     if (desantMaquila) return
@@ -433,22 +483,100 @@ export default function DetallCarrega() {
 
         {/* Comandes */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Comandes</div>
-          {full.comandes.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Comandes</div>
+            <button
+              onClick={() => { setMostrarFormComanda(v => !v); setErrorComanda('') }}
+              style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--accent)', background: mostrarFormComanda ? 'var(--accent)' : 'transparent', color: mostrarFormComanda ? '#fff' : 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {mostrarFormComanda ? '× Cancel·la' : '+ Afegir comanda'}
+            </button>
+          </div>
+
+          {full.comandes.length === 0 && !mostrarFormComanda && (
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>Sense comandes</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          )}
+          {full.comandes.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: mostrarFormComanda ? '0.75rem' : 0 }}>
               {full.comandes.map(c => (
                 <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: 'var(--bg)', borderRadius: '8px' }}>
                   <div>
                     <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.clients.nom}</span>
                     {c.sexat && <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono' }}>SEXAT</span>}
                   </div>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
-                    {c.tipus === 'Pollets' ? `${(c.quantitat_pollets || 0).toLocaleString()} pollets` : `${(c.quantitat_ous_maquila || 0).toLocaleString()} ous maq.`}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                      {c.tipus === 'Pollets' ? `${(c.quantitat_pollets || 0).toLocaleString()} pollets` : `${(c.quantitat_ous_maquila || 0).toLocaleString()} ous maq.`}
+                    </span>
+                    <button
+                      onClick={() => eliminarComanda(c.id)}
+                      title="Eliminar comanda"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '1rem', lineHeight: 1, padding: '2px 4px', borderRadius: 4 }}
+                    >×</button>
+                  </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {mostrarFormComanda && (
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>Client</label>
+                  <select
+                    value={nouClientId}
+                    onChange={e => setNouClientId(e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.85rem', background: 'var(--surface)' }}
+                  >
+                    <option value="">— Selecciona —</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>Tipus</label>
+                  <select
+                    value={nouTipus}
+                    onChange={e => setNouTipus(e.target.value as 'Pollets' | 'Maquila')}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.85rem', background: 'var(--surface)' }}
+                  >
+                    <option value="Pollets">Pollets</option>
+                    <option value="Maquila">Maquila (ous)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>
+                    {nouTipus === 'Pollets' ? 'Quantitat pollets' : 'Quantitat ous maquila'}
+                  </label>
+                  <input
+                    type="number"
+                    value={nouQuantitat}
+                    onChange={e => setNouQuantitat(e.target.value)}
+                    placeholder="0"
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.85rem', background: 'var(--surface)', boxSizing: 'border-box' }}
+                  />
+                </div>
+                {nouTipus === 'Pollets' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: '1.2rem' }}>
+                    <input
+                      type="checkbox"
+                      id="nou-sexat"
+                      checked={nouSexat}
+                      onChange={e => setNouSexat(e.target.checked)}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    <label htmlFor="nou-sexat" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>Sexat</label>
+                  </div>
+                )}
+              </div>
+              {errorComanda && <p style={{ color: '#dc2626', fontSize: '0.8rem', margin: 0 }}>{errorComanda}</p>}
+              <button
+                onClick={afegirComanda}
+                disabled={desantComanda}
+                style={{ alignSelf: 'flex-end', padding: '7px 18px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', cursor: desantComanda ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+              >
+                {desantComanda ? 'Guardant...' : 'Guardar comanda'}
+              </button>
             </div>
           )}
         </div>
