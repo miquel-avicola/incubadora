@@ -12,6 +12,7 @@ import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, calorFuturaCarro, 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
 type SubTipus = 'SS' | 'MSG' | 'MSP' | 'NAIX'
 type Dia = 'dijous' | 'dilluns'
+type Fase = 'seleccio' | 'assignacio'
 
 interface CarroEstoc {
   id: number
@@ -150,6 +151,47 @@ function diesEstoc(posta: string, carrega: string): number {
 function setmanesLot(dataNaixement: string): number {
   const ms = Date.now() - new Date(dataNaixement + 'T00:00:00').getTime()
   return Math.floor(ms / (7 * 24 * 60 * 60 * 1000))
+}
+
+// Replica TypeScript de la funció PL/pgSQL offset_per_dia().
+// Retorna l'offset de numeració per a una incubadora donada.
+// num_carro_full = offset + posicio
+function offsetPerDia(
+  dia: Dia,
+  tipus: string,
+  cap: number,
+  incNumero: number,
+  ssPrincipalNum: number | null,
+  mspOrdre: number[]
+): number | null {
+  if (dia === 'dijous') {
+    if (tipus === 'Singlestage') {
+      if (ssPrincipalNum === null) return null
+      return incNumero === ssPrincipalNum ? 0 : 100
+    } else if (cap === 24) {
+      if (incNumero === 1) return 24
+      if (incNumero === 2) return 32
+      return 200 + incNumero * 8
+    } else {
+      const idx = mspOrdre.indexOf(incNumero)
+      return idx >= 0 ? 40 + idx * 4 : null
+    }
+  } else { // dilluns
+    if (tipus === 'Singlestage') return 100
+    if (cap === 24) {
+      if (incNumero >= 3 && incNumero <= 6) return (incNumero - 3) * 8
+      return 200 + incNumero * 8
+    } else {
+      const idx = mspOrdre.indexOf(incNumero)
+      return idx >= 0 ? 32 + idx * 4 : null
+    }
+  }
+}
+
+// Pollets estimats per a un carro (fertilitat × ous × eclosió)
+function polletsCarro(c: CarroEstoc): number {
+  const setm = setmanesLot(c.lots_reproductores.data_naixement)
+  return Math.round(c.quantitat_ous * fertilitatEstimada(setm) * ECLOSIO_EST)
 }
 
 // Optimitza les zones (central/paret/pulsator) dels carros MS del full actual
@@ -761,6 +803,9 @@ export default function Planificacio() {
   const [mostrarProjectat, setMostrarProjectat] = useState(true)
   // Pre-selecció d'incubadores per al suggeriment (buit = totes)
   const [incsFiltrades, setIncsFiltrades] = useState<Set<number>>(new Set())
+  // Flux de dos passos: selecció de carros → assignació visual
+  const [fase, setFase] = useState<Fase>('seleccio')
+  const [carrosSeleccionats, setCarrosSeleccionats] = useState<Set<number>>(new Set())
 
   function toggleIncFiltrada(incId: number) {
     setIncsFiltrades(prev => {
@@ -802,11 +847,24 @@ export default function Planificacio() {
       setColocats(mapaInicial)
       setSeleccionades(new Set())
 
-      // Inferir dia
+      // Inferir dia i ajustar mspOrdre per defecte
       if (fullRes?.carrega) {
         const d = diaDeFull(fullRes.carrega)
-        if (d) setDia(d)
+        if (d) {
+          setDia(d)
+          // Dilluns: ruta és inc 9, 10, 8 (no 8, 9, 10)
+          setMspOrdre(d === 'dilluns' ? [9, 10, 8] : [8, 9, 10])
+        }
       }
+
+      // Pre-seleccionar els carros ja assignats al full (si es torna a la pàgina)
+      const idsAssignats = new Set<number>(
+        (fullRes?.assignacions ?? []).map((a: AssignacioActual) => a.carros_estoc.id)
+      )
+      setCarrosSeleccionats(idsAssignats)
+      // Si ja hi ha assignacions, anar directament a la fase visual
+      if (idsAssignats.size > 0) setFase('assignacio')
+      else setFase('seleccio')
     } catch (e) {
       setErrorMsg('Error carregant dades: ' + String(e))
     } finally {
@@ -841,10 +899,46 @@ export default function Planificacio() {
     return Array.from(ja.values())
   }, [disponibles, full])
 
-  // Carros que encara NO estan col·locats al mapa
+  // En fase 2, limitar al pool de carros seleccionats a la fase 1
+  const carrosLotFiltrats = useMemo<CarroEstoc[]>(() => {
+    if (carrosSeleccionats.size === 0) return carrosLot
+    return carrosLot.filter(c => carrosSeleccionats.has(c.id))
+  }, [carrosLot, carrosSeleccionats])
+
+  // Carros que encara NO estan col·locats al mapa (limitats als seleccionats)
   const carrosPendents = useMemo<CarroEstoc[]>(() => {
-    return carrosLot.filter(c => !colocats.has(c.id))
-  }, [carrosLot, colocats])
+    return carrosLotFiltrats.filter(c => !colocats.has(c.id))
+  }, [carrosLotFiltrats, colocats])
+
+  // Número SS principal per al dia (mínim numero de SS en colocats, com fa la BD)
+  const ssPrincipalNum = useMemo<number | null>(() => {
+    const ssNums: number[] = []
+    colocats.forEach((p) => {
+      const inc = incsById.get(p.incId)
+      if (inc && inc.tipus === 'Singlestage') ssNums.push(inc.numero)
+    })
+    return ssNums.length > 0 ? Math.min(...ssNums) : null
+  }, [colocats, incsById])
+
+  // Mapa keyCell → num_carro_full potencial (mostra #N a cada slot)
+  const numCarroPerCella = useMemo<Map<string, number>>(() => {
+    const m = new Map<string, number>()
+    for (const inc of incs) {
+      const sub = subtipus(inc.tipus, inc.capacitat_carros)
+      const offset = offsetPerDia(dia, inc.tipus, inc.capacitat_carros, inc.numero, ssPrincipalNum, mspOrdre)
+      if (offset === null) continue
+      if (sub === 'SS') {
+        for (let pos = 1; pos <= 24; pos++) m.set(keyCell(inc.id, pos, null), offset + pos)
+      } else if (sub === 'MSG') {
+        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[])
+          for (let pos = 1; pos <= 8; pos++) m.set(keyCell(inc.id, pos, z), offset + pos)
+      } else { // MSP
+        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[])
+          for (let pos = 1; pos <= 4; pos++) m.set(keyCell(inc.id, pos, z), offset + pos)
+      }
+    }
+    return m
+  }, [incs, dia, mspOrdre, ssPrincipalNum])
 
   // Map de cel·la → carro_id col·locat
   const carroPerCella = useMemo(() => {
@@ -1179,9 +1273,268 @@ export default function Planificacio() {
     )
   }
 
+  // ── Fase 1: Selecció de carros ──────────────────────────────────────────
+  if (fase === 'seleccio') {
+    // Comanda de pollets (exclou maquila)
+    const comandaPollets = full.comandes
+      .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
+      .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
+    const comandaMaquila = full.comandes
+      .filter(c => c.tipus === 'maquila' && c.quantitat_ous_maquila !== null && c.quantitat_ous_maquila > 0)
+      .reduce((s, c) => s + (c.quantitat_ous_maquila ?? 0), 0)
+
+    // Pollets estimats dels carros seleccionats
+    const polletsSel = carrosLot
+      .filter(c => carrosSeleccionats.has(c.id))
+      .reduce((s, c) => s + polletsCarro(c), 0)
+
+    // Agrupar carros per lot (lots_reproductores.id), ordenar lots per dies estoc DESC
+    type GrupLot = {
+      lotId: number
+      granja: string
+      estirp: string | null
+      dataNaix: string
+      setmanes: number
+      carros: CarroEstoc[]
+    }
+    const grupsMap = new Map<number, GrupLot>()
+    for (const c of carrosLot) {
+      const lot = c.lots_reproductores
+      if (!grupsMap.has(lot.id)) {
+        grupsMap.set(lot.id, {
+          lotId: lot.id,
+          granja: lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja,
+          estirp: lot.estirp,
+          dataNaix: lot.data_naixement,
+          setmanes: setmanesLot(lot.data_naixement),
+          carros: [],
+        })
+      }
+      grupsMap.get(lot.id)!.carros.push(c)
+    }
+    // Ordenar carros dins de cada lot per dies estoc DESC (posta més antiga primer)
+    grupsMap.forEach(g => {
+      g.carros.sort((a, b) => diesEstoc(a.posta, full.carrega) - diesEstoc(b.posta, full.carrega))
+    })
+    // Ordenar lots pel dies estoc màxim del primer carro de cada lot (DESC)
+    const grups = Array.from(grupsMap.values()).sort((a, b) =>
+      diesEstoc(a.carros[0].posta, full.carrega) - diesEstoc(b.carros[0].posta, full.carrega)
+    )
+
+    const toggleCarro = (id: number) => {
+      setCarrosSeleccionats(prev => {
+        const s = new Set(prev)
+        if (s.has(id)) s.delete(id); else s.add(id)
+        return s
+      })
+    }
+    const toggleLot = (ids: number[]) => {
+      const tots = ids.every(id => carrosSeleccionats.has(id))
+      setCarrosSeleccionats(prev => {
+        const s = new Set(prev)
+        if (tots) ids.forEach(id => s.delete(id))
+        else ids.forEach(id => s.add(id))
+        return s
+      })
+    }
+    const seleccionarTots = () => {
+      setCarrosSeleccionats(new Set(carrosLot.map(c => c.id)))
+    }
+
+    const pctPollets = comandaPollets > 0 ? Math.round((polletsSel / comandaPollets) * 100) : null
+    const colorPct = pctPollets === null ? '#6b7280'
+      : pctPollets < 90 ? '#b45309'
+      : pctPollets > 115 ? '#b45309'
+      : '#15803d'
+
+    return (
+      <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '80px' }}>
+        {/* Capçalera */}
+        <header style={{ background: '#fff', borderBottom: '1px solid #d4d4d4', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 18 }}>Adjudicació full #{full.num_carrega} — Pas 1: Selecció de carros</h1>
+            <div style={{ color: '#6b7280', fontSize: 13 }}>
+              Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {carrosLot.length} carros en estoc
+            </div>
+          </div>
+          <a href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none' }}>← Tornar al full</a>
+        </header>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, padding: '16px 20px' }}>
+
+          {/* Columna esquerra: comanda + resum */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Comanda */}
+            <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
+              <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Comanda del client</h3>
+              {comandaPollets > 0 && (
+                <div style={{ fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ color: '#6b7280' }}>Pollets: </span>
+                  <b>{comandaPollets.toLocaleString('ca')}</b>
+                </div>
+              )}
+              {comandaMaquila > 0 && (
+                <div style={{ fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ color: '#6b7280' }}>Maquila (ous): </span>
+                  <b>{comandaMaquila.toLocaleString('ca')}</b>
+                </div>
+              )}
+              {comandaPollets === 0 && comandaMaquila === 0 && (
+                <div style={{ color: '#9ca3af', fontSize: 12 }}>Sense comanda registrada</div>
+              )}
+            </div>
+
+            {/* Resum selecció */}
+            <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
+              <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Selecció actual</h3>
+              <div style={{ fontSize: 13, marginBottom: 4 }}>
+                <span style={{ color: '#6b7280' }}>Carros: </span>
+                <b>{carrosSeleccionats.size}</b>
+              </div>
+              {comandaPollets > 0 && (
+                <div style={{ fontSize: 13, marginBottom: 4 }}>
+                  <span style={{ color: '#6b7280' }}>Pollets prev.: </span>
+                  <b style={{ color: colorPct }}>{polletsSel.toLocaleString('ca')}</b>
+                  {pctPollets !== null && (
+                    <span style={{ fontSize: 11, color: colorPct, marginLeft: 4 }}>({pctPollets}%)</span>
+                  )}
+                </div>
+              )}
+              {comandaPollets > 0 && pctPollets !== null && pctPollets < 90 && (
+                <div style={{ fontSize: 11, color: '#b45309', marginTop: 4 }}>
+                  ⚠ Per sota de la comanda
+                </div>
+              )}
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button
+                  onClick={seleccionarTots}
+                  style={{ ...btnStyle(false), marginLeft: 0, fontSize: 12, padding: '6px 10px' }}
+                >Seleccionar tots</button>
+                <button
+                  onClick={() => setCarrosSeleccionats(new Set())}
+                  style={{ ...btnStyle(false), marginLeft: 0, fontSize: 12, padding: '6px 10px' }}
+                  disabled={carrosSeleccionats.size === 0}
+                >Netejar selecció</button>
+              </div>
+            </div>
+          </aside>
+
+          {/* Columna dreta: llista de carros */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {grups.length === 0 && (
+              <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 24, textAlign: 'center', color: '#9ca3af' }}>
+                No hi ha carros en estoc disponibles
+              </div>
+            )}
+            {grups.map(g => {
+              const idsLot = g.carros.map(c => c.id)
+              const totsSel = idsLot.every(id => carrosSeleccionats.has(id))
+              const algunSel = idsLot.some(id => carrosSeleccionats.has(id))
+              return (
+                <div key={g.lotId} style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
+                  {/* Capçalera lot */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={totsSel}
+                        ref={el => { if (el) el.indeterminate = algunSel && !totsSel }}
+                        onChange={() => toggleLot(idsLot)}
+                        style={{ width: 15, height: 15, cursor: 'pointer' }}
+                      />
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{g.granja}</span>
+                        {g.estirp && <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 6 }}>· {g.estirp}</span>}
+                        <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 6 }}>· {g.setmanes} setm. de vida</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                      {idsLot.filter(id => carrosSeleccionats.has(id)).length}/{g.carros.length} seleccionats
+                    </span>
+                  </div>
+
+                  {/* Taula de carros */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <th style={{ width: 28, padding: '4px 6px', textAlign: 'center' }}></th>
+                        <th style={{ padding: '4px 8px', textAlign: 'left', color: '#6b7280', fontWeight: 500 }}>Data posta</th>
+                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Dies estoc</th>
+                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Ous</th>
+                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Prev. pollets</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.carros.map((c, i) => {
+                        const sel = carrosSeleccionats.has(c.id)
+                        const dies = diesEstoc(c.posta, full.carrega)
+                        const prev = polletsCarro(c)
+                        return (
+                          <tr
+                            key={c.id}
+                            onClick={() => toggleCarro(c.id)}
+                            style={{
+                              background: sel ? '#eff6ff' : i % 2 === 0 ? '#fafafa' : '#fff',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f3f4f6',
+                            }}
+                          >
+                            <td style={{ padding: '6px', textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={sel}
+                                onChange={() => toggleCarro(c.id)}
+                                onClick={e => e.stopPropagation()}
+                                style={{ width: 14, height: 14, cursor: 'pointer' }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>{c.posta}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', color: dies > 10 ? '#b45309' : '#1f2937', fontWeight: dies > 10 ? 600 : 400 }}>
+                              {dies}d
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>{c.quantitat_ous.toLocaleString('ca')}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', color: '#2563eb', fontWeight: 500 }}>
+                              {prev.toLocaleString('ca')}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #d4d4d4', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -2px 8px rgba(0,0,0,0.04)', zIndex: 40 }}>
+          <div style={{ fontSize: 13, color: '#6b7280' }}>
+            {carrosSeleccionats.size > 0
+              ? <><b style={{ color: '#1f2937' }}>{carrosSeleccionats.size} carros</b> seleccionats · <b style={{ color: colorPct }}>{polletsSel.toLocaleString('ca')} pollets previstos</b>{comandaPollets > 0 && <> · comanda: {comandaPollets.toLocaleString('ca')}</>}</>
+              : 'Cap carro seleccionat'
+            }
+          </div>
+          <button
+            onClick={() => {
+              if (carrosSeleccionats.size === 0) {
+                alert('Selecciona almenys un carro abans de continuar.')
+                return
+              }
+              setFase('assignacio')
+            }}
+            style={btnStyle(true)}
+          >
+            Continuar amb l&apos;assignació →
+          </button>
+        </footer>
+      </main>
+    )
+  }
+
   return (
     <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '90px' }}>
-      <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosLot.length} colocats={colocats.size} />
+      <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosSeleccionats.size} colocats={colocats.size} onTornarSeleccio={() => setFase('seleccio')} />
 
       {/* Toggle vista projectada — apareix quan hi ha qualsevol diferència
           entre l'estat real i el projectat (transferències i/o rotacions) */}
@@ -1218,6 +1571,7 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                numCarroPerCella={numCarroPerCella}
                 filtrada={incsFiltrades.has(inc.id)}
                 anyFiltrada={incsFiltrades.size > 0}
                 onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
@@ -1241,6 +1595,7 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                numCarroPerCella={numCarroPerCella}
                 filtrada={incsFiltrades.has(inc.id)}
                 anyFiltrada={incsFiltrades.size > 0}
                 onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
@@ -1267,6 +1622,7 @@ export default function Planificacio() {
                 mostrarProjectat={mostrarProjectat}
                 colocats={colocats}
                 seleccionades={seleccionades}
+                numCarroPerCella={numCarroPerCella}
                 filtrada={incsFiltrades.has(inc.id)}
                 anyFiltrada={incsFiltrades.size > 0}
                 onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
@@ -1380,14 +1736,17 @@ export default function Planificacio() {
 // Subcomponents
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HeaderPlan({ full, dia, setDia, pendents, total, colocats }: { full: Full; dia: Dia; setDia: (d: Dia) => void; pendents: number; total: number; colocats: number }) {
+function HeaderPlan({ full, dia, setDia, pendents, total, colocats, onTornarSeleccio }: { full: Full; dia: Dia; setDia: (d: Dia) => void; pendents: number; total: number; colocats: number; onTornarSeleccio: () => void }) {
   const diaInferit = diaDeFull(full.carrega)
   return (
     <header style={{ background: '#fff', borderBottom: '1px solid #d4d4d4', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <div>
-        <h1 style={{ margin: 0, fontSize: 18 }}>Planificació full #{full.num_carrega}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+          <button onClick={onTornarSeleccio} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 5, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280' }}>← Pas 1</button>
+          <h1 style={{ margin: 0, fontSize: 18 }}>Adjudicació full #{full.num_carrega} — Pas 2: Assignació visual</h1>
+        </div>
         <div style={{ color: '#6b7280', fontSize: 13 }}>
-          Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {total} carros disponibles · {colocats} col·locats · {pendents} pendents
+          Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {total} carros seleccionats · {colocats} col·locats · {pendents} pendents
         </div>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -1486,6 +1845,7 @@ interface CellPropsCommon {
   lliureAviatPerCella: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>
   colocats: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>
   seleccionades: Set<string>
+  numCarroPerCella: Map<string, number>
   onSelLliures: () => void
   onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void
   onDragOverCell: (e: React.DragEvent) => void
@@ -1611,7 +1971,7 @@ function IncubadoraMS({ inc, sub, onClicCella, onDropCell, filtrada, anyFiltrada
 
 // ── Cel·la individual ──────────────────────────────────────────────────────
 
-function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, lliureAviatPerCella, mostrarProjectat, colocats, seleccionades, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
+function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, carrosLot, carroPerCella, ocupatsAltresFulls, lliureAviatPerCella, mostrarProjectat, colocats, seleccionades, numCarroPerCella, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellPropsCommon & {
   incId: number
   pos: number
   zona: ZonaMS | null
@@ -1626,6 +1986,7 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
   const ocupAltre = ocupatsAltresFulls.get(k)
   const lliureAviat = lliureAviatPerCella.get(k)
   const sel = seleccionades.has(k)
+  const numCarro = numCarroPerCella.get(k)
 
   // lliureAviat té prioritat sobre ocupAltre (és un subconjunt que permet interacció)
   // En mode projectat, les cel·les "lliure aviat" es mostren com a buides
@@ -1704,12 +2065,20 @@ function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, onClick, onDrop, 
       )}
       {carroNouObj && (
         <>
+          {numCarro !== undefined && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#1e3a8a', background: '#dbeafe', borderRadius: 3, padding: '0 3px', marginBottom: 1 }}>#{numCarro}</span>
+          )}
           <span style={{ fontSize: 10, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nomCarroCurt(carroNouObj)}</span>
-          <span style={{ fontSize: 9, opacity: 0.75 }}>p{pos}</span>
+          <span style={{ fontSize: 9, opacity: 0.75 }}>{carroNouObj.quantitat_ous.toLocaleString('ca')} ous</span>
         </>
       )}
       {!blocat && (tractarComBuit || !lliureAviat) && !carroNouObj && (
-        <span style={{ fontSize: 9, opacity: 0.5 }}>{pos}</span>
+        <>
+          {numCarro !== undefined
+            ? <span style={{ fontSize: 9, fontWeight: 600, color: '#94a3b8' }}>#{numCarro}</span>
+            : <span style={{ fontSize: 9, opacity: 0.35 }}>{pos}</span>
+          }
+        </>
       )}
     </div>
   )
