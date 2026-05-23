@@ -233,11 +233,23 @@ Vercel serveix tot per HTTPS amb certificat automàtic. No cal configurar res ma
 
 ## 8. Auditoria de seguretat: troballes (23 maig 2026)
 
-Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'autenticació, el middleware, una mostra representativa de les rutes API, la configuració de Next.js, i les polítiques RLS i avisos de seguretat directament a Supabase. Els problemes estan ordenats per gravetat. Per a cadascun explico **què és**, **per què importa**, i **què caldria fer**.
+Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'autenticació, el middleware, una mostra representativa de les rutes API, la configuració de Next.js, i les polítiques RLS i avisos de seguretat directament a Supabase. Els problemes estan ordenats per gravetat. Per a cadascun explico **què és**, **per què importa**, **què caldria fer**, i **amb quin model de Claude convé fer-ho**.
+
+### Convenció de models
+
+Cada troballa porta una etiqueta amb el model recomanat:
+
+- **[Sonnet 4.6]** — Tasca rutinària: edits localitzats, migracions SQL senzilles, canvis de configuració, validacions. Sonnet és més ràpid i barat i la qualitat és pràcticament la mateixa que Opus per a aquestes feines.
+- **[Opus 4.7]** — Tasca amb decisions de disseny: trade-offs arquitectònics, canvis difícils de revertir, raonament que requereix veure conseqüències subtils. Val la pena el plus de cost.
+- **[Mixt]** — Comença amb Opus per a decidir el plantejament i passa a Sonnet per a la implementació. La majoria de troballes complexes són d'aquest tipus.
+
+Si Claude es desperta en una sessió i veu que estàs en un model que no toca per a la tasca que vols atacar, t'avisarà al principi de la conversa: *"Ep, abans de començar: això s'hauria de fer amb [model X], per què..."*
 
 ### 8.1. CRÍTIC
 
 #### C-1. Contrasenyes en text pla dins del codi font
+
+**Model recomanat: [Mixt]** — Primer Opus per decidir entre Supabase Auth i taula d'usuaris pròpia amb bcrypt (decisió arquitectònica important, té conseqüències a llarg termini). Després Sonnet per a la implementació un cop el camí està clar.
 
 **Què és:** A `lib/auth.ts` (línies 3–7) hi ha tres parelles usuari/contrasenya literalment escrites al codi. Qualsevol que tingui accés al repositori (o a un dump del repositori) veu les contrasenyes.
 
@@ -247,6 +259,8 @@ Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'auten
 
 #### C-2. Fallback insegur del secret de signatura de sessions
 
+**Model recomanat: [Sonnet 4.6]** — Canvi d'una sola línia, sense decisions de disseny. Perfecte per a Sonnet.
+
 **Què és:** A `lib/auth.ts` línia 1: `const SECRET = process.env.AUTH_SECRET || 'miquel-avicola-secret-2024'`. Si la variable `AUTH_SECRET` no està definida a l'entorn, l'app fa servir un valor per defecte que està al codi públic.
 
 **Per què importa:** Si per qualsevol motiu la variable d'entorn de Vercel s'esborra, es perd, o l'app es desplega en un altre lloc (per exemple, vista prèvia d'un branch), el secret cau al fallback. Qui conegui el codi pot llavors generar sessions vàlides amb qualsevol rol (incloent admin) i entrar com si fos administrador, sense necessitat de cap contrasenya.
@@ -254,6 +268,8 @@ Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'auten
 **Què caldria fer:** Eliminar el fallback. Si `process.env.AUTH_SECRET` és undefined, l'app hauria de fer crash a l'inici amb un missatge clar — és preferible que no arrenqui a què arrenqui amb una clau coneguda.
 
 #### C-3. Tres taules sense Row Level Security i exposades públicament
+
+**Model recomanat: [Sonnet 4.6]** — Migració SQL curta a Supabase (activar RLS amb `ALTER TABLE`). Operació estàndard.
 
 **Què és:** Les taules `parametres`, `eclosio_historic` i `previsio_recurrent` tenen el RLS desactivat segons l'avisador de Supabase. Com que Supabase exposa totes les taules `public` a través de PostgREST, qualsevol que tingui la URL del projecte (que és pública: `uhslwgcjdiwycknvaplr.supabase.co`) i la `anon_key` (la pot obtenir qualsevol amb accés al dashboard de Supabase) pot llegir o modificar aquestes taules sense passar per la teva app.
 
@@ -265,6 +281,8 @@ Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'auten
 
 #### I-1. Sense expiració efectiva de sessió al servidor
 
+**Model recomanat: [Sonnet 4.6]** — Afegir el check d'expiració a `verifySession` és directe. Si decidim afegir taula de revocació, llavors **[Mixt]**: Opus per al disseny de la revocació, Sonnet per a la implementació.
+
 **Què és:** La cookie té `maxAge` de 7 dies, però aquest valor només viu al navegador. La funció `verifySession` a `lib/auth.ts` NO comprova quant temps fa que es va signar el token. Si algú captura el token i el conserva, val per sempre. La data de signatura (`iat`) està al payload però mai es valida.
 
 **Per què importa:** Si un token surt fora del navegador (per logs, per algú que copia la cookie, per una vulnerabilitat futura), pot reutilitzar-se indefinidament. Tampoc hi ha manera d'invalidar sessions actives — el logout només esborra la cookie del navegador, no marca el token com a revocat.
@@ -273,6 +291,8 @@ Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'auten
 
 #### I-2. Permís excessivament ampli a les rutes API per al rol `recepcio`
 
+**Model recomanat: [Mixt]** — Redissenyar `canAccess` com a llista blanca requereix decidir quins endpoints té cada rol (decisió de negoci + de seguretat, fàcil d'errar). Opus per al disseny del mapa rol→endpoints, Sonnet per a la implementació.
+
 **Què és:** A `canAccess`, el rol `recepcio` té accés a `/api/*` excepte la d'assignacions. Això vol dir que un usuari de recepció pot fer POST a `/api/comandes`, `/api/destinacions`, `/api/granges`, `/api/expedicions/*`, `/api/lots`, etc.
 
 **Per què importa:** Si la teva intenció és que recepció només toqui carros i estoc, té permís per fer molt més. Pot crear comandes, modificar destinacions, fer expedicions. Cal confirmar si això és voluntari (potser sí — has de decidir-ho tu).
@@ -280,6 +300,8 @@ Aquesta secció és el resultat del diagnòstic. He inspeccionat el codi d'auten
 **Què caldria fer:** Definir explícitament una llista blanca d'endpoints API per a cada rol, en lloc d'una llista negra. Per exemple, recepció només pot accedir a `/api/carros/*` i `/api/estoc/*`, i la resta queda bloquejat per defecte.
 
 #### I-3. Inputs sense validació estricta a les rutes API
+
+**Model recomanat: [Sonnet 4.6]** — Tediós però mecànic: per a cada ruta API, definir un schema `zod` que descrigui què s'espera. Sonnet ho fa bé i ràpid. Si fem revisió final de qualitat, una passada amb Opus pot detectar casos límit que s'hagin escapat.
 
 **Què és:** A les rutes API mirades (per exemple, `app/api/comandes/route.ts` i `app/api/destinacions/route.ts`), els camps del body es passen directament a `.insert()` de Supabase sense validar tipus, longitud, ni format. PostgreSQL acaba fent de filtre de tipus, però abans hi ha temps per generar errors, omplir la base de dades amb dades brutes o explotar comportaments inesperats.
 
@@ -291,6 +313,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 #### I-4. Cap header de seguretat configurat
 
+**Model recomanat: [Mixt]** — Decidir la Content Security Policy correcta requereix saber quines fonts externes carrega l'app (fonts tipogràfiques, CDNs, imatges, etc.). Una CSP massa estricta trenca l'app, una massa laxa no protegeix. Opus per a dissenyar la CSP. Sonnet per a la configuració de la resta de headers (HSTS, X-Frame-Options, etc.), que són boilerplate.
+
 **Què és:** `next.config.js` està buit. No hi ha CSP (Content Security Policy), HSTS forçat, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.
 
 **Per què importa:** Aquests headers són la defensa estàndard contra XSS (scripts injectats), clickjacking (incrustar la teva pàgina en un iframe d'una web maliciosa), MIME sniffing, etc. Vercel posa alguns headers per defecte però no tots.
@@ -298,6 +322,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 **Què caldria fer:** Configurar headers de seguretat a `next.config.js` mitjançant `async headers()`. Una CSP raonable per a aquesta app seria força restrictiva, ja que tot el JavaScript ve del propi domini.
 
 #### I-5. Cookie de sessió sense `secure: true`
+
+**Model recomanat: [Sonnet 4.6]** — Canvi d'una línia.
 
 **Què és:** A `app/api/auth/route.ts` línies 12-17, la cookie es crea amb `httpOnly: true, sameSite: 'lax'` però **no** té `secure: true`. Això vol dir que en teoria es podria enviar per HTTP.
 
@@ -309,6 +335,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 #### M-1. Funcions de BD amb `search_path` mutable
 
+**Model recomanat: [Sonnet 4.6]** — Recrear 7 funcions amb el `search_path` fixat. Tasca de manteniment SQL.
+
 **Què és:** L'avisador de Supabase apunta 7 funcions (`avg_naixement_supabase`, `rotar_zones_ms_gran`, `avg_eclosio_supabase`, `fulls_candidats_finalitzar`, `estat_instalacions`, `offset_per_dia`, `guarda_planificacio_full`) que no tenen el `search_path` fixat.
 
 **Per què importa:** En un atac molt específic, algú amb permisos limitats podria crear taules ombrejades en un altre schema i fer que la funció els consulti. Risc baix en aquesta app perquè només service_role té permisos d'execució, però és bona pràctica fixar-lo.
@@ -316,6 +344,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 **Què caldria fer:** Recrear cada funció amb `SET search_path = public, pg_temp` o equivalent.
 
 #### M-2. Sense protecció contra força bruta al login
+
+**Model recomanat: [Mixt]** — Decidir l'estratègia (rate limit per IP? per usuari? amb Upstash? amb una taula a Supabase?) té trade-offs. Opus per a la decisió. Sonnet per a la implementació.
 
 **Què és:** L'endpoint `/api/auth` accepta peticions sense límit. Un atacant pot provar milers de contrasenyes per minut.
 
@@ -325,6 +355,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 #### M-3. Sense logs d'auditoria
 
+**Model recomanat: [Mixt]** — Disseny de la taula d'audit_log i del wrapper que la pobli a cada petició: Opus. Aplicar-ho a totes les rutes: Sonnet.
+
 **Què és:** No queda enregistrament de qui fa cada acció. Si algú esborra una comanda o modifica una assignació, no sabem quin usuari ha estat.
 
 **Per què importa:** En una app interna de gestió, saber qui ha fet què és útil tant per a debugging com per a investigar incidents.
@@ -333,6 +365,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 #### M-4. Dependències sense auditoria recent
 
+**Model recomanat: [Sonnet 4.6]** — Tasca operacional: executar `npm audit`, llegir resultats, decidir actualitzacions menors. Si hi ha actualitzacions majors (canvis de versió de Next.js, per exemple) que poden trencar coses, **[Opus 4.7]** per valorar l'impacte.
+
 **Què és:** No s'ha executat `npm audit` recentment. Les versions actuals (`next 14.1.0`, `@supabase/supabase-js 2.39.0`, `@react-pdf/renderer 4.5.1`, `react 18`) tenen uns mesos.
 
 **Per què importa:** Les llibreries acumulen vulnerabilitats descobertes que es corregeixen amb actualitzacions. Estar al dia és una pràctica de manteniment bàsica.
@@ -340,6 +374,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 **Què caldria fer:** Executar `npm audit` i `npm outdated` periòdicament des de l'ordinador local (he intentat fer-ho des d'aquí però el sandbox no té accés al registre npm). Si hi ha avisos, valorar quins són explotables a la pràctica i actualitzar les llibreries afectades. Next 14 ha tingut CVEs publicades durant 2024 (per exemple sobre Server Actions); convé confirmar si la 14.1.0 està afectada abans de decidir si urgeix l'actualització.
 
 #### M-5. Anon key de Supabase mai s'ha rotat
+
+**Model recomanat: [Sonnet 4.6]** — Rotar claus al dashboard de Supabase i actualitzar variables d'entorn a Vercel. Operacional.
 
 **Què és:** No tinc constància que s'hagi rotat la `service_role_key` des de la creació del projecte.
 
