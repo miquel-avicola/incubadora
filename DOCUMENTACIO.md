@@ -247,9 +247,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 ### 8.1. CRÍTIC
 
-#### C-1. Contrasenyes en text pla dins del codi font
+#### C-1. Contrasenyes en text pla dins del codi font ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Mixt]** — Primer Opus per decidir entre Supabase Auth i taula d'usuaris pròpia amb bcrypt (decisió arquitectònica important, té conseqüències a llarg termini). Després Sonnet per a la implementació un cop el camí està clar.
+
+**Resolució:** Taula `users` creada a Supabase amb RLS deny-all. Contrasenyes hashades amb bcrypt cost 12 via `bcryptjs`. `validateUser` ara és async i consulta la BD via service role key. Passphrases de 4 paraules en català assignades als 3 usuaris.
 
 **Què és:** A `lib/auth.ts` (línies 3–7) hi ha tres parelles usuari/contrasenya literalment escrites al codi. Qualsevol que tingui accés al repositori (o a un dump del repositori) veu les contrasenyes.
 
@@ -257,9 +259,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 **Què caldria fer:** Moure els usuaris a una taula de la base de dades amb la contrasenya guardada com a hash (per exemple, bcrypt amb cost 12). La validació compararia el hash, no la cadena. A més, exigir contrasenyes més llargues. Alternativa més robusta: passar a Supabase Auth, que ja ho gestiona tot (signup, reset, MFA) i s'integra natiu amb la BD.
 
-#### C-2. Fallback insegur del secret de signatura de sessions
+#### C-2. Fallback insegur del secret de signatura de sessions ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Sonnet 4.6]** — Canvi d'una sola línia, sense decisions de disseny. Perfecte per a Sonnet.
+
+**Resolució:** Eliminat el fallback. `AUTH_SECRET` ara és obligatori — si no existeix, l'app fa crash amb missatge clar. Secret de 64 caràcters hex afegit a Vercel (Sensitive) i al `.env.local` local.
 
 **Què és:** A `lib/auth.ts` línia 1: `const SECRET = process.env.AUTH_SECRET || 'miquel-avicola-secret-2024'`. Si la variable `AUTH_SECRET` no està definida a l'entorn, l'app fa servir un valor per defecte que està al codi públic.
 
@@ -267,9 +271,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 **Què caldria fer:** Eliminar el fallback. Si `process.env.AUTH_SECRET` és undefined, l'app hauria de fer crash a l'inici amb un missatge clar — és preferible que no arrenqui a què arrenqui amb una clau coneguda.
 
-#### C-3. Tres taules sense Row Level Security i exposades públicament
+#### C-3. Tres taules sense Row Level Security i exposades públicament ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Sonnet 4.6]** — Migració SQL curta a Supabase (activar RLS amb `ALTER TABLE`). Operació estàndard.
+
+**Resolució:** RLS activat a `parametres`, `eclosio_historic` i `previsio_recurrent` via migració. Cap codi trencat perquè tot el backend usa service_role key que bypassa RLS.
 
 **Què és:** Les taules `parametres`, `eclosio_historic` i `previsio_recurrent` tenen el RLS desactivat segons l'avisador de Supabase. Com que Supabase exposa totes les taules `public` a través de PostgREST, qualsevol que tingui la URL del projecte (que és pública: `uhslwgcjdiwycknvaplr.supabase.co`) i la `anon_key` (la pot obtenir qualsevol amb accés al dashboard de Supabase) pot llegir o modificar aquestes taules sense passar per la teva app.
 
