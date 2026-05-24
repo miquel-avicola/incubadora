@@ -297,9 +297,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 **Què caldria fer:** Afegir a `verifySession` un check del tipus `if (Date.now() - payload.iat > 7 * 24 * 60 * 60 * 1000) return null`. Opcionalment, mantenir una taula de revocacions per als casos d'emergència.
 
-#### I-2. Permís excessivament ampli a les rutes API per al rol `recepcio`
+#### I-2. Permís excessivament ampli a les rutes API per al rol `recepcio` ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Mixt]** — Redissenyar `canAccess` com a llista blanca requereix decidir quins endpoints té cada rol (decisió de negoci + de seguretat, fàcil d'errar). Opus per al disseny del mapa rol→endpoints, Sonnet per a la implementació.
+
+**Resolució:** `canAccess` per a `recepcio` convertit a llista blanca explícita. Permet: `/` + `/recepcio/*` + `/estoc/*` + `/api/carros/*` (GET/POST/DELETE) + `/api/previsio-comercial` (GET, sense `/cell`). Tot el que no hi és queda bloquejat per defecte.
 
 **Què és:** A `canAccess`, el rol `recepcio` té accés a `/api/*` excepte la d'assignacions. Això vol dir que un usuari de recepció pot fer POST a `/api/comandes`, `/api/destinacions`, `/api/granges`, `/api/expedicions/*`, `/api/lots`, etc.
 

@@ -87,12 +87,18 @@ export function canAccess(role: string, path: string): boolean {
   if (role === 'carregues') return true
 
   if (role === 'recepcio') {
-    return (
-      path === '/' ||
-      /^\/recepcio($|\/)/.test(path) ||
-      /^\/estoc($|\/)/.test(path) ||
-      /^\/api\//.test(path)
-    )
+    // Pàgines permeses
+    if (path === '/') return true
+    if (/^\/recepcio($|\/)/.test(path)) return true
+    if (/^\/estoc($|\/)/.test(path)) return true
+
+    // APIs permeses (llista blanca explícita)
+    // Carros: veure, afegir i eliminar
+    if (/^\/api\/carros($|\/)/.test(path)) return true
+    // Previsió comercial: només consulta (no /cell que és el PUT de modificar)
+    if (/^\/api\/previsio-comercial$/.test(path)) return true
+
+    return false
   }
 
   return false
