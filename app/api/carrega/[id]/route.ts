@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, CarregaPatchBody } from '@/lib/schemas'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { data, error } = await supabase
@@ -67,8 +68,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
-  const { estat, observacions, transferencia } = body
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarregaPatchBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { estat, observacions, transferencia } = parsed.data
 
   const updates: Record<string, unknown> = {}
   if (estat !== undefined) updates.estat = estat

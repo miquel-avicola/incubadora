@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, CarroPostBody, CarroDeleteBody } from '@/lib/schemas'
 
 export async function GET() {
   const { data, error } = await supabase
@@ -28,22 +29,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
-  const { lot_id, posta, quantitat_ous, nombre_carros } = body
-
-  if (!lot_id || !posta || !nombre_carros) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
-
-  const n = parseInt(nombre_carros)
-  if (isNaN(n) || n < 1 || n > 20) {
-    return NextResponse.json({ error: 'Nombre de carros invàlid' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarroPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { lot_id, posta, quantitat_ous, nombre_carros: n } = parsed.data
 
   const carros = Array.from({ length: n }, () => ({
-    lot_id: parseInt(lot_id),
+    lot_id,
     posta,
-    quantitat_ous: parseInt(quantitat_ous) || 4800,
+    quantitat_ous: quantitat_ous ?? 4800,
     recepcio: new Date().toISOString().split('T')[0],
     estat: 'Disponible',
   }))
@@ -58,11 +53,11 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { lot_id, posta, quantitat_ous } = await request.json()
-
-  if (!lot_id || !posta) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarroDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { lot_id, posta, quantitat_ous } = parsed.data
 
   // Buscar un carro disponible d'aquest grup (lot + posta + quantitat)
   const { data, error } = await supabase

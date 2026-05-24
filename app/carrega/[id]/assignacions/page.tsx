@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, calorFuturaCarro, type CarroTermic } from '@/lib/termico'
@@ -299,7 +299,7 @@ function projectarEstatInst(
   assignacioIdsDelFull: Set<number>
 ): EstatInst {
   // Còpia profunda per no mutar l'estat original
-  const nou: EstatInst = JSON.parse(JSON.stringify(estatInst))
+  const nou: EstatInst = structuredClone(estatInst)
   const dataLoad = new Date(dataCarrega + 'T00:00:00').getTime()
 
   // 1. Recopilar transferències pendents (clau única per carrega+data)
@@ -379,10 +379,6 @@ interface CellaSel {
   prioritat: number
   costat: 'esq' | 'dre' | 'cap'
   columna: number // identificador de columna física (per agrupar lots iguals)
-}
-
-function calcularCella(c: CellaSel, sub: SubTipus): CellaSel {
-  return c
 }
 
 function ordreCellesSS(c: CellaSel): number {
@@ -1435,10 +1431,10 @@ export default function Planificacio() {
                   {/* Capçalera lot */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
+                      <IndeterminateCheckbox
                         type="checkbox"
                         checked={totsSel}
-                        ref={el => { if (el) el.indeterminate = algunSel && !totsSel }}
+                        indeterminate={algunSel && !totsSel}
                         onChange={() => toggleLot(idsLot)}
                         style={{ width: 15, height: 15, cursor: 'pointer' }}
                       />
@@ -1735,6 +1731,18 @@ export default function Planificacio() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Subcomponents
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Checkbox amb suport per a l'estat indeterminate.
+// El ref el gestiona el component internament per evitar crear una nova
+// funció de ref en cada render del pare (cosa que força React a reassignar
+// el DOM node innecessàriament en cada re-render).
+function IndeterminateCheckbox({ indeterminate, ...props }: { indeterminate: boolean } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate
+  }, [indeterminate])
+  return <input ref={ref} {...props} />
+}
 
 function HeaderPlan({ full, dia, setDia, pendents, total, colocats, onTornarSeleccio }: { full: Full; dia: Dia; setDia: (d: Dia) => void; pendents: number; total: number; colocats: number; onTornarSeleccio: () => void }) {
   const diaInferit = diaDeFull(full.carrega)

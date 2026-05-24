@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, ExpedicioIdPatchBody } from '@/lib/schemas'
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ExpedicioIdPatchBody, raw)
+  if (!parsed.ok) return parsed.response
   const {
     pollets_comanda,
     pollets_servits,
@@ -14,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     ordre,
     observacions,
     num_viatge,
-  } = body
+  } = parsed.data
 
   const updates: Record<string, unknown> = {}
   if (pollets_comanda !== undefined) updates.pollets_comanda = pollets_comanda

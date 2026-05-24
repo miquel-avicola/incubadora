@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, GranjaPostBody } from '@/lib/schemas'
 
 export async function GET() {
   const { data, error } = await supabase
@@ -12,12 +13,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
-  const { granja, nom_informal, marca_oficial, codi_rega, poblacio, titular } = body
-
-  if (!granja) {
-    return NextResponse.json({ error: 'El nom de la granja és obligatori' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(GranjaPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { granja, nom_informal, marca_oficial, codi_rega, poblacio, titular } = parsed.data
 
   const { data, error } = await supabase
     .from('granges_reproductores')

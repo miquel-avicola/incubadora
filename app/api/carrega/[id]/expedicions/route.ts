@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, CarregaExpedicioPostBody, CarregaExpedicioDeleteBody } from '@/lib/schemas'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { data: comandes } = await supabase
@@ -32,16 +33,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarregaExpedicioPostBody, raw)
+  if (!parsed.ok) return parsed.response
   const {
     comanda_id, destinacio_id, transportista_id, matricula,
     hora_prevista_naixement, pollets_comanda, observacions,
     sexe, sexat, polletsM, polletsF,
-  } = body
-
-  if (!comanda_id || !destinacio_id) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  } = parsed.data
 
   const { data: comandesOrdre } = await supabase
     .from('comandes')
@@ -153,7 +153,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request) {
-  const { expedicio_id } = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarregaExpedicioDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { expedicio_id } = parsed.data
 
   const { error: errorLots } = await supabase
     .from('expedicio_lots')

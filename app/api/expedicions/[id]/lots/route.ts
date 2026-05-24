@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, ExpedicioLotsPostBody, ExpedicioLotsDeleteBody } from '@/lib/schemas'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
-  const { lot_id, pollets } = body
-
-  if (!lot_id || pollets === undefined) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ExpedicioLotsPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { lot_id, pollets } = parsed.data
 
   const { data, error } = await supabase
     .from('expedicio_lots')
@@ -24,7 +24,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request) {
-  const { expedicio_lot_id } = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ExpedicioLotsDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { expedicio_lot_id } = parsed.data
 
   const { error } = await supabase
     .from('expedicio_lots')

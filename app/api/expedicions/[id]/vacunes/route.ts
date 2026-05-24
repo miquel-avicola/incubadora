@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, ExpedicioVacunaBody } from '@/lib/schemas'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const { vacuna_id } = await request.json()
-  if (!vacuna_id) return NextResponse.json({ error: 'Falta vacuna_id' }, { status: 400 })
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ExpedicioVacunaBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { vacuna_id } = parsed.data
 
   const { data, error } = await supabase
     .from('expedicio_vacunes')
@@ -16,8 +20,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const { vacuna_id } = await request.json()
-  if (!vacuna_id) return NextResponse.json({ error: 'Falta vacuna_id' }, { status: 400 })
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ExpedicioVacunaBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { vacuna_id } = parsed.data
 
   const { error } = await supabase
     .from('expedicio_vacunes')

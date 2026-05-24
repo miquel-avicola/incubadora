@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, LotPostBody } from '@/lib/schemas'
 
 export async function GET() {
   const { data, error } = await supabase
@@ -21,12 +22,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
-  const { granja_reproductora_id, data_naixement, estirp } = body
-
-  if (!granja_reproductora_id || !data_naixement) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(LotPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { granja_reproductora_id, data_naixement, estirp } = parsed.data
 
   const { data, error } = await supabase
     .from('lots_reproductores')

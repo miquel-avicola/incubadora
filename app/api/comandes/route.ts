@@ -1,13 +1,18 @@
 // app/api/comandes/route.ts
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, ComandaGetQuery, ComandaPostBody } from '@/lib/schemas'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const pendents = searchParams.get('pendents') === 'true'
-  const data = searchParams.get('data') // data de naixement de referència
+  const qp = parseBody(
+    ComandaGetQuery,
+    Object.fromEntries(new URL(request.url).searchParams)
+  )
+  if (!qp.ok) return qp.response
+  const { pendents: pendentsStr, data } = qp.data
+  const pendents = pendentsStr === 'true'
 
   let query = supabase
     .from('comandes')
@@ -35,7 +40,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(ComandaPostBody, raw)
+  if (!parsed.ok) return parsed.response
   const {
     full_carrega_id,
     client_id,
@@ -44,11 +52,7 @@ export async function POST(request: Request) {
     quantitat_ous_maquila,
     sexat,
     data_prevista_naixement,
-  } = body
-
-  if (!client_id || !tipus) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  } = parsed.data
 
   const { data, error } = await supabase
     .from('comandes')
