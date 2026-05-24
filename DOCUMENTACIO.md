@@ -321,11 +321,13 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Què caldria fer:** Introduir validació amb una llibreria com `zod` a cada ruta API. Definir el schema esperat del body i refusar amb 400 si no compleix. Per a paràmetres de query, validar tipus (és nombre? és UUID?) abans de passar-los a la consulta.
 
-#### I-4. Cap header de seguretat configurat
+#### I-4. Cap header de seguretat configurat ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Mixt]** — Decidir la Content Security Policy correcta requereix saber quines fonts externes carrega l'app (fonts tipogràfiques, CDNs, imatges, etc.). Una CSP massa estricta trenca l'app, una massa laxa no protegeix. Opus per a dissenyar la CSP. Sonnet per a la configuració de la resta de headers (HSTS, X-Frame-Options, etc.), que són boilerplate.
 
-**Què és:** `next.config.js` està buit. No hi ha CSP (Content Security Policy), HSTS forçat, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.
+**Resolució:** Reescrit `next.config.js` amb `async headers()` aplicats a `source: '/(.*)'`. Headers configurats: HSTS (`max-age=31536000; includeSubDomains`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (càmera, micròfon, geolocalització, pagament i USB denegats), i CSP amb `default-src 'self'`, `'unsafe-inline'` i `'unsafe-eval'` per scripts/styles (necessari per Next 14 HMR i React), `connect-src` amb Supabase HTTPS+WSS, `img-src` amb `data:` i `blob:` per a PDFs, `worker-src blob:` per `@react-pdf/renderer`, i `frame-ancestors 'none'`. Les fonts IBM Plex s'han migrat de Google Fonts a auto-hostatjades via `next/font/google` per complir el `font-src 'self'`.
+
+**Què és:** `next.config.js` estava buit. No hi havia CSP (Content Security Policy), HSTS forçat, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.
 
 **Per què importa:** Aquests headers són la defensa estàndard contra XSS (scripts injectats), clickjacking (incrustar la teva pàgina en un iframe d'una web maliciosa), MIME sniffing, etc. Vercel posa alguns headers per defecte però no tots.
 
