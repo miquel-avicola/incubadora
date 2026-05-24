@@ -3,7 +3,7 @@ import { validateUser, signSession } from '@/lib/auth'
 
 export async function POST(request: Request) {
   const { username, password } = await request.json()
-  const role = validateUser(username, password)
+  const role = await validateUser(username, password)
   if (!role) {
     return NextResponse.json({ error: 'Usuari o contrasenya incorrectes' }, { status: 401 })
   }

@@ -1,9 +1,13 @@
+import { createClient } from '@supabase/supabase-js'
+import bcrypt from 'bcryptjs'
+
 const SECRET = process.env.AUTH_SECRET || 'miquel-avicola-secret-2024'
 
-const USERS: Record<string, { password: string; role: string }> = {
-  ous:        { password: 'ous',       role: 'recepcio'  },
-  responsable:{ password: 'pollet',    role: 'carregues' },
-  admin:      { password: 'pollet1234',role: 'admin'     },
+// Client amb service_role: bypassa RLS, mai exposat al navegador
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient(url, key, { auth: { persistSession: false } })
 }
 
 async function getKey(): Promise<CryptoKey> {
@@ -40,9 +44,27 @@ export async function verifySession(token: string): Promise<{ role: string } | n
   }
 }
 
-export function validateUser(username: string, password: string): string | null {
-  const user = USERS[username.toLowerCase()]
-  if (!user || user.password !== password) return null
+export async function validateUser(username: string, password: string): Promise<string | null> {
+  const supabase = getServiceClient()
+
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('id, password_hash, role, actiu')
+    .eq('username', username.toLowerCase())
+    .single()
+
+  if (error || !user || !user.actiu) return null
+
+  const valid = await bcrypt.compare(password, user.password_hash)
+  if (!valid) return null
+
+  // Actualitzem last_login en segon pla (no bloqueja el login si falla)
+  supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('id', user.id)
+    .then(() => {})
+
   return user.role
 }
 
