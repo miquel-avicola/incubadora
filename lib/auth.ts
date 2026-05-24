@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
 
-const SECRET = process.env.AUTH_SECRET || 'miquel-avicola-secret-2024'
+const SECRET: string = process.env.AUTH_SECRET ?? (() => { throw new Error('AUTH_SECRET no definit. Afegeix-lo a les variables d\'entorn.') })()
 
 // Client amb service_role: bypassa RLS, mai exposat al navegador
 function getServiceClient() {
