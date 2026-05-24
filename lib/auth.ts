@@ -38,7 +38,10 @@ export async function verifySession(token: string): Promise<{ role: string } | n
     const sigBytes = Uint8Array.from(atob(sig), c => c.charCodeAt(0))
     const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payload))
     if (!valid) return null
-    return JSON.parse(atob(payload))
+    const parsed = JSON.parse(atob(payload))
+    // Expiració: 7 dies des de la creació del token
+    if (Date.now() - parsed.iat > 7 * 24 * 60 * 60 * 1000) return null
+    return parsed
   } catch {
     return null
   }

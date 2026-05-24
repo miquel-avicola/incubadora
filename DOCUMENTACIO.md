@@ -285,9 +285,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 ### 8.2. IMPORTANT
 
-#### I-1. Sense expiració efectiva de sessió al servidor
+#### I-1. Sense expiració efectiva de sessió al servidor ✅ Resolt el 2026-05-24
 
-**Model recomanat: [Sonnet 4.6]** — Afegir el check d'expiració a `verifySession` és directe. Si decidim afegir taula de revocació, llavors **[Mixt]**: Opus per al disseny de la revocació, Sonnet per a la implementació.
+**Model recomanat: [Sonnet 4.6]** — Afegir el check d'expiració a `verifySession` és directe.
+
+**Resolució:** `verifySession` ara comprova que el token no té més de 7 dies. Si `Date.now() - iat > 7 dies`, retorna null i la sessió queda invalidada. Si decidim afegir taula de revocació, llavors **[Mixt]**: Opus per al disseny de la revocació, Sonnet per a la implementació.
 
 **Què és:** La cookie té `maxAge` de 7 dies, però aquest valor només viu al navegador. La funció `verifySession` a `lib/auth.ts` NO comprova quant temps fa que es va signar el token. Si algú captura el token i el conserva, val per sempre. La data de signatura (`iat`) està al payload però mai es valida.
 
@@ -327,9 +329,11 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Què caldria fer:** Configurar headers de seguretat a `next.config.js` mitjançant `async headers()`. Una CSP raonable per a aquesta app seria força restrictiva, ja que tot el JavaScript ve del propi domini.
 
-#### I-5. Cookie de sessió sense `secure: true`
+#### I-5. Cookie de sessió sense `secure: true` ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Sonnet 4.6]** — Canvi d'una línia.
+
+**Resolució:** Afegit `secure: process.env.NODE_ENV === 'production'` a la cookie. En producció (Vercel) sempre s'envia per HTTPS; en local amb `npm run dev` no s'exigeix per no trencar el desenvolupament.
 
 **Què és:** A `app/api/auth/route.ts` línies 12-17, la cookie es crea amb `httpOnly: true, sameSite: 'lax'` però **no** té `secure: true`. Això vol dir que en teoria es podria enviar per HTTP.
 
