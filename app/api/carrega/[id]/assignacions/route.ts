@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, CarregaAssignacionsPostBody, CarregaAssignacionsDeleteBody } from '@/lib/schemas'
 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
 const ZONES_VALIDES: ZonaMS[] = ['central', 'paret', 'pulsator']
@@ -17,7 +18,10 @@ type AssignacioInsert = {
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarregaAssignacionsPostBody, raw)
+  if (!parsed.ok) return parsed.response
   const {
     carro_ids,
     incubadora_id,
@@ -25,18 +29,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     previsio_naixement,
     posicions,
     zona,
-  } = body as {
-    carro_ids?: number[]
-    incubadora_id?: number
-    hora_entrada?: string | null
-    previsio_naixement?: number | null
-    posicions?: number[]
-    zona?: ZonaMS
-  }
-
-  if (!carro_ids?.length || !incubadora_id) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  } = parsed.data
 
   const { data: incubadora } = await supabase
     .from('incubadores')
@@ -157,7 +150,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request, { params: _params }: { params: { id: string } }) {
-  const { assignacio_id, carro_id } = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(CarregaAssignacionsDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { assignacio_id, carro_id } = parsed.data
 
   const { error } = await supabase
     .from('assignacions')

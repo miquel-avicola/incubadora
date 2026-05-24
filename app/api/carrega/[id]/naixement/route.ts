@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, NaixementPostBody, NaixementDeleteBody } from '@/lib/schemas'
 
 export async function POST(request: Request) {
-  const body = await request.json()
-  const { carros, total_pollets, sexat } = body
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(NaixementPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { carros, total_pollets, sexat } = parsed.data
 
   // carros és un array de { assignacio_id, transferencia_id, ous_fertils_vacunats }
-  if (!carros?.length || total_pollets === undefined) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
 
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
@@ -44,11 +45,11 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { transferencia_ids } = await request.json()
-
-  if (!transferencia_ids?.length) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(NaixementDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { transferencia_ids } = parsed.data
 
   const { error } = await supabase
     .from('resultats_naix')

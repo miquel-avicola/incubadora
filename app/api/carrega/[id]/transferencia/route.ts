@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseBody, TransferenciaPostBody, TransferenciaDeleteBody } from '@/lib/schemas'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const body = await request.json()
-  const { assignacio_id, naixedora_id, ous_explosius, ous_fertils_vacunats } = body
-
-  if (!assignacio_id || !naixedora_id || ous_explosius === undefined || !ous_fertils_vacunats) {
-    return NextResponse.json({ error: 'Falten camps obligatoris' }, { status: 400 })
-  }
-
-  if (ous_fertils_vacunats > 4800) {
-    return NextResponse.json({ error: 'No es poden transferir més de 4.800 ous fèrtils per carro' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(TransferenciaPostBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { assignacio_id, naixedora_id, ous_explosius, ous_fertils_vacunats } = parsed.data
 
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
@@ -91,7 +87,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request) {
-  const { transferencia_id, carro_id } = await request.json()
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(TransferenciaDeleteBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { transferencia_id, carro_id } = parsed.data
 
   const { error } = await supabase
     .from('transferencies')

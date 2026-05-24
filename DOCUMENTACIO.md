@@ -309,9 +309,11 @@ Si Claude es desperta en una sessió i veu que estàs en un model que no toca pe
 
 **Què caldria fer:** Definir explícitament una llista blanca d'endpoints API per a cada rol, en lloc d'una llista negra. Per exemple, recepció només pot accedir a `/api/carros/*` i `/api/estoc/*`, i la resta queda bloquejat per defecte.
 
-#### I-3. Inputs sense validació estricta a les rutes API
+#### I-3. Inputs sense validació estricta a les rutes API ✅ Resolt el 2026-05-24
 
 **Model recomanat: [Sonnet 4.6]** — Tediós però mecànic: per a cada ruta API, definir un schema `zod` que descrigui què s'espera. Sonnet ho fa bé i ràpid. Si fem revisió final de qualitat, una passada amb Opus pot detectar casos límit que s'hagin escapat.
+
+**Resolució:** Creat `lib/schemas.ts` amb un helper `parseBody<T>()` i 25 schemas `zod` cobrInt totes les rutes API. Totes les rutes retornen 400 amb missatge descriptiu si el body no compleix el schema. La construcció crítica de `destinacions/route.ts` (interpolació de `client_id` en filtre PostgREST) ara passa per `z.coerce.number().int().positive()`, garantint que el valor és un enter segur abans d'entrar al filtre. La validació de longitud màxima dels camps de text protegeix contra intents de saturació de la BD. Rutes excloses intencionadament (ja tenien validació suficient): `previsio-recurrent`, `eclosio-referencia`, `previsio`, `previsio-comercial`, `previsio-post-transferencia`, `carrega/[id]/maquila-grup`, `carrega/[id]/previsio-grup`, `carrega/[id]/planificacio`, `instalacions/rotar-zones`, `assignacions/[id]`.
 
 **Què és:** A les rutes API mirades (per exemple, `app/api/comandes/route.ts` i `app/api/destinacions/route.ts`), els camps del body es passen directament a `.insert()` de Supabase sense validar tipus, longitud, ni format. PostgreSQL acaba fent de filtre de tipus, però abans hi ha temps per generar errors, omplir la base de dades amb dades brutes o explotar comportaments inesperats.
 
