@@ -102,7 +102,7 @@ const [dosi2, setDosi2] = useState('1')
       cridades.push(fetch(`/api/carrega/${params.id}/vacunes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignacio_id, vacuna_id: parseInt(vacunaId2), dosi: parseFloat(dosi2) }),
+        body: JSON.stringify({ assignacio_id, vacuna_id: parseInt(vacunaId2), dosi: dosi2 }),
       }))
     }
     return cridades
