@@ -95,7 +95,7 @@ const [dosi2, setDosi2] = useState('1')
       fetch(`/api/carrega/${params.id}/vacunes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignacio_id, vacuna_id: parseInt(vacunaId), dosi: parseFloat(dosi) }),
+        body: JSON.stringify({ assignacio_id, vacuna_id: parseInt(vacunaId), dosi }),
       })
     ]
     if (vacunaId2) {
