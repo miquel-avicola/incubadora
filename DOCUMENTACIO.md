@@ -389,7 +389,7 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Resolt el 2026-05-25:** Taula `audit_log` (uuid, ts, user_id, username, role, ip, method, path, payload jsonb redactat i truncat a 5KB, status_code) creada amb RLS deny-all. Wrapper `withAudit` a `lib/audit.ts` aplicat a totes les rutes mutatives (POST, PATCH, DELETE, PUT). Excepció: `/api/auth POST` (login, sense sessió; es registra via `login_attempts`). Pre-requisit P0 resolt: JWT ara inclou `userId` i `username` (sessions existents invalidades, cal tornar a fer login). Pàgina `/admin/auditoria` accessible només per rol `admin`, amb filtres per ruta i rang de dates.
 
-#### M-4. Dependències sense auditoria recent
+#### M-4. Dependències sense auditoria recent ✅ Resolt el 2026-05-25
 
 **Model recomanat: [Sonnet 4.6]** — Tasca operacional: executar `npm audit`, llegir resultats, decidir actualitzacions menors. Si hi ha actualitzacions majors (canvis de versió de Next.js, per exemple) que poden trencar coses, **[Opus 4.7]** per valorar l'impacte.
 
@@ -397,9 +397,9 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Per què importa:** Les llibreries acumulen vulnerabilitats descobertes que es corregeixen amb actualitzacions. Estar al dia és una pràctica de manteniment bàsica.
 
-**Què caldria fer:** Executar `npm audit` i `npm outdated` periòdicament des de l'ordinador local (he intentat fer-ho des d'aquí però el sandbox no té accés al registre npm). Si hi ha avisos, valorar quins són explotables a la pràctica i actualitzar les llibreries afectades. Next 14 ha tingut CVEs publicades durant 2024 (per exemple sobre Server Actions); convé confirmar si la 14.1.0 està afectada abans de decidir si urgeix l'actualització.
+**Resolt el 2026-05-25:** Actualitzat `next` de 14.1.0 a 14.2.35 (corregeix CVEs crítiques, inclosa l'Authorization Bypass in Middleware). Actualitzats també `@supabase/supabase-js` (2.106.1), `postcss` (8.5.15), `@types/node` i `@types/react`. Les CVEs restants en 14.2.35 no afecten aquesta app (no usa remotePatterns, rewrites, CSP nonces ni WebSocket upgrades). El salt a Next.js 16 (que les corregiria totes) és un canvi de versió major que queda pendent per una sessió de migració específica.
 
-#### M-5. Anon key de Supabase mai s'ha rotat
+#### M-5. Anon key de Supabase mai s'ha rotat ✅ Resolt el 2026-05-25
 
 **Model recomanat: [Sonnet 4.6]** — Rotar claus al dashboard de Supabase i actualitzar variables d'entorn a Vercel. Operacional.
 
@@ -407,7 +407,7 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Per què importa:** Si en algun moment la clau ha quedat exposada (per error, en un log, en un screenshot...), continua sent vàlida indefinidament fins que algú la roti.
 
-**Què caldria fer:** Rotar `SUPABASE_SERVICE_ROLE_KEY` i `AUTH_SECRET` periòdicament (per exemple, anualment), i sempre que hi hagi sospita d'exposició.
+**Resolt el 2026-05-25:** `SUPABASE_SERVICE_ROLE_KEY` rotada al dashboard de Supabase (nova clau `vercel-2026`, antiga eliminada) i `AUTH_SECRET` regenerat. Ambdues variables actualitzades a Vercel i redespliegades. Propera rotació recomanada: maig 2027, o abans si hi ha sospita d'exposició.
 
 ---
 
