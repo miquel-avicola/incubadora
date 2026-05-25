@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server'
-import { validateUser, signSession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { validateUser, signSession, verifySession } from '@/lib/auth'
 import { parseBody, AuthLoginBody } from '@/lib/schemas'
 import { createClient } from '@supabase/supabase-js'
-import { withAudit } from '@/lib/audit'
 
 function getServiceClient() {
   return createClient(
@@ -94,7 +93,26 @@ export async function POST(request: Request) {
 }
 
 // logout: no requereix sessió vàlida — l'objectiu és esborrar la cookie
-export async function DELETE() {
+// El registre a audit_log és best-effort: si la sessió ja és invàlida, simplement no es registra
+export async function DELETE(request: NextRequest) {
+  const token = request.cookies.get('session')?.value ?? null
+  if (token) {
+    verifySession(token).then(session => {
+      if (!session) return
+      const supabase = getServiceClient()
+      const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? null
+      supabase.from('audit_log').insert({
+        user_id: session.userId,
+        username: session.username,
+        role: session.role,
+        ip,
+        method: 'DELETE',
+        path: '/api/auth',
+        payload: null,
+        status_code: 200,
+      }).then(() => {})
+    }).catch(() => {})
+  }
   const res = NextResponse.json({ ok: true })
   res.cookies.set('session', '', { httpOnly: true, maxAge: 0, path: '/' })
   return res
