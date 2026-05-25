@@ -236,17 +236,13 @@ export async function GET(request: Request) {
 
   // DEBUG TEMPORAL
   const co79 = (comandes || []).find((c: any) => c.id === 79)
+  const { data: co79Direct } = await supabase.from('comandes').select('id, data_prevista_naixement, quantitat_pollets').eq('id', 79).single()
   const _debug = {
-    comanda_79: co79 ? {
-      id: co79.id,
-      data_prevista_naixement: co79.data_prevista_naixement,
-      tipus_dpn: typeof co79.data_prevista_naixement,
-      full_carrega_id: co79.full_carrega_id,
-      quantitat_pollets: co79.quantitat_pollets,
-      dataEfectiva: co79.data_prevista_naixement || null,
-    } : 'NO TROBADA',
+    total_comandes: (comandes || []).length,
+    ids_retornats: (comandes || []).map((c: any) => c.id).sort((a: number, b: number) => a - b),
+    comanda_79_en_select: co79 ? 'SÍ' : 'NO',
+    comanda_79_directa: co79Direct || 'NO TROBADA (query directa)',
     totesDates_inclou_0625: totesDates.includes('2026-06-25'),
-    totesDates_mostra: totesDates.filter(d => d >= '2026-06-20' && d <= '2026-06-30'),
   }
 
   return NextResponse.json({
