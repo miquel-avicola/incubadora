@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifySession } from '@/lib/auth'
 
@@ -60,10 +60,8 @@ async function insertAuditRow(row: {
 export function withAudit(handler: (req: Request, ctx?: any) => Promise<Response>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async (req: Request, ctx?: any): Promise<Response> => {
-    // Obtenir la cookie de sessió
-    const cookieHeader = req.headers.get('cookie') ?? ''
-    const sessionMatch = cookieHeader.match(/(?:^|;\s*)session=([^;]+)/)
-    const token = sessionMatch?.[1] ?? null
+    // Obtenir la cookie de sessió via NextRequest per tenir decode automàtic
+    const token = (req as NextRequest).cookies.get('session')?.value ?? null
 
     if (!token) {
       return NextResponse.json({ error: 'No autoritzat' }, { status: 401 })

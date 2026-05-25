@@ -93,9 +93,9 @@ export async function POST(request: Request) {
   return res
 }
 
-// logout: SÍ porta withAudit (hi ha sessió activa)
-export const DELETE = withAudit(async () => {
+// logout: no requereix sessió vàlida — l'objectiu és esborrar la cookie
+export async function DELETE() {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('session', '', { httpOnly: true, maxAge: 0, path: '/' })
   return res
-})
+}
