@@ -75,13 +75,15 @@ export async function GET(request: Request) {
   }
 
   // 2. Comandes al rang, amb data efectiva (data_prevista_naixement o derivada del full)
-  const { data: comandes, error: errCo } = await supabase
+  const { data: comandes, count: totalComandes, error: errCo } = await supabase
     .from('comandes')
     .select(`
       id, client_id, tipus, quantitat_pollets, quantitat_ous_maquila,
       data_prevista_naixement, full_carrega_id,
       clients ( nom, mostrar_calendari, ordre_calendari )
-    `)
+    `, { count: 'exact' })
+    .order('id', { ascending: true })
+    .limit(1000)
   if (errCo) return NextResponse.json({ error: errCo.message }, { status: 500 })
 
   // Per a comandes amb full_carrega_id però sense data_prevista_naixement,
@@ -239,6 +241,7 @@ export async function GET(request: Request) {
   const { data: co79Direct } = await supabase.from('comandes').select('id, data_prevista_naixement, quantitat_pollets').eq('id', 79).single()
   const _debug = {
     total_comandes: (comandes || []).length,
+    count_exact: totalComandes,
     ids_retornats: (comandes || []).map((c: any) => c.id).sort((a: number, b: number) => a - b),
     comanda_79_en_select: co79 ? 'SÍ' : 'NO',
     comanda_79_directa: co79Direct || 'NO TROBADA (query directa)',
