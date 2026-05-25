@@ -33,6 +33,7 @@ interface Expedicio {
 
 interface Assignacio {
   carros_estoc: {
+    quantitat_ous: number
     lots_reproductores: { id: number; estirp: string | null; granges_reproductores: { granja: string; nom_informal: string | null } }
   }
   transferencies: {
@@ -162,15 +163,16 @@ export default function ExpedicionsNaixement() {
     </main>
   )
 
-  // Calcular pollets nascuts i assignats per lot
-  const statsPerLot: Record<number, { nom: string; nascuts: number; assignats: number }> = {}
+  // Calcular pollets nascuts, ous entrats i assignats per lot
+  const statsPerLot: Record<number, { nom: string; nascuts: number; ousEntrats: number; assignats: number }> = {}
   const resultatsComptats = new Set<number>()
 
   full.assignacions.forEach(a => {
     const lot = a.carros_estoc.lots_reproductores
     if (!statsPerLot[lot.id]) {
-      statsPerLot[lot.id] = { nom: nomLot(lot), nascuts: 0, assignats: 0 }
+      statsPerLot[lot.id] = { nom: nomLot(lot), nascuts: 0, ousEntrats: 0, assignats: 0 }
     }
+    statsPerLot[lot.id].ousEntrats += a.carros_estoc.quantitat_ous
     a.transferencies.forEach(t => {
       t.resultats_naix.forEach(r => {
         if (!resultatsComptats.has(r.id)) {
@@ -304,6 +306,7 @@ export default function ExpedicionsNaixement() {
           <thead>
             <tr>
               <th>Lot</th>
+              <th>Ous entrats</th>
               <th>Nascuts</th>
               {cols.map((col) => {
                 if (col.type === 'single') {
@@ -357,6 +360,7 @@ export default function ExpedicionsNaixement() {
               return (
                 <tr key={lotId}>
                   <td className="lot-nom">{stats.nom}</td>
+                  <td>{stats.ousEntrats.toLocaleString()}</td>
                   <td>{stats.nascuts.toLocaleString()}</td>
                   {cols.map((col) => {
                     if (col.type === 'single') {
@@ -383,6 +387,7 @@ export default function ExpedicionsNaixement() {
             })}
             <tr className="total-row">
               <td className="lot-nom">TOTAL</td>
+              <td>{Object.values(statsPerLot).reduce((s, l) => s + l.ousEntrats, 0).toLocaleString()}</td>
               <td>{totalNascuts.toLocaleString()}</td>
               {cols.map((col) => {
                 if (col.type === 'single') {
@@ -404,6 +409,7 @@ export default function ExpedicionsNaixement() {
             <tr className="dist-row">
               <td className="dist-label">Pollets/caixa</td>
               <td></td>
+              <td></td>
               {cols.map((col) => {
                 const grup = col.type === 'single' ? getDistGrup(col.exp) : getDistGrup(col.expM)
                 const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
@@ -415,6 +421,7 @@ export default function ExpedicionsNaixement() {
             <tr className="dist-row">
               <td className="dist-label">Alçada carro</td>
               <td></td>
+              <td></td>
               {cols.map((col) => {
                 const grup = col.type === 'single' ? getDistGrup(col.exp) : getDistGrup(col.expM)
                 const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
@@ -425,6 +432,7 @@ export default function ExpedicionsNaixement() {
             {/* Fila: Distribució */}
             <tr className="dist-row">
               <td className="dist-label">Distribució</td>
+              <td></td>
               <td></td>
               {cols.map((col) => {
                 if (col.type === 'single') {
