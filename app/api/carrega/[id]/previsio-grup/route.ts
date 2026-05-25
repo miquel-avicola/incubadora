@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -21,7 +22,7 @@ interface BodyPatch {
  * Body: { lot_id, incubadora_id, previsio_naixement: 0..1 | null }
  * Resposta: { actualitzats: N }
  */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const fullId = parseInt(params.id, 10)
   if (!Number.isFinite(fullId)) {
     return NextResponse.json({ error: 'Full no valid' }, { status: 400 })
@@ -89,4 +90,4 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     { actualitzats: ids.length },
     { headers: { 'Cache-Control': 'no-store' } }
   )
-}
+})

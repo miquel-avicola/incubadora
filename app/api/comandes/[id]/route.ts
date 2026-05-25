@@ -2,10 +2,11 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, ComandaPatchBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const id = parseInt(params.id, 10)
   if (!Number.isFinite(id)) return NextResponse.json({ error: 'ID invàlid' }, { status: 400 })
 
@@ -31,9 +32,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
-}
+})
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export const DELETE = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const id = parseInt(params.id, 10)
   if (!Number.isFinite(id)) return NextResponse.json({ error: 'ID invàlid' }, { status: 400 })
   const { error } = await supabase
@@ -43,4 +44,4 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
-}
+})

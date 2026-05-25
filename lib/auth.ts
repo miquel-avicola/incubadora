@@ -20,15 +20,15 @@ async function getKey(): Promise<CryptoKey> {
   )
 }
 
-export async function signSession(role: string): Promise<string> {
-  const payload = btoa(JSON.stringify({ role, iat: Date.now() }))
+export async function signSession(params: { userId: string; username: string; role: string }): Promise<string> {
+  const payload = btoa(JSON.stringify({ userId: params.userId, username: params.username, role: params.role, iat: Date.now() }))
   const key = await getKey()
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
   const sigB64 = btoa(Array.from(new Uint8Array(sig), c => String.fromCharCode(c)).join(''))
   return `${payload}.${sigB64}`
 }
 
-export async function verifySession(token: string): Promise<{ role: string } | null> {
+export async function verifySession(token: string): Promise<{ userId: string; username: string; role: string } | null> {
   const dot = token.lastIndexOf('.')
   if (dot === -1) return null
   const payload = token.slice(0, dot)
@@ -41,18 +41,20 @@ export async function verifySession(token: string): Promise<{ role: string } | n
     const parsed = JSON.parse(atob(payload))
     // Expiració: 7 dies des de la creació del token
     if (Date.now() - parsed.iat > 7 * 24 * 60 * 60 * 1000) return null
-    return parsed
+    // Validar que el token té els camps nous (tokens antics sense userId/username retornen null)
+    if (!parsed.userId || !parsed.username) return null
+    return { userId: parsed.userId, username: parsed.username, role: parsed.role }
   } catch {
     return null
   }
 }
 
-export async function validateUser(username: string, password: string): Promise<string | null> {
+export async function validateUser(username: string, password: string): Promise<{ userId: string; username: string; role: string } | null> {
   const supabase = getServiceClient()
 
   const { data: user, error } = await supabase
     .from('users')
-    .select('id, password_hash, role, actiu')
+    .select('id, username, password_hash, role, actiu')
     .eq('username', username.toLowerCase())
     .single()
 
@@ -68,7 +70,7 @@ export async function validateUser(username: string, password: string): Promise<
     .eq('id', user.id)
     .then(() => {})
 
-  return user.role
+  return { userId: user.id, username: user.username, role: user.role }
 }
 
 export function canAccess(role: string, path: string): boolean {
@@ -81,6 +83,8 @@ export function canAccess(role: string, path: string): boolean {
     /^\/carrega\/[^/]+\/assignacions($|\/)/,
     /^\/carrega\/[^/]+\/vacunes($|\/)/,
     /^\/api\/carrega\/[^/]+\/assignacions($|\/)/,
+    /^\/admin($|\/)/,
+    /^\/api\/admin($|\/)/,
   ]
   if (requiresAdmin.some(r => r.test(path))) return false
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, CarregaAssignacionsPostBody, CarregaAssignacionsDeleteBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
 const ZONES_VALIDES: ZonaMS[] = ['central', 'paret', 'pulsator']
@@ -17,7 +18,7 @@ type AssignacioInsert = {
   previsio_naixement: number | null
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export const POST = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarregaAssignacionsPostBody, raw)
@@ -147,9 +148,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .in('id', carro_ids)
 
   return NextResponse.json({ created: data?.length }, { status: 201 })
-}
+})
 
-export async function DELETE(request: Request, { params: _params }: { params: { id: string } }) {
+export const DELETE = withAudit(async (request: Request, { params: _params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarregaAssignacionsDeleteBody, raw)
@@ -169,4 +170,4 @@ export async function DELETE(request: Request, { params: _params }: { params: { 
     .eq('id', carro_id)
 
   return NextResponse.json({ ok: true })
-}
+})

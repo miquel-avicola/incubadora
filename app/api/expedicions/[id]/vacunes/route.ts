@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, ExpedicioVacunaBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export const POST = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(ExpedicioVacunaBody, raw)
@@ -17,9 +18,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
-}
+})
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export const DELETE = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(ExpedicioVacunaBody, raw)
@@ -34,4 +35,4 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
-}
+})

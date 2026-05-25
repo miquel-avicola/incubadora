@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ export async function GET() {
 
 // POST /api/previsio-recurrent → crear nova regla
 // Body: { client_id, dia_setmana, tipus, quantitat, observacions? }
-export async function POST(request: Request) {
+export const POST = withAudit(async (request: Request) => {
   const body = await request.json()
   const { client_id, dia_setmana, tipus, quantitat, observacions } = body || {}
   if (!client_id || dia_setmana == null || !tipus || !quantitat) {
@@ -39,4 +40,4 @@ export async function POST(request: Request) {
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, id: data?.id })
-}
+})

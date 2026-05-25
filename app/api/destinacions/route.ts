@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, DestinacionsGetQuery, DestinacioPostBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 export async function GET(request: Request) {
   const qp = parseBody(
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   return NextResponse.json(data)
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit(async (request: Request) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(DestinacioPostBody, raw)
@@ -46,4 +47,4 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
-}
+})

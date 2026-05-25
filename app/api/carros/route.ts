@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, CarroPostBody, CarroDeleteBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 export async function GET() {
   const { data, error } = await supabase
@@ -28,7 +29,7 @@ export async function GET() {
   return NextResponse.json(data)
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit(async (request: Request) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarroPostBody, raw)
@@ -50,9 +51,9 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ created: data?.length, carros: data }, { status: 201 })
-}
+})
 
-export async function DELETE(request: Request) {
+export const DELETE = withAudit(async (request: Request) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarroDeleteBody, raw)
@@ -84,4 +85,4 @@ export async function DELETE(request: Request) {
   }
 
   return NextResponse.json({ deleted: data.id })
-}
+})

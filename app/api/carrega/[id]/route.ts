@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, CarregaPatchBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { data, error } = await supabase
@@ -67,7 +68,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   return NextResponse.json(data)
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarregaPatchBody, raw)
@@ -88,4 +89,4 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
-}
+})

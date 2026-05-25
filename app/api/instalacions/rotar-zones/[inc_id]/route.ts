@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -13,7 +14,7 @@ export const revalidate = 0
  *  - Pulsator d'aquesta Inc ha d'estar buit (cap carro Assignat).
  * Si alguna condicio falla, retorna 400 amb el motiu.
  */
-export async function POST(_request: Request, { params }: { params: { inc_id: string } }) {
+export const POST = withAudit(async (_request: Request, { params }: { params: { inc_id: string } }) => {
   const incId = parseInt(params.inc_id, 10)
   if (!Number.isFinite(incId)) {
     return NextResponse.json({ error: 'inc_id no valid' }, { status: 400 })
@@ -35,4 +36,4 @@ export async function POST(_request: Request, { params }: { params: { inc_id: st
   }
 
   return NextResponse.json(resultat, { headers: { 'Cache-Control': 'no-store' } })
-}
+})

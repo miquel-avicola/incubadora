@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -42,7 +43,7 @@ function subtipus(tipus: string, cap: number): 'SS' | 'MSG' | 'MSP' | 'UNKNOWN' 
  *
  * Els dos modes es poden combinar a la mateixa crida si cal.
  */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const assignacioId = parseInt(params.id, 10)
   if (!Number.isFinite(assignacioId)) {
     return NextResponse.json({ error: "ID d'assignacio no valid" }, { status: 400 })
@@ -235,4 +236,4 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
-}
+})

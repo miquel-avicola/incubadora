@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, ComandaGetQuery, ComandaPostBody } from '@/lib/schemas'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
   return NextResponse.json(comandes)
 }
 
-export async function POST(request: Request) {
+export const POST = withAudit(async (request: Request) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(ComandaPostBody, raw)
@@ -70,4 +71,4 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data, { status: 201 })
-}
+})

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,7 +11,7 @@ export const revalidate = 0
  * Marca totes les assignacions d'un (lot_id, incubadora_id) com a maquila o no.
  * Body: { lot_id: number, incubadora_id: number, es_maquila: boolean }
  */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const fullId = parseInt(params.id, 10)
   if (!Number.isFinite(fullId)) {
     return NextResponse.json({ error: 'ID de full no vàlid' }, { status: 400 })
@@ -65,4 +66,4 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     { ok: true, actualitzats: count ?? 0 },
     { headers: { 'Cache-Control': 'no-store' } }
   )
-}
+})

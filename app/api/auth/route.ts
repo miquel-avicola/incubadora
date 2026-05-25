@@ -1,19 +1,88 @@
 import { NextResponse } from 'next/server'
 import { validateUser, signSession } from '@/lib/auth'
 import { parseBody, AuthLoginBody } from '@/lib/schemas'
+import { createClient } from '@supabase/supabase-js'
+import { withAudit } from '@/lib/audit'
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
+
+const RATE_LIMIT_MAX_FAILURES = 20
+const RATE_LIMIT_WINDOW_MINUTES = 5
+const RATE_LIMIT_BLOCK_SECONDS = 15 * 60
 
 export async function POST(request: Request) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown'
+
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(AuthLoginBody, raw)
   if (!parsed.ok) return parsed.response
+
+  const supabase = getServiceClient()
+
+  // Obtenir la data de l'últim login exitós per a aquesta IP
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString()
+
+  const { data: lastSuccess } = await supabase
+    .from('login_attempts')
+    .select('attempted_at')
+    .eq('ip', ip)
+    .eq('success', true)
+    .order('attempted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const sinceRef = lastSuccess?.attempted_at ?? new Date(0).toISOString()
+  const effectiveFrom = sinceRef > windowStart ? sinceRef : windowStart
+
+  // Comptar fallits recents des del darrer login exitós (o finestra de 5 min)
+  const { count: recentFailures } = await supabase
+    .from('login_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('ip', ip)
+    .eq('success', false)
+    .gt('attempted_at', effectiveFrom)
+
+  if ((recentFailures ?? 0) >= RATE_LIMIT_MAX_FAILURES) {
+    // Registrar l'intent bloquejat igualment (perquè l'atac quedi registrat)
+    await supabase.from('login_attempts').insert({ ip, success: false })
+    const res = NextResponse.json(
+      { error: "Massa intents. Torna a provar d'aquí a uns 15 minuts" },
+      { status: 429 }
+    )
+    res.headers.set('Retry-After', String(RATE_LIMIT_BLOCK_SECONDS))
+    return res
+  }
+
+  // Validar credencials (bcrypt) — només s'executa si no estem bloquejats
   const { username, password } = parsed.data
-  const role = await validateUser(username, password)
-  if (!role) {
+  const userInfo = await validateUser(username, password)
+
+  // Registrar l'intent (èxit o fallada)
+  await supabase.from('login_attempts').insert({ ip, success: userInfo !== null })
+
+  // Neteja amortitzada: ~2% de peticions esborren entrades de més de 24h
+  if (Math.random() < 0.02) {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    supabase
+      .from('login_attempts')
+      .delete()
+      .lt('attempted_at', cutoff)
+      .then(() => {})
+  }
+
+  if (!userInfo) {
     return NextResponse.json({ error: 'Usuari o contrasenya incorrectes' }, { status: 401 })
   }
-  const token = await signSession(role)
-  const res = NextResponse.json({ ok: true, role })
+
+  const token = await signSession(userInfo)
+  const res = NextResponse.json({ ok: true, role: userInfo.role })
   res.cookies.set('session', token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -24,8 +93,9 @@ export async function POST(request: Request) {
   return res
 }
 
-export async function DELETE() {
+// logout: SÍ porta withAudit (hi ha sessió activa)
+export const DELETE = withAudit(async () => {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('session', '', { httpOnly: true, maxAge: 0, path: '/' })
   return res
-}
+})

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 // PATCH /api/previsio-recurrent/[id] → editar regla
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const body = await request.json()
   const updates: any = {}
   if (body.quantitat != null) {
@@ -28,14 +29,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     .eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
-}
+})
 
 // DELETE /api/previsio-recurrent/[id]
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export const DELETE = withAudit(async (_request: Request, { params }: { params: { id: string } }) => {
   const { error } = await supabase
     .from('previsio_recurrent')
     .delete()
     .eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
-}
+})

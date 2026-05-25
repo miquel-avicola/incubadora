@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { obtenirNaixementPct, llegirParametresPrevisio } from '@/lib/previsio'
+import { withAudit } from '@/lib/audit'
 
 // La planificació canvia l'estat dels carros i de les assignacions. Cal que les
 // rutes que llegeixen aquesta info després d'una crida no rebin cache de Next.js.
@@ -45,7 +46,7 @@ interface BodyPlanificacio {
  *    ja s'ha guardat). S'inclouen els comptadors `previsio_recalculats` i
  *    `previsio_errors` per al diagnostic.
  */
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export const PUT = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   let body: BodyPlanificacio
   try {
     body = await request.json()
@@ -106,7 +107,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     { ...data, ...recalculInfo },
     { headers: { 'Cache-Control': 'no-store' } }
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Recalcul de previsio_naixement per a les assignacions d'un full

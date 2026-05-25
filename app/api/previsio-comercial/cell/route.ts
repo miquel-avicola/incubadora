@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { withAudit } from '@/lib/audit'
 
 // PUT /api/previsio-comercial/cell
 // Body: { data: 'YYYY-MM-DD', client_id: number, tipus: 'Pollets' | 'Maquila', quantitat: number }
@@ -7,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 // Si quantitat <= 0, elimina la comanda preliminar.
 // No permet modificar comandes reals (amb full_carrega_id).
 
-export async function PUT(request: Request) {
+export const PUT = withAudit(async (request: Request) => {
   const body = await request.json()
   const { data, client_id, tipus, quantitat } = body || {}
 
@@ -76,4 +77,4 @@ export async function PUT(request: Request) {
     if (errIns) return NextResponse.json({ error: errIns.message }, { status: 500 })
     return NextResponse.json({ ok: true, accio: 'creat', id: creada?.id })
   }
-}
+})

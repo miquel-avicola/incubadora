@@ -153,6 +153,10 @@ Les **taules principals** (amb una explicació planera del que guarden):
 
 **`eclosio_historic`** — Històric d'eclosió importat d'Excel: `estirp`, `tipus_incubadora`, `setmanes_vida`, `eclosio`.
 
+**`login_attempts`** *(afegida 2026-05-25)* — Registre d'intents de login per IP per a la protecció contra força bruta. Camps: `id`, `ip`, `attempted_at`, `success`. RLS deny-all (accedida via service_role). Neteja automàtica amortitzada d'entrades de més de 24 hores.
+
+**`audit_log`** *(afegida 2026-05-25)* — Registre d'accions mutatives de cada usuari. Camps: `id` (uuid), `ts`, `user_id` (FK → users, set null si s'esborra l'usuari), `username` (desnormalitzat), `role`, `ip`, `method`, `path`, `payload` (jsonb redactat i truncat a 5KB), `status_code`. RLS deny-all. Consultable a `/admin/auditoria`.
+
 Les **funcions** de la base de dades (codi SQL guardat dins de la pròpia base que fa càlculs) inclouen: `avg_naixement_supabase`, `avg_eclosio_supabase`, `rotar_zones_ms_gran`, `fulls_candidats_finalitzar`, `estat_instalacions`, `offset_per_dia`, `guarda_planificacio_full`.
 
 ---
@@ -189,7 +193,7 @@ Aquí va una explicació del **com està muntada la seguretat actualment**. La m
 
 Quan algú entra a l'app, ha de passar per `/login`. Allà introdueix usuari i contrasenya. El servidor compara amb una llista d'usuaris **hardcoded al fitxer `lib/auth.ts`** (és a dir, els usuaris i les contrasenyes estan escrits literalment dins del codi).
 
-Si el parell usuari/contrasenya quadra, el servidor genera un "token de sessió". Aquest token és una cadena de text amb dues parts separades per un punt: la primera és un JSON codificat en base64 que conté el rol i el moment de creació, i la segona és una signatura HMAC-SHA256 que prova que el servidor ha generat aquell token (i que ningú l'ha modificat). La clau secreta per signar és la variable d'entorn `AUTH_SECRET`.
+Si el parell usuari/contrasenya quadra, el servidor genera un "token de sessió". Aquest token és una cadena de text amb dues parts separades per un punt: la primera és un JSON codificat en base64 que conté `userId`, `username`, `role` i el moment de creació (`iat`), i la segona és una signatura HMAC-SHA256 que prova que el servidor ha generat aquell token (i que ningú l'ha modificat). La clau secreta per signar és la variable d'entorn `AUTH_SECRET`. *(Actualitzat 2026-05-25: el payload inclou `userId` i `username` per al registre d'auditoria. Tokens antics (sense aquests camps) queden automàticament invalidats.)*
 
 El token es guarda al navegador com una cookie anomenada `session`, amb opcions: `httpOnly` (el JavaScript del navegador no la pot llegir — protegeix contra robatori per scripts injectats), `sameSite: 'lax'` (no s'envia en peticions creuades de tercers — protecció bàsica contra CSRF), i `maxAge` de 7 dies.
 
@@ -359,6 +363,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Què caldria fer:** Recrear cada funció amb `SET search_path = public, pg_temp` o equivalent.
 
+**Resolt el 2026-05-25:** 7 funcions recreades amb `SET search_path = public, pg_temp` via migració `m1_fix_search_path_7_functions`. Verificat amb `get_advisors` — cap alerta de `function_search_path_mutable` restant.
+
 #### M-2. Sense protecció contra força bruta al login
 
 **Model recomanat: [Mixt]** — Decidir l'estratègia (rate limit per IP? per usuari? amb Upstash? amb una taula a Supabase?) té trade-offs. Opus per a la decisió. Sonnet per a la implementació.
@@ -369,6 +375,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 
 **Què caldria fer:** Afegir rate limiting per IP a la ruta de login (per exemple, amb la integració d'Upstash Redis a Vercel o amb la primitiva `next/server` `unstable_after`). Bloquejar després de N intents fallits.
 
+**Resolt el 2026-05-25:** Rate limit per IP implementat a `/api/auth` amb la taula `login_attempts` a Supabase. Llindar: 20 fallits en 5 minuts (rellotge reseteja amb un login exitós) → blockeig de 15 minuts (HTTP 429 + header `Retry-After`). Neteja amortitzada (probabilitat 2%) d'entrades de més de 24 hores.
+
 #### M-3. Sense logs d'auditoria
 
 **Model recomanat: [Mixt]** — Disseny de la taula d'audit_log i del wrapper que la pobli a cada petició: Opus. Aplicar-ho a totes les rutes: Sonnet.
@@ -378,6 +386,8 @@ A `app/api/destinacions/route.ts` línia 14 hi ha una construcció particularmen
 **Per què importa:** En una app interna de gestió, saber qui ha fet què és útil tant per a debugging com per a investigar incidents.
 
 **Què caldria fer:** Afegir una taula `audit_log` amb (timestamp, role, path, method, payload_resumit, ip) i un wrapper al servidor que la pobli a cada petició mutativa.
+
+**Resolt el 2026-05-25:** Taula `audit_log` (uuid, ts, user_id, username, role, ip, method, path, payload jsonb redactat i truncat a 5KB, status_code) creada amb RLS deny-all. Wrapper `withAudit` a `lib/audit.ts` aplicat a totes les rutes mutatives (POST, PATCH, DELETE, PUT). Excepció: `/api/auth POST` (login, sense sessió; es registra via `login_attempts`). Pre-requisit P0 resolt: JWT ara inclou `userId` i `username` (sessions existents invalidades, cal tornar a fer login). Pàgina `/admin/auditoria` accessible només per rol `admin`, amb filtres per ruta i rang de dates.
 
 #### M-4. Dependències sense auditoria recent
 
