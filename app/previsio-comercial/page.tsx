@@ -84,10 +84,10 @@ export default function PrevisioComercial() {
     setLoading(true)
     const res = await fetch(`/api/previsio-comercial?inici=${inici}&setmanes=${setmanes}`)
     const d: Resposta = await res.json()
-    // DEBUG TEMPORAL - buscar cel·la Sanco (18_Pollets) al rang visible
+    // DEBUG TEMPORAL
     const f2506 = d.files.find(f => f.data === '2026-06-25')
-    console.log('[DEBUG] fila 2026-06-25:', f2506 ? JSON.stringify(f2506.cells['18_Pollets']) : 'fila no trobada')
-    console.log('[DEBUG] columnes retornades:', d.columnes.map(c => c.key).join(', '))
+    console.log('[DEBUG] fila 2026-06-25 cells[18_Pollets]:', f2506 ? JSON.stringify(f2506.cells['18_Pollets']) : 'fila no trobada')
+    console.log('[DEBUG] _debug API:', JSON.stringify((d as any)._debug, null, 2))
     setData(d)
     setEdits({})
     setLoading(false)
