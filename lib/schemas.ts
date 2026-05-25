@@ -242,7 +242,6 @@ export const NaixementPostBody = z.object({
   carros: z
     .array(
       z.object({
-        assignacio_id: zId,
         transferencia_id: zId,
         ous_fertils_vacunats: z.number().int().min(0),
       })
