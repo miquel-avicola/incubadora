@@ -348,6 +348,7 @@ export default function ExpedicionsNaixement() {
                 }
               })}
               <th>Total assignat</th>
+              <th>Sobrants</th>
             </tr>
           </thead>
           <tbody>
@@ -382,6 +383,7 @@ export default function ExpedicionsNaixement() {
                     }
                   })}
                   <td>{totalLot > 0 ? totalLot.toLocaleString() : ''}</td>
+                  <td>{stats.nascuts - totalLot !== 0 ? (stats.nascuts - totalLot).toLocaleString() : ''}</td>
                 </tr>
               )
             })}
@@ -404,6 +406,7 @@ export default function ExpedicionsNaixement() {
                 }
               })}
               <td>{totalAssignats.toLocaleString()}</td>
+              <td>{(totalNascuts - totalAssignats).toLocaleString()}</td>
             </tr>
             {/* Fila: Pollets/caixa */}
             <tr className="dist-row">
@@ -416,6 +419,7 @@ export default function ExpedicionsNaixement() {
                 return <td key={key}>{grup ? grup.pollets_caixa : '—'}</td>
               })}
               <td></td>
+              <td></td>
             </tr>
             {/* Fila: Alçada carro */}
             <tr className="dist-row">
@@ -427,6 +431,7 @@ export default function ExpedicionsNaixement() {
                 const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
                 return <td key={key}>{grup ? grup.alcada : '—'}</td>
               })}
+              <td></td>
               <td></td>
             </tr>
             {/* Fila: Distribució */}
@@ -451,6 +456,7 @@ export default function ExpedicionsNaixement() {
                   return <td key={`par_${expM.id}`}><span>{fmtM}</span><br /><span>{fmtF}</span></td>
                 }
               })}
+              <td></td>
               <td></td>
             </tr>
           </tbody>

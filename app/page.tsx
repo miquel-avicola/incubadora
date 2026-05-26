@@ -64,6 +64,16 @@ export default async function Home() {
             </Link>
           )}
 
+          {role === 'admin' && (
+            <Link href="/estadistiques" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📊</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estadístiques mensuals</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Rendiment d'incubació, fertilitat i comercialització</div>
+              </div>
+            </Link>
+          )}
+
           {showCarrega && (
             <Link href="/instalacions" style={{ textDecoration: 'none' }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>

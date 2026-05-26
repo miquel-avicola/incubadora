@@ -10,7 +10,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   // 1. Info del lot
   const { data: lot, error: lotError } = await supabase
     .from('lots_reproductores')
-    .select('id, data_naixement, estirp, granja_reproductora_id')
+    .select('id, data_naixement, estirp, granja_reproductora_id, actiu')
     .eq('id', lotId)
     .single()
 
@@ -44,7 +44,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   // 4. Assignacions d'aquests carros (per tenir el num_carrega)
   const { data: assignacions } = await supabase
     .from('assignacions')
-    .select('carro_id, full_carrega_id')
+    .select('carro_id, full_carrega_id, incubadores(tipus)')
     .in('carro_id', carroIds)
 
  const fullIdsSet = new Set((assignacions || []).map(a => a.full_carrega_id).filter(Boolean))
@@ -84,6 +84,7 @@ const fullIds = Array.from(fullIdsSet)
     // Assignació i full de càrrega
     const assignacio = (assignacions || []).find(a => a.carro_id === carro.id)
     const full = assignacio ? (fulls || []).find(f => f.id === assignacio.full_carrega_id) : null
+    const tipusIncubadora = assignacio?.incubadores ? (assignacio.incubadores as any).tipus : null
 
     // Transferències i resultats
     const transfsDelCarro = (transferencies || []).filter(t => t.carro_id === carro.id)
@@ -107,6 +108,7 @@ const fullIds = Array.from(fullIdsSet)
           pollets_nascuts: nascuts,
           pollets_descartats: res.pollets_descartats ?? null,
           data_naixement_pollets: res.naixement ?? null,
+          tipus_incubadora: tipusIncubadora,
           fertilitat: fertils !== null && ous > 0 ? Math.round((fertils / ous) * 1000) / 10 : null,
           eclosio: fertils !== null && fertils > 0 && nascuts !== null ? Math.round((nascuts / fertils) * 1000) / 10 : null,
           naixement: nascuts !== null && ous > 0 ? Math.round((nascuts / ous) * 1000) / 10 : null,
@@ -121,4 +123,22 @@ const fullIds = Array.from(fullIdsSet)
     lot: { ...lot, granges_reproductores: granja },
     resultats,
   })
+}
+
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
+  const lotId = parseInt(params.id)
+  const raw = await request.json().catch(() => null)
+  if (raw === null || typeof raw.actiu !== 'boolean') {
+    return NextResponse.json({ error: 'Payload invàlid' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('lots_reproductores')
+    .update({ actiu: raw.actiu })
+    .eq('id', lotId)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
 }

@@ -82,7 +82,7 @@ export default function PrevisioComercial() {
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/previsio-comercial?inici=${inici}&setmanes=${setmanes}`)
+    const res = await fetch(`/api/previsio-comercial?inici=${inici}&setmanes=${setmanes}`, { cache: 'no-store' })
     const d: Resposta = await res.json()
     setData(d)
     setEdits({})

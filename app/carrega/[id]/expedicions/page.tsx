@@ -73,6 +73,11 @@ interface Full {
   num_carrega: number
   carrega: string
   comandes: Comanda[]
+  assignacions: {
+    transferencies: {
+      resultats_naix: { pollets_nascuts: number }[]
+    }[]
+  }[]
 }
 
 interface ResultatExpedicio {
@@ -448,6 +453,15 @@ export default function Expedicions() {
     if (cid && polletsPerComanda[cid]) polletsPerComanda[cid].assignats += e.pollets_comanda || 0
   })
 
+  const totalNascuts = full.assignacions?.reduce((acc, a) => {
+    return acc + (a.transferencies?.reduce((tAcc, t) => {
+      return tAcc + (t.resultats_naix?.reduce((rAcc, r) => rAcc + (r.pollets_nascuts || 0), 0) || 0)
+    }, 0) || 0)
+  }, 0) || 0
+
+  const totalAssignats = Object.values(polletsPerComanda).reduce((s, c) => s + c.assignats, 0)
+  const sobrants = totalNascuts - totalAssignats
+
   const grupsViatge: Array<{ key: string; transportista: Transportista; num_viatge: number; exps: Expedicio[] }> = []
   const grupMap = new Map<string, typeof grupsViatge[0]>()
   expedicions.forEach(e => {
@@ -530,6 +544,14 @@ export default function Expedicions() {
               </div>
             )
           })}
+          {totalNascuts > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', marginTop: '0.5rem', borderTop: '2px solid var(--border)', fontSize: '0.85rem' }}>
+              <span style={{ fontWeight: 700 }}>SOBRANTS</span>
+              <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', fontWeight: 700, color: sobrants > 0 ? 'var(--success)' : sobrants < 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
+                {sobrants.toLocaleString()} pollets
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Formulari nova expedició */}

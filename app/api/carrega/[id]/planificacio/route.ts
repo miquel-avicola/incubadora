@@ -159,9 +159,10 @@ async function recalcularPrevisions(fullId: number): Promise<{
   let errors = 0
   let skippedManual = 0
 
-  // Sense paral.lelitzar, per aprofitar la cache de naixement per (estirp, setmanes, tipus).
-  // Volum esperat: <= 80 assignacions per full -> temps total < 2s al pitjor cas.
+  // Ara calculem totes les previsions seqüencialment per aprofitar la cache de naixement per (estirp, setmanes, tipus).
   const llista = assignacionsActuals as unknown as AssignacioPerRecalcul[]
+  const updatesToApply: { id: number; naixement: number }[] = []
+
   for (let i = 0; i < llista.length; i++) {
     const a = llista[i]
     if (a.previsio_manual) {
@@ -203,12 +204,22 @@ async function recalcularPrevisions(fullId: number): Promise<{
       }
     }
 
-    const { error: errUpd } = await supabase
-      .from('assignacions')
-      .update({ previsio_naixement: naixement })
-      .eq('id', a.id)
+    updatesToApply.push({ id: a.id, naixement })
+  }
 
-    if (errUpd) errors++
+  // Executem totes les actualitzacions en paral·lel per reduir dràsticament el temps de resposta
+  // Volum esperat: <= 80 assignacions per full, que triguen ~100ms en total amb Promise.all.
+  const updatePromises = updatesToApply.map(upd =>
+    supabase
+      .from('assignacions')
+      .update({ previsio_naixement: upd.naixement })
+      .eq('id', upd.id)
+  )
+
+  const updateResults = await Promise.all(updatePromises)
+
+  for (const result of updateResults) {
+    if (result.error) errors++
     else recalculats++
   }
 

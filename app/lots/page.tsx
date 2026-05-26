@@ -19,6 +19,7 @@ interface Lot {
     granja: string
     nom_informal: string | null
   }
+  actiu: boolean
 }
 
 export default function Lots() {
@@ -53,7 +54,7 @@ export default function Lots() {
       const res = await fetch('/api/lots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ granja_reproductora_id: granjaId, data_naixement: dataNaixement, estirp: estirp || null }),
+        body: JSON.stringify({ granja_reproductora_id: parseInt(granjaId, 10), data_naixement: dataNaixement, estirp: estirp || null }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -260,6 +261,7 @@ export default function Lots() {
                 </div>
                 <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
                   nascut {lot.data_naixement}
+                  {lot.actiu === false && <span style={{ marginLeft: '0.5rem', color: '#ef4444' }}>[Tancat]</span>}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

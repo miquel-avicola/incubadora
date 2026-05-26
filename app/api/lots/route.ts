@@ -10,6 +10,7 @@ export async function GET() {
       id,
       data_naixement,
       estirp,
+      actiu,
       granges_reproductores (
         id,
         granja,
