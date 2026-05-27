@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
-import LogoutButton from './components/LogoutButton'
+import AppLayout from './components/AppLayout'
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
@@ -27,8 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ca" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
       <body>
-        {children}
-        <LogoutButton />
+        <AppLayout>
+          {children}
+        </AppLayout>
       </body>
     </html>
   )

@@ -1,785 +1,21 @@
 'use client'
+import { useAssignacions } from './useAssignacions'
+import { IndeterminateCheckbox, HeaderPlan, OrdreMSP, Safata, SeccioInc, IncubadoraSS, IncubadoraMS, Cell, MemoCell, btnStyle, cardSeccio, h2Seccio, badgeStyle, cardInc, btnSelLliures, chipNaix, miniBtn } from './components/AllComponents';
+
+
 
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment, memo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, calorFuturaCarro, type CarroTermic } from '@/lib/termico'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipus
-// ─────────────────────────────────────────────────────────────────────────────
-
-type ZonaMS = 'central' | 'paret' | 'pulsator'
-type SubTipus = 'SS' | 'MSG' | 'MSP' | 'NAIX'
-type Dia = 'dijous' | 'dilluns'
-type Fase = 'seleccio' | 'assignacio'
-
-interface CarroEstoc {
-  id: number
-  posta: string
-  quantitat_ous: number
-  estat: string
-  lots_reproductores: {
-    id: number
-    data_naixement: string
-    estirp: string | null
-    granges_reproductores: { granja: string; nom_informal: string | null }
-  }
-  previsio_pct?: number
-}
-
-interface Incubadora {
-  id: number
-  numero: number
-  model: string
-  tipus: string
-  capacitat_carros: number
-}
-
-interface AssignacioActual {
-  id: number
-  num_carro_full: number
-  posicio: number | null
-  zona: ZonaMS | null
-  incubadora_id: number
-  carros_estoc: {
-    id: number
-    posta: string
-    quantitat_ous: number
-    lots_reproductores: {
-      id: number
-      data_naixement: string
-      estirp: string | null
-      granges_reproductores: { granja: string; nom_informal: string | null }
-    }
-    previsio_pct?: number
-  }
-  incubadores: { numero: number; model: string; tipus: string }
-}
-
-interface Full {
-  id: number
-  num_carrega: number
-  carrega: string
-  assignacions: AssignacioActual[]
-  comandes: { quantitat_pollets: number | null; quantitat_ous_maquila: number | null; tipus: string }[]
-}
-
-interface CarroInst {
-  assignacio_id: number
-  num_carro_full: number
-  full_id: number
-  num_carrega: number
-  posicio: number | null
-  zona: ZonaMS | null
-  estirp: string | null
-  // Camps per a la capa tèrmica (venenen de estat_instalacions())
-  quantitat_ous: number
-  setmanes_lot: number | null
-  dia_incubacio: number | null
-  // Data de transferència planificada del full al qual pertany el carro
-  data_transferencia_full: string | null
-}
-
-interface IncInst {
-  id: number
-  numero: number
-  tipus: string
-  capacitat: number
-  carros: CarroInst[]
-}
-
-interface EstatInst {
-  incubadores: IncInst[]
-  naixedores: { id: number; numero: number; capacitat: number; carros: { num_carro_full: number; estirp: string | null }[] }[]
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Mapatge SS posicio (1-24) a la cel·la visual (col 0-5, row 0-3, on row 0 = porta a baix).
-// Numeració real: paret esq 1-4, paret dre 5-8, central esq 9-12, central dre 13-16,
-// pulsator esq 17-20, pulsator dre 21-24.
-// Columnes visuals: 0=paret esq, 1=central esq, 2=pulsator esq, 3=pulsator dre, 4=central dre, 5=paret dre
-function ssPosToCell(pos: number): { col: number; row: number } {
-  const grup = Math.floor((pos - 1) / 4)
-  const row = (pos - 1) % 4
-  const grupAColumna = [0, 5, 1, 4, 2, 3]
-  return { col: grupAColumna[grup], row }
-}
-
-const MS_ZONES_ESQ: ZonaMS[] = ['paret', 'central', 'pulsator']
-const MS_ZONES_DRE: ZonaMS[] = ['pulsator', 'central', 'paret']
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function subtipus(tipus: string, cap: number): SubTipus {
-  if (tipus === 'Singlestage') return 'SS'
-  if (tipus === 'Multistage' && cap === 24) return 'MSG'
-  if (tipus === 'Multistage' && cap === 12) return 'MSP'
-  return 'NAIX'
-}
-
-function diaDeFull(dataIso: string): Dia | null {
-  const d = new Date(dataIso + 'T12:00:00').getDay()
-  if (d === 1) return 'dilluns'
-  if (d === 4) return 'dijous'
-  return null
-}
-
-function nomCarroCurt(c: CarroEstoc | AssignacioActual['carros_estoc']): string {
-  const lot = c.lots_reproductores
-  return lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja
-}
-
-function keyCell(incId: number, pos: number, zona: ZonaMS | null): string {
-  return `${incId}|${pos}|${zona || '-'}`
-}
-
-function diesEstoc(posta: string, carrega: string): number {
-  const p = new Date(posta + 'T00:00:00')
-  const c = new Date(carrega + 'T00:00:00')
-  return Math.floor((c.getTime() - p.getTime()) / 86400000)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers tèrmics
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Setmanes de vida del lot a partir de la data de naixement (ISO)
-function setmanesLot(dataNaixement: string): number {
-  const ms = Date.now() - new Date(dataNaixement + 'T00:00:00').getTime()
-  return Math.floor(ms / (7 * 24 * 60 * 60 * 1000))
-}
-
-// Replica TypeScript de la funció PL/pgSQL offset_per_dia().
-// Retorna l'offset de numeració per a una incubadora donada.
-// num_carro_full = offset + posicio
-function offsetPerDia(
-  dia: Dia,
-  tipus: string,
-  cap: number,
-  incNumero: number,
-  ssPrincipalNum: number | null,
-  mspOrdre: number[]
-): number | null {
-  if (dia === 'dijous') {
-    if (tipus === 'Singlestage') {
-      if (ssPrincipalNum === null) return null
-      return incNumero === ssPrincipalNum ? 0 : 100
-    } else if (cap === 24) {
-      if (incNumero === 1) return 24
-      if (incNumero === 2) return 32
-      return 200 + incNumero * 8
-    } else {
-      const idx = mspOrdre.indexOf(incNumero)
-      return idx >= 0 ? 40 + idx * 4 : null
-    }
-  } else { // dilluns
-    if (tipus === 'Singlestage') return 100
-    if (cap === 24) {
-      if (incNumero >= 3 && incNumero <= 6) return (incNumero - 3) * 8
-      return 200 + incNumero * 8
-    } else {
-      const idx = mspOrdre.indexOf(incNumero)
-      return idx >= 0 ? 32 + idx * 4 : null
-    }
-  }
-}
-
-// Pollets estimats per a un carro (fórmula completa o fallback)
-function polletsCarro(c: CarroEstoc | AssignacioActual['carros_estoc']): number {
-  if (c.previsio_pct != null) return Math.round(c.quantitat_ous * c.previsio_pct)
-  const setm = setmanesLot(c.lots_reproductores.data_naixement)
-  return Math.round(c.quantitat_ous * fertilitatEstimada(setm) * ECLOSIO_EST)
-}
-
-// Optimitza les zones (central/paret/pulsator) dels carros MS del full actual
-// deixant les Singlestage i els carros d'altres fulls intactes.
-// Algoritme greedy: per cada MS, tria la zona que minimitza el desequilibri
-// projectat a 21 dies, processant els carros en ordre de calor potencial DESC.
-function optimitzarZonesTermiques(
-  colocatsActuals: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>,
-  carrosLotParam: CarroEstoc[],
-  estatInstParam: EstatInst,
-  incsById: Map<number, Incubadora>,
-  assignacioIdsDelFull: Set<number>
-): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
-  const resultat = new Map(colocatsActuals)
-
-  // Incubadores MS que tenen carros del full actual
-  const msIncIds = new Set<number>()
-  colocatsActuals.forEach((p) => {
-    const inc = incsById.get(p.incId)
-    if (inc && inc.tipus === 'Multistage') msIncIds.add(p.incId)
-  })
-
-  msIncIds.forEach((incId) => {
-    const inc = incsById.get(incId)
-    if (!inc) return
-    const maxPerZona = inc.capacitat_carros === 24 ? 8 : 4
-
-    // Estat fixe: carros d'altres fulls ja a la MS (excloem els del full actual)
-    const incInst = estatInstParam.incubadores.find((i) => i.id === incId)
-    const carrosFixos: CarroTermic[] = []
-    if (incInst) {
-      for (const c of incInst.carros) {
-        if (assignacioIdsDelFull.has(c.assignacio_id)) continue
-        if (!c.zona || c.dia_incubacio === null || c.setmanes_lot === null) continue
-        carrosFixos.push({
-          zona: c.zona as CarroTermic['zona'],
-          quantitat_ous: c.quantitat_ous,
-          setmanes_lot: c.setmanes_lot,
-          dia_incubacio: c.dia_incubacio,
-        })
-      }
-    }
-
-    // Carros del full actual en aquesta MS
-    const carrosDeFull: { carroId: number; carro: CarroEstoc }[] = []
-    colocatsActuals.forEach((p, carroId) => {
-      if (p.incId !== incId) return
-      const carro = carrosLotParam.find((c) => c.id === carroId)
-      if (carro) carrosDeFull.push({ carroId, carro })
-    })
-
-    // Ordenar per calor potencial pic (dia 18) DESC → els carros "calents" primer
-    carrosDeFull.sort((a, b) => {
-      const sa = setmanesLot(a.carro.lots_reproductores.data_naixement)
-      const sb = setmanesLot(b.carro.lots_reproductores.data_naixement)
-      return indexCalorCarro(b.carro.quantitat_ous, sb, 18)
-           - indexCalorCarro(a.carro.quantitat_ous, sa, 18)
-    })
-
-    // Assignació greedy
-    const carrosVirtuals: CarroTermic[] = [...carrosFixos]
-    for (const { carroId, carro } of carrosDeFull) {
-      const setm = setmanesLot(carro.lots_reproductores.data_naixement)
-      // Zones amb capacitat disponible
-      const comptes: Record<ZonaMS, number> = { central: 0, paret: 0, pulsator: 0 }
-      carrosVirtuals.forEach((cv) => { comptes[cv.zona]++ })
-      const zonesDisp = (['central', 'paret', 'pulsator'] as ZonaMS[]).filter(
-        (z) => comptes[z] < maxPerZona
-      )
-      if (zonesDisp.length === 0) continue
-      const zona = suggerirZonaMS(carrosVirtuals, { quantitat_ous: carro.quantitat_ous, setmanes_lot: setm }, zonesDisp)
-      const p = resultat.get(carroId)!
-      resultat.set(carroId, { ...p, zona })
-      carrosVirtuals.push({ zona, quantitat_ous: carro.quantitat_ous, setmanes_lot: setm, dia_incubacio: 0 })
-    }
-  })
-
-  return resultat
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Projecció de l'estat de les instal·lacions al moment del load futur
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Donat l'estat real actual i la data del load actual, retorna un nou EstatInst
-// que reflecteix com estaran les màquines just abans del load: amb totes les
-// transferències intermèdies aplicades (carros eliminats) i les rotacions MSG
-// (paret→pulsator, central→paret) executades automàticament cada vegada que el
-// pulsator d'una MSG queda buit. Replica el comportament del botó manual
-// "Rotar zones" + la funció SQL rotar_zones_ms_gran.
-//
-// Regles:
-//   · Es processen totes les transferències amb data_transferencia_full ≤ data
-//     de càrrega del full actual i que no pertanyen al full actual.
-//   · Les transferències s'apliquen en ordre cronològic ASC.
-//   · Després de cada transferència, per cada MSG (cap=24) afectada: si el
-//     pulsator d'aquella MS queda completament buit, s'aplica la rotació.
-//   · Les MSP (cap=12) i les SS NO roten — només es treuen els carros
-//     transferits.
-//   · La rotació manté la `posicio` numèrica del carro, només canvia la `zona`.
-
-function projectarEstatInst(
-  estatInst: EstatInst,
-  dataCarrega: string,
-  assignacioIdsDelFull: Set<number>
-): EstatInst {
-  // Còpia profunda per no mutar l'estat original
-  const nou: EstatInst = structuredClone(estatInst)
-  const dataLoad = new Date(dataCarrega + 'T00:00:00').getTime()
-
-  // 1. Recopilar transferències pendents (clau única per carrega+data)
-  type TransfEvent = { numCarrega: number; dataTransf: string }
-  const transfMap = new Map<string, TransfEvent>()
-  for (const inc of nou.incubadores) {
-    for (const c of inc.carros) {
-      if (assignacioIdsDelFull.has(c.assignacio_id)) continue
-      if (!c.data_transferencia_full) continue
-      const dataTrans = new Date(c.data_transferencia_full + 'T00:00:00').getTime()
-      if (dataTrans > dataLoad) continue
-      const key = `${c.num_carrega}|${c.data_transferencia_full}`
-      if (!transfMap.has(key)) {
-        transfMap.set(key, { numCarrega: c.num_carrega, dataTransf: c.data_transferencia_full })
-      }
-    }
-  }
-
-  // 2. Ordenar cronològicament ASC
-  const transfsOrdenades = Array.from(transfMap.values()).sort(
-    (a, b) => new Date(a.dataTransf + 'T00:00:00').getTime() - new Date(b.dataTransf + 'T00:00:00').getTime()
-  )
-
-  // 3. Aplicar cada transferència i rotar les MSG que quedin amb pulsator buit
-  for (const ev of transfsOrdenades) {
-    const incsAfectades = new Set<number>()
-
-    for (const inc of nou.incubadores) {
-      const abans = inc.carros.length
-      inc.carros = inc.carros.filter((c) => {
-        if (c.num_carrega !== ev.numCarrega) return true
-        if (c.data_transferencia_full !== ev.dataTransf) return true
-        return false
-      })
-      if (inc.carros.length !== abans) incsAfectades.add(inc.id)
-    }
-
-    // Rotació automàtica de MSG amb pulsator buit
-    Array.from(incsAfectades).forEach((incId) => {
-      const inc = nou.incubadores.find((i) => i.id === incId)
-      if (!inc) return
-      if (inc.tipus !== 'Multistage' || inc.capacitat !== 24) return
-      const hiHaPulsator = inc.carros.some((c) => c.zona === 'pulsator')
-      if (hiHaPulsator) return
-      // paret → pulsator, central → paret (manté `posicio`)
-      for (const c of inc.carros) {
-        if (c.zona === 'paret') c.zona = 'pulsator'
-        else if (c.zona === 'central') c.zona = 'paret'
-      }
-    })
-  }
-
-  return nou
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Algoritme pre-suggerit (v1)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Distribueix els carros encara no col·locats entre les cel·les marcades pel
-// l'usuari (seleccionades en groc), aplicant aquestes regles:
-//
-//   1. Agrupar carros per (granja, estirp, posta). Els grups més grans van primer.
-//   2. Dins d'una incubadora SS, prioritzar columnes pulsator/central abans que paret.
-//   3. Carros del mateix grup tendeixen a anar a la mateixa columna (i incubadora).
-//   4. Costat esquerra primer.
-//
-// Retorna un Map<carro_id, {incId, posicio, zona}>.
-
-interface CellaSel {
-  incId: number
-  pos: number
-  zona: ZonaMS | null
-  // Per a SS, derivem (col, row) i una "prioritat de columna":
-  // 0 = pulsator (esq), 1 = central (esq), 2 = paret (esq), 3 = paret (dre), 4 = central (dre), 5 = pulsator (dre)
-  // Volem pulsator/central abans que paret → ordenar per prioritat ASC.
-  prioritat: number
-  costat: 'esq' | 'dre' | 'cap'
-  columna: number // identificador de columna física (per agrupar lots iguals)
-}
-
-function ordreCellesSS(c: CellaSel): number {
-  // Pulsator(esq)=0, Central(esq)=1, Paret(esq)=2, Paret(dre)=3, Central(dre)=4, Pulsator(dre)=5
-  // Per prioritzar pulsator+central abans que paret:
-  // Pulsator esq, Central esq, Pulsator dre, Central dre, Paret esq, Paret dre
-  // → ordre desitjat: 0, 1, 5, 4, 2, 3
-  const mapa: Record<number, number> = { 0: 0, 1: 1, 5: 2, 4: 3, 2: 4, 3: 5 }
-  return mapa[c.prioritat] ?? 99
-}
-
-function preSuggerit(
-  carrosPendents: CarroEstoc[],
-  cellesSel: CellaSel[],
-  incsById: Map<number, Incubadora>
-): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
-  const resultat = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
-  if (carrosPendents.length === 0 || cellesSel.length === 0) return resultat
-
-  // 1. Agrupar carros per (granja+estirp+posta)
-  const grupsCarros = new Map<string, CarroEstoc[]>()
-  for (const c of carrosPendents) {
-    const key = `${c.lots_reproductores.granges_reproductores.granja}|${c.lots_reproductores.estirp || ''}|${c.posta}`
-    if (!grupsCarros.has(key)) grupsCarros.set(key, [])
-    grupsCarros.get(key)!.push(c)
-  }
-  // Ordenar grups: els més grans primer
-  const grupsOrd = Array.from(grupsCarros.entries()).sort((a, b) => b[1].length - a[1].length)
-
-  // 2. Agrupar cel·les per (incubadora, columna)
-  // Per SS, "columna" = grupAColumna a ssPosToCell. Per MS, "columna" = (incId, zona, costat).
-  const grupsCelles = new Map<string, CellaSel[]>()
-  for (const cel of cellesSel) {
-    const inc = incsById.get(cel.incId)
-    if (!inc) continue
-    const sub = subtipus(inc.tipus, inc.capacitat_carros)
-    let groupKey: string
-    if (sub === 'SS') {
-      const { col } = ssPosToCell(cel.pos)
-      groupKey = `${cel.incId}|SS|${col}`
-    } else {
-      // MS: zona + costat (esq=pos 1-4 a MSG / 1-2 MSP, dre=la resta)
-      const costat = (sub === 'MSG' ? (cel.pos <= 4 ? 'esq' : 'dre') : (cel.pos <= 2 ? 'esq' : 'dre'))
-      groupKey = `${cel.incId}|MS|${cel.zona}|${costat}`
-    }
-    if (!grupsCelles.has(groupKey)) grupsCelles.set(groupKey, [])
-    grupsCelles.get(groupKey)!.push(cel)
-  }
-
-  // 3. Ordenar les columnes (grups de cel·les) per prioritat
-  // SS: pulsator + central abans que paret, esquerra primer
-  // MS: central > paret > pulsator (els nous sempre van a central per defecte;
-  //     si l'usuari ha seleccionat paret/pulsator, conscient és)
-  const grupsCellesOrd = Array.from(grupsCelles.entries()).sort((a, b) => {
-    const [keyA, cellsA] = a
-    const [keyB, cellsB] = b
-    const tipusA = keyA.split('|')[1]
-    const tipusB = keyB.split('|')[1]
-    if (tipusA !== tipusB) return tipusA === 'SS' ? -1 : 1
-    if (tipusA === 'SS') {
-      const colA = parseInt(keyA.split('|')[2])
-      const colB = parseInt(keyB.split('|')[2])
-      // ordreCellesSS s'aplica al prioritat de la primera cel·la (que té la mateixa col)
-      const ordA = ordreCellesSS(cellsA[0])
-      const ordB = ordreCellesSS(cellsB[0])
-      if (ordA !== ordB) return ordA - ordB
-      return colA - colB
-    } else {
-      // MS: central abans, després paret, després pulsator. Esquerra abans que dreta.
-      const partsA = keyA.split('|') // incId, MS, zona, costat
-      const partsB = keyB.split('|')
-      const ordZona: Record<string, number> = { central: 0, paret: 1, pulsator: 2 }
-      const za = ordZona[partsA[2]] ?? 3
-      const zb = ordZona[partsB[2]] ?? 3
-      if (za !== zb) return za - zb
-      if (partsA[3] !== partsB[3]) return partsA[3] === 'esq' ? -1 : 1
-      return 0
-    }
-  })
-
-  // 4. Ordenar cel·les dins cada columna: SS per fila ASC (porta primer);
-  //    MS per posicio ASC.
-  for (const [, cells] of grupsCellesOrd) {
-    cells.sort((x, y) => x.pos - y.pos)
-  }
-
-  // 5. Aplanar cel·les en l'ordre final
-  const ordreCelles: CellaSel[] = []
-  for (const [, cells] of grupsCellesOrd) ordreCelles.push(...cells)
-
-  // 6. Aplanar carros: grups grans primer, dins del grup en l'ordre de la llista
-  const ordreCarros: CarroEstoc[] = []
-  for (const [, carros] of grupsOrd) ordreCarros.push(...carros)
-
-  // 7. Assignar 1-a-1
-  const n = Math.min(ordreCarros.length, ordreCelles.length)
-  for (let i = 0; i < n; i++) {
-    const c = ordreCarros[i]
-    const cel = ordreCelles[i]
-    resultat.set(c.id, { incId: cel.incId, pos: cel.pos, zona: cel.zona })
-  }
-  return resultat
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Algorisme de suggeriment complet (v2)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Regles implementades:
-//   MS  · Tots els nous carros van al passadís central (única zona buida).
-//       · Ompliment lineal esq→dre. Lots consecutius (garantit per l'ordre del pool).
-//       · Equilibri tèrmic ESQ/DRE: prova esq-first vs dre-first; tria la millor.
-//       · Considera tots els carros de la màquina (paret+pulsator existents).
-//   SS  · Del pool, els K carros amb més setmanes_lot van a SS.
-//       · Menys calor futura → posicions centrals (9-16); més calor → paret/pulsator.
-//   Pool· Ordenat per posta ASC (dies_estoc DESC), agrupat per lot (lot_id).
-//       · Selecció fins [comanda_pollets−500, comanda_pollets+4000].
-//       · Si la comanda és de maquila (tipus='maquila'), s'usen tots els carros.
-
-const ECLOSIO_EST = 0.88
-
-function suggerirAssignacioCompleta(
-  carrosPendents: CarroEstoc[],
-  full: Full,
-  incs: Incubadora[],
-  estatInstParam: EstatInst,
-  diaCarrega: Dia,
-  lliureAviatPerCellaParam: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>,
-  carroPerCellaParam: Map<string, number>,
-  incsFiltrades: Set<number> = new Set()
-): Map<number, { incId: number; pos: number; zona: ZonaMS | null }> {
-  const resultat = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
-  if (carrosPendents.length === 0) return resultat
-
-  const incsById = new Map(incs.map(i => [i.id, i]))
-  const instById = new Map(estatInstParam.incubadores.map(ii => [ii.id, ii]))
-  const incByNumero = new Map(incs.map(i => [i.numero, i]))
-
-  // ── 1. Construir pool ───────────────────────────────────────────────────
-  // Comanda pollets propis
-  const comandaPollets = full.comandes
-    .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
-    .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
-
-  // Ordenar: primer agrupar per lot (per garantir lots consecutius a les MS),
-  // lots ordenats per la seva posta més antiga ASC (dies d'estoc DESC).
-  // Dins de cada lot, carros ordenats per posta ASC.
-  const carrosOrd = (() => {
-    const byLot = new Map<number, CarroEstoc[]>()
-    for (const c of carrosPendents) {
-      const lid = c.lots_reproductores.id
-      if (!byLot.has(lid)) byLot.set(lid, [])
-      byLot.get(lid)!.push(c)
-    }
-    byLot.forEach(cs => cs.sort((a, b) =>
-      new Date(a.posta + 'T00:00:00').getTime() - new Date(b.posta + 'T00:00:00').getTime()
-    ))
-    const lotsOrds = Array.from(byLot.values()).sort((a, b) =>
-      new Date(a[0].posta + 'T00:00:00').getTime() - new Date(b[0].posta + 'T00:00:00').getTime()
-    )
-    return lotsOrds.flat()
-  })()
-
-  let pool: CarroEstoc[]
-  if (comandaPollets > 0) {
-    let polletsPrev = 0
-    pool = []
-    for (const c of carrosOrd) {
-      const setm = setmanesLot(c.lots_reproductores.data_naixement)
-      const pred = polletsCarro(c)
-      // Si ja tenim prou pollets i afegir aquest carro passaria del màxim, parem
-      if (polletsPrev >= comandaPollets - 500 && polletsPrev + pred > comandaPollets + 4000) break
-      pool.push(c)
-      polletsPrev += pred
-    }
-    if (polletsPrev < comandaPollets - 500) pool = carrosOrd
-  } else {
-    pool = carrosOrd
-  }
-
-  // ── 2. Helper: slots disponibles per incubadora ─────────────────────────
-  function slotsDisponibles(incInst: IncInst): { pos: number; zona: ZonaMS | null; costat: 'esq' | 'dre' | 'cap' }[] {
-    const inc = incsById.get(incInst.id)
-    if (!inc) return []
-    const sub = subtipus(inc.tipus, inc.capacitat_carros)
-    const ocupatsInst = new Set(
-      incInst.carros.filter(c => c.posicio !== null).map(c => `${c.posicio}|${c.zona ?? '-'}`)
-    )
-    function esDisp(pos: number, zona: ZonaMS | null): boolean {
-      const k = keyCell(incInst.id, pos, zona)
-      const ocupatInst = ocupatsInst.has(`${pos}|${zona ?? '-'}`)
-      const ocupatFull = carroPerCellaParam.has(k)
-      const llAviat = lliureAviatPerCellaParam.has(k)
-      return (!ocupatInst && !ocupatFull) || llAviat
-    }
-    const slots: { pos: number; zona: ZonaMS | null; costat: 'esq' | 'dre' | 'cap' }[] = []
-    if (sub === 'SS') {
-      for (let p = 1; p <= 24; p++) {
-        if (!esDisp(p, null)) continue
-        const { col } = ssPosToCell(p)
-        slots.push({ pos: p, zona: null, costat: col <= 2 ? 'esq' : 'dre' })
-      }
-    } else if (sub === 'MSG') {
-      // MSG: nous carros sempre al central (paret/pulsator es reserven per a la rotació)
-      const maxEsq = 4
-      const maxDre = 8
-      for (let p = 1; p <= maxEsq; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'esq' })
-      for (let p = maxEsq + 1; p <= maxDre; p++) if (esDisp(p, 'central')) slots.push({ pos: p, zona: 'central', costat: 'dre' })
-    } else {
-      // MSP: llibertat total — qualsevol zona disponible.
-      // Ordre de preferència: central > paret > pulsator dins de cada costat.
-      const maxEsq = 2
-      const maxDre = 4
-      const zonesPreferides: ZonaMS[] = ['central', 'paret', 'pulsator']
-      for (const z of zonesPreferides) {
-        for (let p = 1; p <= maxEsq; p++) if (esDisp(p, z)) slots.push({ pos: p, zona: z, costat: 'esq' })
-        for (let p = maxEsq + 1; p <= maxDre; p++) if (esDisp(p, z)) slots.push({ pos: p, zona: z, costat: 'dre' })
-      }
-    }
-    return slots
-  }
-
-  // ── 3a. Helper: un lot consecutiu des de la posició `start` fins a `maxN` ─
-  function nextLotSlice(arr: CarroEstoc[], start: number, maxN: number): CarroEstoc[] {
-    if (start >= arr.length || maxN === 0) return []
-    const lotId = arr[start].lots_reproductores.id
-    const res: CarroEstoc[] = []
-    for (let i = start; i < arr.length && res.length < maxN; i++) {
-      if (arr[i].lots_reproductores.id !== lotId) break
-      res.push(arr[i])
-    }
-    return res
-  }
-
-  // ── 3b. Helper: calor futura d'un costat MS (existents + nous) ──────────
-  function calorCostatMS(
-    incInst: IncInst,
-    sub: SubTipus,
-    costat: 'esq' | 'dre',
-    novsCarros: { ous: number; setm: number }[]
-  ): number {
-    const [minP, maxP] = costat === 'esq'
-      ? (sub === 'MSG' ? [1, 4] : [1, 2])
-      : (sub === 'MSG' ? [5, 8] : [3, 4])
-    let calor = 0
-    for (const c of incInst.carros) {
-      if (c.posicio === null || c.dia_incubacio === null || c.setmanes_lot === null) continue
-      if (c.posicio < minP || c.posicio > maxP) continue
-      calor += calorFuturaCarro(c.quantitat_ous, c.setmanes_lot, c.dia_incubacio)
-    }
-    for (const nc of novsCarros) calor += calorFuturaCarro(nc.ous, nc.setm, 0)
-    return calor
-  }
-
-  // ── 4. Ordre d'incubadores per dia ──────────────────────────────────────
-  let ordreIncs: number[]
-  if (diaCarrega === 'dijous') {
-    const ssInsts = estatInstParam.incubadores
-      .filter(ii => { const inc = incsById.get(ii.id); return inc && subtipus(inc.tipus, inc.capacitat_carros) === 'SS' })
-      .sort((a, b) => slotsDisponibles(b).length - slotsDisponibles(a).length)
-    const ssNums = ssInsts.map(ii => incsById.get(ii.id)!.numero)
-    ordreIncs = [...ssNums, 1, 2, 8]
-  } else {
-    ordreIncs = [3, 4, 5, 6, 9, 10, 8]
-  }
-
-  // ── 5. Separar carros per SS i MS (dijous) ──────────────────────────────
-  let poolSS: CarroEstoc[] = []
-  let poolMS: CarroEstoc[] = [...pool]
-
-  if (diaCarrega === 'dijous') {
-    // Trobar SS disponible i quants slots té
-    const ssNum = ordreIncs.find(n => {
-      const inc = incByNumero.get(n)
-      if (!inc || subtipus(inc.tipus, inc.capacitat_carros) !== 'SS') return false
-      const inst = instById.get(inc.id)
-      return inst && slotsDisponibles(inst).length > 0
-    })
-    if (ssNum !== undefined) {
-      const ssInc = incByNumero.get(ssNum)!
-      const ssInst = instById.get(ssInc.id)!
-      const nSlotsSS = slotsDisponibles(ssInst).length
-      // Del pool, agafar els K carros amb més setmanes_lot per a SS
-      const poolOrdenatPerSetm = [...pool].sort((a, b) =>
-        setmanesLot(b.lots_reproductores.data_naixement) - setmanesLot(a.lots_reproductores.data_naixement)
-      )
-      poolSS = poolOrdenatPerSetm.slice(0, nSlotsSS)
-      const idsSS = new Set(poolSS.map(c => c.id))
-      poolMS = pool.filter(c => !idsSS.has(c.id))
-    }
-  }
-
-  // ── 6. Assignació ────────────────────────────────────────────────────────
-  // Si l'usuari ha pre-seleccionat incubadores, filtrar ordreIncs per elles
-  const ordreIncsFiltrat = incsFiltrades.size > 0
-    ? ordreIncs.filter(n => {
-        const inc = incByNumero.get(n)
-        return inc && incsFiltrades.has(inc.id)
-      })
-    : ordreIncs
-
-  const assignats = new Set<number>()
-
-  for (const num of ordreIncsFiltrat) {
-    const inc = incByNumero.get(num)
-    if (!inc) continue
-    const incInst = instById.get(inc.id)
-    if (!incInst) continue
-    const sub = subtipus(inc.tipus, inc.capacitat_carros)
-    const slots = slotsDisponibles(incInst)
-    if (slots.length === 0) continue
-
-    if (sub === 'SS') {
-      // Carros per SS: els preseleccionats (poolSS), menys calor → central
-      const carrosAquiSS = poolSS.filter(c => !assignats.has(c.id))
-      if (carrosAquiSS.length === 0) continue
-
-      // Calcular calor futura per cada carro
-      const ambCalor = carrosAquiSS.map(c => {
-        const setm = setmanesLot(c.lots_reproductores.data_naixement)
-        return { c, calor: calorFuturaCarro(c.quantitat_ous, setm, 0) }
-      })
-
-      // Slots SS ordenats: central (9-16) primer → paret (1-8) → pulsator (17-24)
-      const slotsSSOrds = [...slots].sort((a, b) => {
-        const ord = (p: number) => p >= 9 && p <= 16 ? 0 : p >= 1 && p <= 8 ? 1 : 2
-        if (ord(a.pos) !== ord(b.pos)) return ord(a.pos) - ord(b.pos)
-        // Dins la mateixa zona: alternar esq/dre (parelles)
-        const costatOrd = (p: number) => {
-          const { col } = ssPosToCell(p)
-          return col <= 2 ? 0 : 1
-        }
-        if (costatOrd(a.pos) !== costatOrd(b.pos)) return costatOrd(a.pos) - costatOrd(b.pos)
-        return a.pos - b.pos
-      })
-
-      // Carros de menys calor → posicions centrals (menys calor)
-      // Assignar parelles: 1 esq + 1 dre per mantenir equilibri
-      ambCalor.sort((a, b) => a.calor - b.calor)
-      const n = Math.min(ambCalor.length, slotsSSOrds.length)
-      for (let i = 0; i < n; i++) {
-        const carro = ambCalor[i].c
-        const slot = slotsSSOrds[i]
-        resultat.set(carro.id, { incId: incInst.id, pos: slot.pos, zona: slot.zona })
-        assignats.add(carro.id)
-      }
-
-    } else {
-      // MS: un sol lot per costat, equilibri ESQ/DRE
-      const carrosAquiMS = poolMS.filter(c => !assignats.has(c.id))
-      if (carrosAquiMS.length === 0) continue
-
-      // Ordre dels slots dins de cada costat: per zona (central > paret > pulsator) i,
-      // dins de la mateixa zona, per pos ASC. Així omplim primer tot el central abans
-      // de tocar el paret, i el paret abans del pulsator (només rellevant a MSP, on
-      // poden haver-hi slots a totes tres zones).
-      const ordreZona = (z: ZonaMS | null): number => z === 'central' ? 0 : z === 'paret' ? 1 : z === 'pulsator' ? 2 : 3
-      const cmpSlots = (a: { pos: number; zona: ZonaMS | null }, b: { pos: number; zona: ZonaMS | null }) => {
-        const dz = ordreZona(a.zona) - ordreZona(b.zona)
-        if (dz !== 0) return dz
-        return a.pos - b.pos
-      }
-      const slotsEsq = slots.filter(s => s.costat === 'esq').sort(cmpSlots)
-      const slotsDre = slots.filter(s => s.costat === 'dre').sort(cmpSlots)
-      if (slotsEsq.length === 0 && slotsDre.length === 0) continue
-
-      // Opció A: primer lot → esq (fins a omplir o acabar lot), continuació → dre
-      const esqA = nextLotSlice(carrosAquiMS, 0, slotsEsq.length)
-      const dreA = nextLotSlice(carrosAquiMS, esqA.length, slotsDre.length)
-      // Opció B: primer lot → dre, continuació → esq
-      const dreB = nextLotSlice(carrosAquiMS, 0, slotsDre.length)
-      const esqB = nextLotSlice(carrosAquiMS, dreB.length, slotsEsq.length)
-
-      const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
-      const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
-      const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqB)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreB)))
-
-      const [esqFinal, dreFinal] = deseqA <= deseqB ? [esqA, dreA] : [esqB, dreB]
-
-      for (let i = 0; i < esqFinal.length && i < slotsEsq.length; i++) {
-        resultat.set(esqFinal[i].id, { incId: incInst.id, pos: slotsEsq[i].pos, zona: slotsEsq[i].zona })
-        assignats.add(esqFinal[i].id)
-      }
-      for (let i = 0; i < dreFinal.length && i < slotsDre.length; i++) {
-        resultat.set(dreFinal[i].id, { incId: incInst.id, pos: slotsDre[i].pos, zona: slotsDre[i].zona })
-        assignats.add(dreFinal[i].id)
-      }
-    }
-  }
-
-  return resultat
-}
+import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, optimitzarZonesTermiques, projectarEstatInst, CellaSel, ordreCellesSS, preSuggerit, ECLOSIO_EST, suggerirAssignacioCompleta } from '@/lib/assignacions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MemoCell = memo(Cell)
+
 
 export interface AssignacionsClientProps {
   initialFull: any;
@@ -789,473 +25,26 @@ export interface AssignacionsClientProps {
 }
 
 export function AssignacionsClient({ initialFull, initialDisponibles, initialIncs, initialEstatInst }: AssignacionsClientProps) {
-  const params = useParams()
-  const router = useRouter()
 
-  const [full, setFull] = useState<Full | null>(initialFull)
-  const [disponibles, setDisponibles] = useState<CarroEstoc[]>(initialDisponibles)
-  const [incs, setIncs] = useState<Incubadora[]>(initialIncs)
-  const [estatInst, setEstatInst] = useState<EstatInst | null>(initialEstatInst)
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
-  const [guardant, setGuardant] = useState(false)
-  const [resultatGuardar, setResultatGuardar] = useState<string>('')
-
-  // Mapa: carro_id → posició planificada (incId+posicio+zona)
-  const [colocats, setColocats] = useState<Map<number, { incId: number; pos: number; zona: ZonaMS | null }>>(() => {
-    const mapaInicial = new Map<number, { incId: number; pos: number; zona: ZonaMS | null }>()
-    if (initialFull && Array.isArray(initialFull.assignacions)) {
-      for (const a of initialFull.assignacions) {
-        if (a.posicio === null || a.posicio === undefined) continue
-        mapaInicial.set(a.carros_estoc.id, {
-          incId: a.incubadora_id,
-          pos: a.posicio,
-          zona: a.zona,
-        })
-      }
-    }
-    return mapaInicial
-  })
-  const colocatsRef = useRef(colocats)
-  useEffect(() => { colocatsRef.current = colocats }, [colocats])
-  
-  // Set de claus 'incId|pos|zona' marcades com a destí del pre-suggerit
-  const [seleccionades, setSeleccionades] = useState<Set<string>>(new Set())
-
-  const [dia, setDia] = useState<Dia>(() => {
-    if (initialFull?.carrega) {
-      const d = diaDeFull(initialFull.carrega)
-      if (d) return d
-    }
-    return 'dijous'
-  })
-  const [mspOrdre, setMspOrdre] = useState<number[]>(() => {
-    if (initialFull?.carrega) {
-      const d = diaDeFull(initialFull.carrega)
-      if (d === 'dilluns') return [9, 10, 8]
-    }
-    return [8, 9, 10]
-  })
-  const [mostrarProjectat, setMostrarProjectat] = useState(true)
-  // Pre-selecció d'incubadores per al suggeriment (buit = totes)
-  const [incsFiltrades, setIncsFiltrades] = useState<Set<number>>(new Set())
-  // Flux de dos passos: selecció de carros → assignació visual
-  const [carrosSeleccionats, setCarrosSeleccionats] = useState<Set<number>>(() => {
-    return new Set<number>((initialFull?.assignacions ?? []).map((a: any) => a.carros_estoc.id))
-  })
-  const [fase, setFase] = useState<Fase>(() => {
-    const idsAssignats = new Set<number>((initialFull?.assignacions ?? []).map((a: any) => a.carros_estoc.id))
-    return idsAssignats.size > 0 ? 'assignacio' : 'seleccio'
-  })
-
-  function toggleIncFiltrada(incId: number) {
-    setIncsFiltrades(prev => {
-      const s = new Set(prev)
-      if (s.has(incId)) s.delete(incId)
-      else s.add(incId)
-      return s
-    })
-  }
-
-  // ── Càrrega inicial gestionada per Server Components
-
-  // ── Derivacions
-  const incsById = useMemo(() => new Map(incs.map(i => [i.id, i])), [incs])
-
-  // Carros que es poden col·locar: disponibles + els assignats al full
-  // (perquè si tornes a la pàgina i en treus algun, ha de tornar a la safata)
-  const carrosLot = useMemo<CarroEstoc[]>(() => {
-    const ja: Map<number, CarroEstoc> = new Map()
-    for (const c of disponibles) ja.set(c.id, c)
-    if (full) {
-      for (const a of full.assignacions) {
-        const ce = a.carros_estoc
-        if (!ja.has(ce.id)) {
-          ja.set(ce.id, {
-            id: ce.id,
-            posta: ce.posta,
-            quantitat_ous: ce.quantitat_ous,
-            estat: 'Assignat',
-            lots_reproductores: ce.lots_reproductores,
-          } as CarroEstoc)
-        }
-      }
-    }
-    return Array.from(ja.values())
-  }, [disponibles, full])
-
-  // En fase 2, limitar al pool de carros seleccionats a la fase 1
-  const carrosLotFiltrats = useMemo<CarroEstoc[]>(() => {
-    if (carrosSeleccionats.size === 0) return carrosLot
-    return carrosLot.filter(c => carrosSeleccionats.has(c.id))
-  }, [carrosLot, carrosSeleccionats])
-
-  // Carros que encara NO estan col·locats al mapa (limitats als seleccionats)
-  const carrosPendents = useMemo<CarroEstoc[]>(() => {
-    return carrosLotFiltrats.filter(c => !colocats.has(c.id))
-  }, [carrosLotFiltrats, colocats])
-
-  // Número SS principal per al dia (mínim numero de SS en colocats, com fa la BD)
-  const ssPrincipalNum = useMemo<number | null>(() => {
-    const ssNums: number[] = []
-    colocats.forEach((p) => {
-      const inc = incsById.get(p.incId)
-      if (inc && inc.tipus === 'Singlestage') ssNums.push(inc.numero)
-    })
-    return ssNums.length > 0 ? Math.min(...ssNums) : null
-  }, [colocats, incsById])
-
-  // Mapa keyCell → num_carro_full potencial (mostra #N a cada slot)
-  const numCarroPerCella = useMemo<Map<string, number>>(() => {
-    const m = new Map<string, number>()
-    for (const inc of incs) {
-      const sub = subtipus(inc.tipus, inc.capacitat_carros)
-      const offset = offsetPerDia(dia, inc.tipus, inc.capacitat_carros, inc.numero, ssPrincipalNum, mspOrdre)
-      if (offset === null) continue
-      if (sub === 'SS') {
-        for (let pos = 1; pos <= 24; pos++) m.set(keyCell(inc.id, pos, null), offset + pos)
-      } else if (sub === 'MSG') {
-        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[])
-          for (let pos = 1; pos <= 8; pos++) m.set(keyCell(inc.id, pos, z), offset + pos)
-      } else { // MSP
-        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[])
-          for (let pos = 1; pos <= 4; pos++) m.set(keyCell(inc.id, pos, z), offset + pos)
-      }
-    }
-    return m
-  }, [incs, dia, mspOrdre, ssPrincipalNum])
-
-  // Map de cel·la → carro_id col·locat
-  const carroPerCella = useMemo(() => {
-    const m = new Map<string, number>()
-    colocats.forEach((p, cid) => {
-      m.set(keyCell(p.incId, p.pos, p.zona), cid)
-    })
-    return m
-  }, [colocats])
-
-  // Té carros MS col·locats al full actual?
-  const hiHaMsColocats = useMemo(() => {
-    let found = false
-    colocats.forEach((p) => {
-      const inc = incsById.get(p.incId)
-      if (inc && inc.tipus === 'Multistage') found = true
-    })
-    return found
-  }, [colocats, incsById])
-
-  // Estat projectat: aplica transferències pendents fins a la data del load actual
-  // i les rotacions MSG que se'n derivin. Sempre es calcula; el toggle
-  // `mostrarProjectat` decideix si la UI l'utilitza o veu l'estat real.
-  const estatInstProjectat = useMemo<EstatInst | null>(() => {
-    if (!estatInst || !full) return null
-    const assignacioIdsDelFull = new Set<number>(full.assignacions.map((a) => a.id))
-    return projectarEstatInst(estatInst, full.carrega, assignacioIdsDelFull)
-  }, [estatInst, full])
-
-  // Quin estat utilitzem per pintar les cel·les "altres fulls" depèn del toggle.
-  const estatInstEffectiu = (mostrarProjectat ? estatInstProjectat : estatInst) ?? estatInst
-
-  // Ocupació "altres fulls" (per pintar de gris a la cel·la) — deriva de l'estat efectiu
-  const ocupatsAltresFullsPerCella = useMemo(() => {
-    const m = new Map<string, { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null }>()
-    if (!estatInstEffectiu || !full) return m
-    for (const inc of estatInstEffectiu.incubadores) {
-      for (const c of inc.carros) {
-        if (c.posicio === null || c.posicio === undefined) continue
-        // Si aquest carro és del full actual, no compta com a "altres fulls"
-        const esDelFullActual = full.assignacions.some(a => a.id === c.assignacio_id)
-        if (esDelFullActual) continue
-        m.set(keyCell(inc.id, c.posicio, c.zona), {
-          num_carro_full: c.num_carro_full,
-          num_carrega: c.num_carrega,
-          estirp: c.estirp,
-          data_transferencia_full: c.data_transferencia_full ?? null,
-        })
-      }
-    }
-    return m
-  }, [estatInstEffectiu, full])
-
-  // Diferències entre estat real i projectat (per al banner de toggle).
-  // Útil per saber si hi ha alguna cosa a projectar tot i estar en mode
-  // projectat (en el qual lliureAviatPerCella ja és buit).
-  const nCanvisProjeccio = useMemo(() => {
-    if (!estatInst || !estatInstProjectat) return 0
-    const claus = (e: EstatInst) => {
-      const s = new Set<string>()
-      for (const inc of e.incubadores) {
-        for (const c of inc.carros) {
-          if (c.posicio === null || c.posicio === undefined) continue
-          s.add(`${c.assignacio_id}|${inc.id}|${c.posicio}|${c.zona ?? '-'}`)
-        }
-      }
-      return s
-    }
-    const a = claus(estatInst)
-    const b = claus(estatInstProjectat)
-    let diff = 0
-    a.forEach((k) => { if (!b.has(k)) diff++ })
-    b.forEach((k) => { if (!a.has(k)) diff++ })
-    return diff
-  }, [estatInst, estatInstProjectat])
-
-  // Slots "lliure aviat":
-  //  · En mode PROJECTAT, l'estat efectiu ja té les transferències i rotacions
-  //    aplicades, així que les cel·les realment buides es renderitzen com a
-  //    lliures normals — no cal cap remap. Per tant retornem un mapa buit.
-  //  · En mode NO PROJECTAT (real), marquem amb badge verd les cel·les que
-  //    estan ocupades ARA però buides al projectat (es buidaran a temps).
-  const lliureAviatPerCella = useMemo(() => {
-    const m = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
-    if (mostrarProjectat) return m
-    if (!estatInst || !estatInstProjectat || !full) return m
-    const avui = new Date(); avui.setHours(0, 0, 0, 0)
-    // Mapa de cel·les ocupades al projectat (per saber quines s'han alliberat)
-    const ocupadesProjectat = new Set<string>()
-    for (const inc of estatInstProjectat.incubadores) {
-      for (const c of inc.carros) {
-        if (c.posicio === null || c.posicio === undefined) continue
-        ocupadesProjectat.add(keyCell(inc.id, c.posicio, c.zona))
-      }
-    }
-    for (const inc of estatInst.incubadores) {
-      for (const c of inc.carros) {
-        if (c.posicio === null || c.posicio === undefined) continue
-        if (!c.data_transferencia_full) continue
-        const esDelFullActual = full.assignacions.some(a => a.id === c.assignacio_id)
-        if (esDelFullActual) continue
-        const k = keyCell(inc.id, c.posicio, c.zona)
-        if (ocupadesProjectat.has(k)) continue // encara ocupada al projectat (rotada)
-        const dataTrans = new Date(c.data_transferencia_full + 'T00:00:00').getTime()
-        const diesFins = Math.max(0, Math.floor((dataTrans - avui.getTime()) / 86400000))
-        m.set(k, {
-          diesFins,
-          num_carro_full: c.num_carro_full,
-          num_carrega: c.num_carrega,
-          data_transferencia_full: c.data_transferencia_full,
-        })
-      }
-    }
-    return m
-  }, [mostrarProjectat, estatInst, estatInstProjectat, full])
-
-  // ── Handlers de cel·la
-  const toggleSeleccio = useCallback((incId: number, pos: number, zona: ZonaMS | null) => {
-    const k = keyCell(incId, pos, zona)
-    if (ocupatsAltresFullsPerCella.has(k) && !lliureAviatPerCella.has(k)) return
-    
-    const cellaOcupada = Array.from(colocatsRef.current.values()).some(val => val.incId === incId && val.pos === pos && val.zona === zona)
-    if (cellaOcupada) return
-
-    setSeleccionades(prev => {
-      const s = new Set(prev)
-      if (s.has(k)) s.delete(k); else s.add(k)
-      return s
-    })
-  }, [ocupatsAltresFullsPerCella, lliureAviatPerCella])
-
-  const seleccionarLliuresInc = useCallback((inc: Incubadora) => {
-    const sub = subtipus(inc.tipus, inc.capacitat_carros)
-    setSeleccionades(prev => {
-      const next = new Set(prev)
-      const afegir = (pos: number, zona: ZonaMS | null) => {
-        const k = keyCell(inc.id, pos, zona)
-        const cellaOcupada = Array.from(colocatsRef.current.values()).some(val => val.incId === inc.id && val.pos === pos && val.zona === zona)
-        if (!cellaOcupada && (!ocupatsAltresFullsPerCella.has(k) || lliureAviatPerCella.has(k))) next.add(k)
-      }
-      if (sub === 'SS') {
-        for (let p = 1; p <= 24; p++) afegir(p, null)
-      } else if (sub === 'MSG') {
-        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[]) for (let p = 1; p <= 8; p++) afegir(p, z)
-      } else if (sub === 'MSP') {
-        for (const z of ['central', 'paret', 'pulsator'] as ZonaMS[]) for (let p = 1; p <= 4; p++) afegir(p, z)
-      }
-      return next
-    })
-  }, [ocupatsAltresFullsPerCella, lliureAviatPerCella])
-
-  function netejarSeleccio() {
-    setSeleccionades(new Set())
-  }
-
-  function reiniciar() {
-    if (!confirm('Reiniciar tota la planificació? Es perdrà el que has marcat i col·locat.')) return
-    setColocats(new Map())
-    setSeleccionades(new Set())
-  }
-
-  // ── Drag-and-drop
-  const onDragStartCarro = useCallback((e: React.DragEvent, carroId: number, origenCella: string | null) => {
-    e.dataTransfer.setData('carro_id', String(carroId))
-    e.dataTransfer.setData('origen', origenCella || 'safata')
-    e.dataTransfer.effectAllowed = 'move'
-  }, [])
-
-  const onDragOverCell = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  const onDropCell = useCallback((e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) => {
-    e.preventDefault()
-    const carroId = parseInt(e.dataTransfer.getData('carro_id'), 10)
-    if (!Number.isFinite(carroId)) return
-    const k = keyCell(incId, pos, zona)
-    if (ocupatsAltresFullsPerCella.has(k) && !lliureAviatPerCella.has(k)) return
-    
-    setColocats(prev => {
-      const cellaOcupada = Array.from(prev.values()).some(val => val.incId === incId && val.pos === pos && val.zona === zona)
-      if (cellaOcupada) return prev
-
-      const m = new Map(prev)
-      m.set(carroId, { incId, pos, zona })
-      return m
-    })
-    
-    setSeleccionades(prev => {
-      if (!prev.has(k)) return prev
-      const s = new Set(prev); s.delete(k); return s
-    })
-  }, [ocupatsAltresFullsPerCella, lliureAviatPerCella])
-
-  const onDropSafata = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    const carroId = parseInt(e.dataTransfer.getData('carro_id'), 10)
-    if (!Number.isFinite(carroId)) return
-    setColocats(prev => {
-      const m = new Map(prev)
-      m.delete(carroId)
-      return m
-    })
-  }, [])
-
-  const clicarCarroColocat = useCallback((carroId: number) => {
-    setColocats(prev => {
-      const m = new Map(prev)
-      m.delete(carroId)
-      return m
-    })
-  }, [])
-
-  // ── Pre-suggerit
-  function aplicarPreSuggerit() {
-    if (!full || !estatInst) return
-    // El suggeriment ha de raonar sobre l'estat post-transferència (rotacions
-    // incloses). Si la projecció no es pot calcular, fem fallback a l'estat
-    // real. En passar el projectat, els carros transferits ja no hi són i les
-    // rotacions ja s'han aplicat, així que no cal el mapa lliureAviat.
-    const estatPerSuggerir = estatInstProjectat ?? estatInst
-    const lliureAviatBuit = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
-    const sug = suggerirAssignacioCompleta(
-      carrosPendents,
-      full,
-      incs,
-      estatPerSuggerir,
-      dia,
-      lliureAviatBuit,
-      carroPerCella,
-      incsFiltrades
-    )
-    if (sug.size === 0) return
-    setColocats(prev => {
-      const m = new Map(prev)
-      sug.forEach((p, cid) => m.set(cid, p))
-      return m
-    })
-    setSeleccionades(new Set())
-
-    // Avís si pollets previstos per sota de la comanda
-    const comandaPollets = full.comandes
-      .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
-      .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
-    if (comandaPollets > 0) {
-      const polletsSug = Array.from(sug.keys()).reduce((acc, cid) => {
-        const c = carrosPendents.find(x => x.id === cid)
-        if (!c) return acc
-        const setm = setmanesLot(c.lots_reproductores.data_naixement)
-        return acc + polletsCarro(c)
-      }, 0)
-      if (polletsSug < comandaPollets - 500) {
-        setErrorMsg(
-          `⚠️ Atenció: els ${sug.size} carros assignats preveuen ~${Math.round(polletsSug).toLocaleString('ca')} pollets, ` +
-          `per sota de la comanda (${comandaPollets.toLocaleString('ca')}). ` +
-          `Necessites seleccionar més incubadores o afegir carros.`
-        )
-      }
-    }
-  }
-
-  // ── Optimització tèrmica de zones MS
-  function aplicarOptimitzacioTermica() {
-    if (!estatInst || !full) return
-    const msColocats = Array.from(colocats.entries()).filter(([, p]) => {
-      const inc = incsById.get(p.incId)
-      return inc && inc.tipus === 'Multistage'
-    })
-    if (msColocats.length === 0) return
-    if (!confirm(
-      `Redistribuirà les zones (central/paret/pulsator) de ${msColocats.length} carro(s) a les Multistage\nbasat en l'equilibri de calor projectat a 21 dies.\n\nVols continuar?`
-    )) return
-
-    const assignacioIdsDelFull = new Set<number>(
-      full.assignacions.map((a) => a.id)
-    )
-    // L'optimització ha de considerar només els carros que ENCARA hi seran
-    // quan entri el load actual (post-transferències + rotacions).
-    const estatPerOptimitzar = estatInstProjectat ?? estatInst
-    const novaColocats = optimitzarZonesTermiques(
-      colocats,
-      carrosLot,
-      estatPerOptimitzar,
-      incsById,
-      assignacioIdsDelFull
-    )
-    setColocats(novaColocats)
-  }
-
-  // ── Guardar
-  async function guardar() {
-    if (!full) return
-    if (colocats.size === 0) {
-      if (!confirm('No hi ha cap carro col·locat. Vols guardar igualment (buidaria el full)?')) return
-    }
-    setGuardant(true)
-    setErrorMsg('')
-    setResultatGuardar('')
-    try {
-      const items = Array.from(colocats.entries()).map(([carro_id, p]) => ({
-        carro_id,
-        incubadora_id: p.incId,
-        posicio: p.pos,
-        zona: p.zona,
-      }))
-      const res = await fetch(`/api/carrega/${full.id}/planificacio`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dia, msp_ordre: mspOrdre, items }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        if (res.status === 409 && data.orfes_bloquejades) {
-          const llista = data.orfes_bloquejades.map((o: { num_carro_full: number; te_transferencia: boolean; te_vacuna: boolean }) =>
-            `· Carro #${o.num_carro_full}: ${o.te_transferencia ? 'té transferència' : ''}${o.te_transferencia && o.te_vacuna ? ' i ' : ''}${o.te_vacuna ? 'té vacunes' : ''}`
-          ).join('\n')
-          setErrorMsg(`No es pot guardar:\n${data.error}\n\n${llista}`)
-        } else {
-          setErrorMsg(data.error || 'Error desconegut al guardar')
-        }
-        return
-      }
-      setResultatGuardar(`Guardat: ${data.inserits} nous, ${data.actualitzats} mogudes, ${data.esborrats} esborrades`)
-      // Recarregar dades reals
-      router.refresh()
-    } catch (e) {
-      setErrorMsg('Error de xarxa: ' + String(e))
-    } finally {
-      setGuardant(false)
-    }
-  }
+  const hook = useAssignacions({ initialFull, initialDisponibles, initialIncs, initialEstatInst })
+  const {
+    full, disponibles, incs, estatInst,
+    loading, errorMsg, setErrorMsg, guardant, resultatGuardar, setResultatGuardar,
+    colocats, setColocats,
+    seleccionades, setSeleccionades,
+    dia, setDia, mspOrdre, setMspOrdre,
+    mostrarProjectat, setMostrarProjectat,
+    incsFiltrades, setIncsFiltrades, toggleIncFiltrada,
+    carrosSeleccionats, setCarrosSeleccionats,
+    fase, setFase,
+    incsById, carrosLot, carrosLotFiltrats, carrosPendents,
+    ssPrincipalNum, numCarroPerCella, carroPerCella, hiHaMsColocats,
+    estatInstProjectat, estatInstEffectiu,
+    ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
+    toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
+    onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat,
+    aplicarPreSuggerit, aplicarOptimitzacioTermica, guardar
+  } = hook
 
   // ── Render
   if (loading || !full) {
@@ -1341,71 +130,71 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
       : '#15803d'
 
     return (
-      <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '80px' }}>
+      <main className="bg-bg min-h-screen pb-20">
         {/* Capçalera */}
-        <header style={{ background: '#fff', borderBottom: '1px solid #d4d4d4', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <header className="bg-surface border-b border-border px-5 py-3 flex justify-between items-center gap-3 flex-wrap">
           <div>
-            <h1 style={{ margin: 0, fontSize: 18 }}>Adjudicació full #{full.num_carrega} — Pas 1: Selecció de carros</h1>
-            <div style={{ color: '#6b7280', fontSize: 13 }}>
-              Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {carrosLot.length} carros en estoc
+            <h1 className="m-0 text-lg font-bold text-text">Adjudicació full #{full.num_carrega} — Pas 1: Selecció de carros</h1>
+            <div className="text-text-dim text-sm">
+              Càrrega <b className="text-text">{full.carrega}</b> · {carrosLot.length} carros en estoc
             </div>
           </div>
-          <a href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none' }}>← Tornar al full</a>
+          <a href={`/carrega/${full.id}`} className="px-3.5 py-2 rounded-md border border-border bg-surface text-text font-medium text-sm no-underline hover:bg-bg transition-colors">← Tornar al full</a>
         </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, padding: '16px 20px' }}>
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 px-5 py-4">
 
           {/* Columna esquerra: comanda + resum */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <aside className="flex flex-col gap-3">
             {/* Comanda */}
-            <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
-              <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Comanda del client</h3>
+            <div className="bg-surface border border-border rounded-lg p-3.5 shadow-sm">
+              <h3 className="m-0 mb-2.5 text-sm font-bold text-text">Comanda del client</h3>
               {comandaPollets > 0 && (
-                <div style={{ fontSize: 13, marginBottom: 6 }}>
-                  <span style={{ color: '#6b7280' }}>Pollets: </span>
-                  <b>{comandaPollets.toLocaleString('ca')}</b>
+                <div className="text-[13px] mb-1.5 text-text-dim">
+                  <span>Pollets: </span>
+                  <b className="text-text">{comandaPollets.toLocaleString('ca')}</b>
                 </div>
               )}
               {comandaMaquila > 0 && (
-                <div style={{ fontSize: 13, marginBottom: 6 }}>
-                  <span style={{ color: '#6b7280' }}>Maquila (ous): </span>
-                  <b>{comandaMaquila.toLocaleString('ca')}</b>
+                <div className="text-[13px] mb-1.5 text-text-dim">
+                  <span>Maquila (ous): </span>
+                  <b className="text-text">{comandaMaquila.toLocaleString('ca')}</b>
                 </div>
               )}
               {comandaPollets === 0 && comandaMaquila === 0 && (
-                <div style={{ color: '#9ca3af', fontSize: 12 }}>Sense comanda registrada</div>
+                <div className="text-text-dim text-xs">Sense comanda registrada</div>
               )}
             </div>
 
             {/* Resum selecció */}
-            <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
-              <h3 style={{ margin: '0 0 10px', fontSize: 14 }}>Selecció actual</h3>
-              <div style={{ fontSize: 13, marginBottom: 4 }}>
-                <span style={{ color: '#6b7280' }}>Carros: </span>
-                <b>{carrosSeleccionats.size}</b>
+            <div className="bg-surface border border-border rounded-lg p-3.5 shadow-sm">
+              <h3 className="m-0 mb-2.5 text-sm font-bold text-text">Selecció actual</h3>
+              <div className="text-[13px] mb-1 text-text-dim">
+                <span>Carros: </span>
+                <b className="text-text">{carrosSeleccionats.size}</b>
               </div>
               {comandaPollets > 0 && (
-                <div style={{ fontSize: 13, marginBottom: 4 }}>
-                  <span style={{ color: '#6b7280' }}>Pollets prev.: </span>
+                <div className="text-[13px] mb-1 text-text-dim">
+                  <span>Pollets prev.: </span>
                   <b style={{ color: colorPct }}>{polletsSel.toLocaleString('ca')}</b>
                   {pctPollets !== null && (
-                    <span style={{ fontSize: 11, color: colorPct, marginLeft: 4 }}>({pctPollets}%)</span>
+                    <span className="text-[11px] ml-1 font-bold" style={{ color: colorPct }}>({pctPollets}%)</span>
                   )}
                 </div>
               )}
               {comandaPollets > 0 && pctPollets !== null && pctPollets < 90 && (
-                <div style={{ fontSize: 11, color: '#b45309', marginTop: 4 }}>
+                <div className="text-[11px] text-danger mt-1 font-bold">
                   ⚠ Per sota de la comanda
                 </div>
               )}
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="mt-2.5 flex flex-col gap-1.5">
                 <button
                   onClick={seleccionarTots}
-                  style={{ ...btnStyle(false), marginLeft: 0, fontSize: 12, padding: '6px 10px' }}
+                  className="px-2.5 py-1.5 border border-border bg-bg text-text rounded text-xs cursor-pointer hover:bg-surface font-medium"
                 >Seleccionar tots</button>
                 <button
                   onClick={() => setCarrosSeleccionats(new Set())}
-                  style={{ ...btnStyle(false), marginLeft: 0, fontSize: 12, padding: '6px 10px' }}
+                  className="px-2.5 py-1.5 border border-border bg-bg text-text rounded text-xs cursor-pointer hover:bg-surface font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={carrosSeleccionats.size === 0}
                 >Netejar selecció</button>
               </div>
@@ -1413,9 +202,9 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
           </aside>
 
           {/* Columna dreta: llista de carros */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="flex flex-col gap-3">
             {grups.length === 0 && (
-              <div style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 24, textAlign: 'center', color: '#9ca3af' }}>
+              <div className="bg-surface border border-border rounded-lg p-6 text-center text-text-dim shadow-sm">
                 No hi ha carros en estoc disponibles
               </div>
             )}
@@ -1424,76 +213,74 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
               const totsSel = idsLot.every(id => carrosSeleccionats.has(id))
               const algunSel = idsLot.some(id => carrosSeleccionats.has(id))
               return (
-                <div key={g.lotId} style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 }}>
+                <div key={g.lotId} className="bg-surface border border-border rounded-lg p-3.5 shadow-sm">
                   {/* Capçalera lot */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className="flex justify-between items-center mb-2.5">
+                    <div className="flex items-center gap-2">
                       <IndeterminateCheckbox
                         type="checkbox"
                         checked={totsSel}
                         indeterminate={algunSel && !totsSel}
                         onChange={() => toggleLot(idsLot)}
-                        style={{ width: 15, height: 15, cursor: 'pointer' }}
+                        className="w-4 h-4 cursor-pointer accent-accent"
                       />
                       <div>
-                        <span style={{ fontWeight: 600, fontSize: 14 }}>{g.granja}</span>
-                        {g.estirp && <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 6 }}>· {g.estirp}</span>}
-                        <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 6 }}>· {g.setmanes} setm. de vida</span>
+                        <span className="font-bold text-sm text-text">{g.granja}</span>
+                        {g.estirp && <span className="text-text-dim text-xs ml-1.5">· {g.estirp}</span>}
+                        <span className="text-text-dim text-[11px] ml-1.5 opacity-70">· {g.setmanes} setm. de vida</span>
                       </div>
                     </div>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                    <span className="text-xs text-text-dim font-bold">
                       {idsLot.filter(id => carrosSeleccionats.has(id)).length}/{g.carros.length} seleccionats
                     </span>
                   </div>
 
                   {/* Taula de carros */}
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                        <th style={{ width: 28, padding: '4px 6px', textAlign: 'center' }}></th>
-                        <th style={{ padding: '4px 8px', textAlign: 'left', color: '#6b7280', fontWeight: 500 }}>Data posta</th>
-                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Dies estoc</th>
-                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Ous</th>
-                        <th style={{ padding: '4px 8px', textAlign: 'right', color: '#6b7280', fontWeight: 500 }}>Prev. pollets</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g.carros.map((c, i) => {
-                        const sel = carrosSeleccionats.has(c.id)
-                        const dies = diesEstoc(c.posta, full.carrega)
-                        const prev = polletsCarro(c)
-                        return (
-                          <tr
-                            key={c.id}
-                            onClick={() => toggleCarro(c.id)}
-                            style={{
-                              background: sel ? '#eff6ff' : i % 2 === 0 ? '#fafafa' : '#fff',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #f3f4f6',
-                            }}
-                          >
-                            <td style={{ padding: '6px', textAlign: 'center' }}>
-                              <input
-                                type="checkbox"
-                                checked={sel}
-                                onChange={() => toggleCarro(c.id)}
-                                onClick={e => e.stopPropagation()}
-                                style={{ width: 14, height: 14, cursor: 'pointer' }}
-                              />
-                            </td>
-                            <td style={{ padding: '6px 8px' }}>{c.posta}</td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', color: dies > 10 ? '#b45309' : '#1f2937', fontWeight: dies > 10 ? 600 : 400 }}>
-                              {dies}d
-                            </td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>{c.quantitat_ous.toLocaleString('ca')}</td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', color: '#2563eb', fontWeight: 500 }}>
-                              {prev.toLocaleString('ca')}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-[13px]">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="w-7 py-1 px-1.5 text-center"></th>
+                          <th className="py-1 px-2 text-left text-text-dim font-medium">Data posta</th>
+                          <th className="py-1 px-2 text-right text-text-dim font-medium">Dies estoc</th>
+                          <th className="py-1 px-2 text-right text-text-dim font-medium">Ous</th>
+                          <th className="py-1 px-2 text-right text-text-dim font-medium">Prev. pollets</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.carros.map((c, i) => {
+                          const sel = carrosSeleccionats.has(c.id)
+                          const dies = diesEstoc(c.posta, full.carrega)
+                          const prev = polletsCarro(c)
+                          return (
+                            <tr
+                              key={c.id}
+                              onClick={() => toggleCarro(c.id)}
+                              className={`cursor-pointer border-b border-border transition-colors ${sel ? 'bg-accent/10' : 'hover:bg-bg'}`}
+                            >
+                              <td className="py-1.5 px-1.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={sel}
+                                  onChange={() => toggleCarro(c.id)}
+                                  onClick={e => e.stopPropagation()}
+                                  className="w-3.5 h-3.5 cursor-pointer accent-accent"
+                                />
+                              </td>
+                              <td className="py-1.5 px-2 text-text">{c.posta}</td>
+                              <td className={`py-1.5 px-2 text-right ${dies > 10 ? 'text-danger font-bold' : 'text-text'}`}>
+                                {dies}d
+                              </td>
+                              <td className="py-1.5 px-2 text-right text-text font-mono">{c.quantitat_ous.toLocaleString('ca')}</td>
+                              <td className="py-1.5 px-2 text-right text-accent font-bold font-mono">
+                                {prev.toLocaleString('ca')}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )
             })}
@@ -1501,10 +288,10 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
         </div>
 
         {/* Footer */}
-        <footer style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #d4d4d4', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -2px 8px rgba(0,0,0,0.04)', zIndex: 40 }}>
-          <div style={{ fontSize: 13, color: '#6b7280' }}>
+        <footer className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-5 py-2.5 flex justify-between items-center z-40 shadow-sm">
+          <div className="text-[13px] text-text-dim">
             {carrosSeleccionats.size > 0
-              ? <><b style={{ color: '#1f2937' }}>{carrosSeleccionats.size} carros</b> seleccionats · <b style={{ color: colorPct }}>{polletsSel.toLocaleString('ca')} pollets previstos</b>{comandaPollets > 0 && <> · comanda: {comandaPollets.toLocaleString('ca')}</>}</>
+              ? <><b className="text-text">{carrosSeleccionats.size} carros</b> seleccionats · <b style={{ color: colorPct }}>{polletsSel.toLocaleString('ca')} pollets previstos</b>{comandaPollets > 0 && <> · comanda: {comandaPollets.toLocaleString('ca')}</>}</>
               : 'Cap carro seleccionat'
             }
           </div>
@@ -1516,7 +303,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
               }
               setFase('assignacio')
             }}
-            style={btnStyle(true)}
+            className="px-4 py-2 bg-accent text-[#000] border-none rounded-md font-bold text-sm cursor-pointer hover:opacity-90"
           >
             Continuar amb l&apos;assignació →
           </button>
@@ -1526,32 +313,31 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
   }
 
   return (
-    <main style={{ background: '#f7f7f5', minHeight: '100vh', paddingBottom: '90px' }}>
+    <main className="bg-bg min-h-screen pb-[90px]">
       <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosSeleccionats.size} colocats={colocats.size} onTornarSeleccio={() => setFase('seleccio')} />
 
-      {/* Toggle vista projectada — apareix quan hi ha qualsevol diferència
-          entre l'estat real i el projectat (transferències i/o rotacions) */}
+      {/* Toggle vista projectada */}
       {nCanvisProjeccio > 0 && (
-        <div style={{ padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 8, background: mostrarProjectat ? '#f0fdf4' : '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: mostrarProjectat ? '#15803d' : '#6b7280', userSelect: 'none' }}>
+        <div className={`px-5 py-1.5 flex items-center gap-2 border-b border-border ${mostrarProjectat ? 'bg-success/10' : 'bg-surface'}`}>
+          <label className={`flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none ${mostrarProjectat ? 'text-success' : 'text-text-dim'}`}>
             <input
               type="checkbox"
               checked={mostrarProjectat}
               onChange={e => setMostrarProjectat(e.target.checked)}
-              style={{ width: 14, height: 14, accentColor: '#16a34a', cursor: 'pointer' }}
+              className="w-3.5 h-3.5 accent-success cursor-pointer"
             />
             Mostra estat post-transferència (transferències + rotacions MSG aplicades)
           </label>
           {!mostrarProjectat && lliureAviatPerCella.size > 0 && (
-            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>
+            <span className="text-[11px] text-success font-medium">
               Els slots en verd s&apos;alliberaran abans de la càrrega
             </span>
           )}
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 290px', gap: '16px', padding: '16px 20px' }}>
-        <main style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_290px] gap-4 px-5 py-4">
+        <main className="flex flex-col gap-5">
           {/* Singlestage */}
           <SeccioInc titol="Single Stage" badge="SS · cap 24"
             incs={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'SS')}
@@ -1630,16 +416,16 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
 
           {/* Naixedores només lectura */}
           {estatInst && estatInst.naixedores.length > 0 && (
-            <section style={cardSeccio()}>
-              <h2 style={h2Seccio()}>Naixedores <span style={badgeStyle()}>només informatives</span></h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <section className="bg-surface border border-border rounded-xl p-3.5 shadow-sm">
+              <h2 className="m-0 mb-3 text-[15px] flex gap-2 items-center text-text">Naixedores <span className="bg-bg border border-border px-2 py-0.5 rounded-full text-[11px] font-medium text-text-dim">només informatives</span></h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {estatInst.naixedores.map(n => (
-                  <div key={n.id} style={cardInc()}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Naix {n.numero} <span style={{ color: '#6b7280', fontSize: 11, fontWeight: 400 }}>{n.carros.length}/{n.capacitat}</span></div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minHeight: 60 }}>
+                  <div key={n.id} className="border border-border rounded-lg p-2 bg-bg">
+                    <div className="text-[13px] font-bold mb-1.5 text-text">Naix {n.numero} <span className="text-text-dim text-[11px] font-normal">{n.carros.length}/{n.capacitat}</span></div>
+                    <div className="flex flex-col gap-1 min-h-[60px]">
                       {n.carros.length === 0
-                        ? <div style={{ color: '#9ca3af', fontSize: 11, textAlign: 'center', padding: 8 }}>buida</div>
-                        : n.carros.map((c, i) => <div key={i} style={chipNaix()}>#{c.num_carro_full}</div>)}
+                        ? <div className="text-text-dim text-[11px] text-center p-2 opacity-50">buida</div>
+                        : n.carros.map((c, i) => <div key={i} className="bg-border text-text px-1.5 py-1 rounded text-[11px] font-mono">#{c.num_carro_full}</div>)}
                     </div>
                   </div>
                 ))}
@@ -1648,11 +434,11 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
           )}
         </main>
 
-        <aside style={{ background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 12, alignSelf: 'start', position: 'sticky', top: 16, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
+        <aside className="bg-surface border border-border rounded-lg p-3 self-start sticky top-4 max-h-[calc(100vh-32px)] overflow-y-auto"
                onDragOver={onDragOverCell}
                onDrop={onDropSafata}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Carros a col·locar</h3>
-          <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 10 }}>
+          <h3 className="m-0 mb-2 text-sm text-text">Carros a col·locar</h3>
+          <div className="text-text-dim text-xs mb-2.5">
             {carrosPendents.length} pendents · {colocats.size} col·locats
           </div>
           <Safata
@@ -1660,7 +446,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
             onDragStartCarro={onDragStartCarro}
             full={full}
           />
-          <div style={{ marginTop: 12, padding: 8, background: '#f3f4f6', borderRadius: 6, fontSize: 11, color: '#6b7280', lineHeight: 1.4 }}>
+          <div className="mt-3 p-2 bg-bg rounded-md text-[11px] text-text-dim leading-snug">
             <b>Com va:</b><br />
             1) Clica cel·les lliures per seleccionar-les (groc).<br />
             2) Prem <i>Pre-suggerit</i> per repartir.<br />
@@ -1672,53 +458,48 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
 
       {/* Errors i resultats */}
       {(errorMsg || resultatGuardar) && (
-        <div style={{ position: 'fixed', bottom: 60, left: 20, right: 20, zIndex: 50 }}>
+        <div className="fixed bottom-16 left-5 right-5 z-50">
           {errorMsg && (
-            <div style={{ background: '#fef2f2', border: '1px solid #f87171', color: '#991b1b', padding: 10, borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, marginBottom: 6 }}>
+            <div className="bg-danger/10 border border-danger text-danger p-2.5 rounded-md whitespace-pre-wrap text-[13px] mb-1.5 shadow-sm">
               {errorMsg}
-              <button onClick={() => setErrorMsg('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', fontSize: 16 }}>×</button>
+              <button onClick={() => setErrorMsg('')} className="float-right bg-transparent border-none cursor-pointer text-danger text-base hover:opacity-70">×</button>
             </div>
           )}
           {resultatGuardar && (
-            <div style={{ background: '#ecfdf5', border: '1px solid #34d399', color: '#065f46', padding: 10, borderRadius: 6, fontSize: 13 }}>
+            <div className="bg-success/10 border border-success text-success p-2.5 rounded-md text-[13px] shadow-sm">
               {resultatGuardar}
-              <button onClick={() => setResultatGuardar('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', fontSize: 16 }}>×</button>
+              <button onClick={() => setResultatGuardar('')} className="float-right bg-transparent border-none cursor-pointer text-success text-base hover:opacity-70">×</button>
             </div>
           )}
         </div>
       )}
 
-      <footer style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #d4d4d4', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -2px 8px rgba(0,0,0,0.04)', zIndex: 40 }}>
-        <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {carrosPendents.length > 0 && <>Queden <b style={{ color: '#1f2937' }}>{carrosPendents.length}</b> carros sense ubicar</>}
+      <footer className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-5 py-2.5 flex justify-between items-center shadow-sm z-40 overflow-x-auto">
+        <div className="text-[13px] text-text-dim flex items-center gap-2 whitespace-nowrap">
+          {carrosPendents.length > 0 && <>Queden <b className="text-text">{carrosPendents.length}</b> carros sense ubicar</>}
           {carrosPendents.length === 0 && colocats.size > 0 && <>Tots els carros estan col·locats ({colocats.size})</>}
           {' · '}<span>{seleccionades.size} cel·les seleccionades</span>
           {incsFiltrades.size > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#dbeafe', color: '#1d4ed8', borderRadius: 4, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>
+            <span className="inline-flex items-center gap-1 bg-accent/20 text-accent rounded px-2 py-0.5 text-xs font-bold">
               ✓ {incsFiltrades.size} inc. seleccionades
-              <button onClick={() => setIncsFiltrades(new Set())} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1d4ed8', fontSize: 14, padding: '0 2px', lineHeight: 1 }} title="Esborra filtre">×</button>
+              <button onClick={() => setIncsFiltrades(new Set())} className="bg-transparent border-none cursor-pointer text-accent text-sm px-0.5 leading-none hover:opacity-70" title="Esborra filtre">×</button>
             </span>
           )}
         </div>
-        <div>
-          <Link href={`/carrega/${full.id}`} style={{ ...btnStyle(false), textDecoration: 'none', marginRight: 8 }}>Tornar al full</Link>
-          <button onClick={netejarSeleccio} style={btnStyle(false)}>Netejar selecció</button>
-          <button onClick={reiniciar} style={btnStyle(false)}>Reiniciar</button>
-          <button onClick={aplicarPreSuggerit} style={btnStyle(false)} disabled={carrosPendents.length === 0 || !full || !estatInst}>Suggereix assignació</button>
+        <div className="flex gap-2">
+          <Link href={`/carrega/${full.id}`} className="btn-secondary no-underline mr-2 whitespace-nowrap">Tornar al full</Link>
+          <button onClick={netejarSeleccio} className="btn-secondary whitespace-nowrap">Netejar selecció</button>
+          <button onClick={reiniciar} className="btn-secondary whitespace-nowrap">Reiniciar</button>
+          <button onClick={aplicarPreSuggerit} className="btn-secondary whitespace-nowrap" disabled={carrosPendents.length === 0 || !full || !estatInst}>Suggereix assignació</button>
           <button
             onClick={aplicarOptimitzacioTermica}
             disabled={!hiHaMsColocats}
             title={hiHaMsColocats ? 'Redistribueix zones MS per equilibrar calor projectada a 21 dies' : 'Necessites carros MS col·locats primer'}
-            style={{
-              ...btnStyle(false),
-              background: hiHaMsColocats ? '#ecfdf5' : undefined,
-              border: hiHaMsColocats ? '1px solid #34d399' : undefined,
-              color: hiHaMsColocats ? '#065f46' : undefined,
-            }}
+            className={`whitespace-nowrap px-3.5 py-2 rounded-md font-medium text-sm transition-colors border ${hiHaMsColocats ? 'bg-success/10 border-success text-success hover:bg-success/20 cursor-pointer' : 'bg-surface border-border text-text-dim opacity-50 cursor-not-allowed'}`}
           >
             ⚡ Optimitzar zones (calor)
           </button>
-          <button onClick={guardar} style={btnStyle(true)} disabled={guardant}>{guardant ? 'Guardant...' : 'Guardar planificació'}</button>
+          <button onClick={guardar} className="btn-primary whitespace-nowrap" disabled={guardant}>{guardant ? 'Guardant...' : 'Guardar planificació'}</button>
         </div>
       </footer>
     </main>
@@ -1726,400 +507,3 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Subcomponents
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Checkbox amb suport per a l'estat indeterminate.
-// El ref el gestiona el component internament per evitar crear una nova
-// funció de ref en cada render del pare (cosa que força React a reassignar
-// el DOM node innecessàriament en cada re-render).
-function IndeterminateCheckbox({ indeterminate, ...props }: { indeterminate: boolean } & React.InputHTMLAttributes<HTMLInputElement>) {
-  const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate
-  }, [indeterminate])
-  return <input ref={ref} {...props} />
-}
-
-function HeaderPlan({ full, dia, setDia, pendents, total, colocats, onTornarSeleccio }: { full: Full; dia: Dia; setDia: (d: Dia) => void; pendents: number; total: number; colocats: number; onTornarSeleccio: () => void }) {
-  const diaInferit = diaDeFull(full.carrega)
-  return (
-    <header style={{ background: '#fff', borderBottom: '1px solid #d4d4d4', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-          <button onClick={onTornarSeleccio} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 5, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#6b7280' }}>← Pas 1</button>
-          <h1 style={{ margin: 0, fontSize: 18 }}>Adjudicació full #{full.num_carrega} — Pas 2: Assignació visual</h1>
-        </div>
-        <div style={{ color: '#6b7280', fontSize: 13 }}>
-          Càrrega <b style={{ color: '#1f2937' }}>{full.carrega}</b> · {total} carros seleccionats · {colocats} col·locats · {pendents} pendents
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <label style={{ fontSize: 13, color: '#6b7280' }}>
-          Patró del dia:&nbsp;
-          <select value={dia} onChange={e => setDia(e.target.value as Dia)} style={{ padding: '4px 8px', fontSize: 13 }}>
-            <option value="dijous">Dijous (SS · Inc 1-2 · MSP)</option>
-            <option value="dilluns">Dilluns (Inc 3-6 · MSP)</option>
-          </select>
-          {diaInferit && diaInferit !== dia && (
-            <span style={{ color: '#b45309', fontSize: 12, marginLeft: 8 }}>(el full és {diaInferit}!)</span>
-          )}
-        </label>
-      </div>
-    </header>
-  )
-}
-
-function OrdreMSP({ ordre, onChange }: { ordre: number[]; onChange: (o: number[]) => void }) {
-  function mou(idx: number, dir: -1 | 1) {
-    const novaOrdre = [...ordre]
-    const j = idx + dir
-    if (j < 0 || j >= novaOrdre.length) return
-    ;[novaOrdre[idx], novaOrdre[j]] = [novaOrdre[j], novaOrdre[idx]]
-    onChange(novaOrdre)
-  }
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
-      Ordre MSP:
-      {ordre.map((n, i) => (
-        <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-          <button onClick={() => mou(i, -1)} disabled={i === 0} style={{ ...miniBtn(), padding: '0 4px' }}>◀</button>
-          <span style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 3, fontWeight: 600 }}>{n}</span>
-          <button onClick={() => mou(i, 1)} disabled={i === ordre.length - 1} style={{ ...miniBtn(), padding: '0 4px' }}>▶</button>
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function Safata({ pendents, onDragStartCarro, full }: { pendents: CarroEstoc[]; onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void; full: Full }) {
-  // Agrupar per lot (granja+estirp+posta)
-  const grups: { key: string; nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }[] = []
-  const map = new Map<string, { nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }>()
-  for (const c of pendents) {
-    const k = `${c.lots_reproductores.granges_reproductores.granja}|${c.lots_reproductores.estirp || ''}|${c.posta}`
-    if (!map.has(k)) map.set(k, { nom: nomCarroCurt(c), estirp: c.lots_reproductores.estirp, posta: c.posta, carros: [] })
-    map.get(k)!.carros.push(c)
-  }
-  map.forEach((v, k) => grups.push({ key: k, ...v }))
-  grups.sort((a, b) => diesEstoc(b.posta, full.carrega) - diesEstoc(a.posta, full.carrega))
-
-  return (
-    <div>
-      {grups.map(g => (
-        <div key={g.key} style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 3, fontWeight: 600 }}>
-            {g.nom}{g.estirp ? ` · ${g.estirp}` : ''} · posta {g.posta} · {g.carros.length} carro{g.carros.length !== 1 ? 's' : ''}
-          </div>
-          {g.carros.map(c => (
-            <div key={c.id}
-              draggable
-              onDragStart={(e) => onDragStartCarro(e, c.id, null)}
-              style={{ background: '#bfdbfe', border: '1px solid #2563eb', borderRadius: 6, padding: '6px 8px', marginBottom: 4, cursor: 'grab', fontSize: 12, lineHeight: 1.3, userSelect: 'none' }}>
-              <div style={{ color: '#1e3a8a', fontSize: 11 }}>{c.quantitat_ous.toLocaleString('ca')} ous · estoc {diesEstoc(c.posta, full.carrega)}d</div>
-            </div>
-          ))}
-        </div>
-      ))}
-      {pendents.length === 0 && <div style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center', padding: 12 }}>Cap carro pendent</div>}
-    </div>
-  )
-}
-
-function SeccioInc({ titol, badge, incs, children, extra }: { titol: string; badge: string; incs: Incubadora[]; children: React.ReactNode; extra?: React.ReactNode }) {
-  if (incs.length === 0) return null
-  return (
-    <section style={cardSeccio()}>
-      <h2 style={h2Seccio()}>
-        {titol} <span style={badgeStyle()}>{badge}</span>
-        {extra && <span style={{ marginLeft: 'auto' }}>{extra}</span>}
-      </h2>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(incs.length, 3)}, 1fr)`, gap: 14 }}>
-        {children}
-      </div>
-    </section>
-  )
-}
-
-// ── Singlestage incubadora ────────────────────────────────────────────────
-
-interface CellPropsCommon {
-  carrosLot: CarroEstoc[]
-  carroPerCella: Map<string, number>
-  ocupatsAltresFulls: Map<string, { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null }>
-  lliureAviatPerCella: Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>
-  colocats: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>
-  seleccionades: Set<string>
-  numCarroPerCella: Map<string, number>
-  onSelLliures: (inc: Incubadora) => void
-  onClicCella: (incId: number, pos: number, zona: ZonaMS | null) => void
-  onDropCell: (e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) => void
-  onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void
-  onDragOverCell: (e: React.DragEvent) => void
-  onClicCarroColocat: (id: number) => void
-  mostrarProjectat: boolean
-}
-
-function IncubadoraSS({ inc, filtrada, anyFiltrada, onToggleFiltrada, ...p }: CellPropsCommon & {
-  inc: Incubadora
-  filtrada: boolean
-  anyFiltrada: boolean
-  onToggleFiltrada: () => void
-}) {
-  const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
-  const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
-  const exclosa = anyFiltrada && !filtrada
-  return (
-    <div style={{ ...cardInc(), outline: filtrada ? '2px solid #2563eb' : exclosa ? '1px solid #e5e7eb' : undefined, opacity: exclosa ? 0.5 : 1 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
-        <button onClick={onToggleFiltrada} title={filtrada ? 'Exclou del suggeriment' : 'Inclou al suggeriment'} style={{ fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: filtrada ? '#2563eb' : '#1f2937', fontSize: 13 }}>
-          {filtrada ? '✓ ' : ''}SS {inc.numero}
-        </button>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
-          <button onClick={() => p.onSelLliures(inc)} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr', gap: 3 }}>
-        {['Paret esq', 'Central esq', 'Pulsator esq', '', 'Pulsator dre', 'Central dre', 'Paret dre'].map((h, i) => (
-          <div key={i} style={{ gridColumn: i + 1, gridRow: 1, fontSize: 9, textAlign: 'center', color: '#6b7280' }}>{h}</div>
-        ))}
-        <div style={{ gridColumn: 4, gridRow: '2 / 6', background: '#1f2937', borderRadius: 1 }} />
-        {Array.from({ length: 24 }, (_, i) => i + 1).map(pos => {
-          const { col, row } = ssPosToCell(pos)
-          const gridCol = col < 3 ? (col + 1) : (col + 2)
-          const gridRow = 2 + (3 - row)
-          return (
-            (() => {
-              const k = keyCell(inc.id, pos, null)
-              const carroIdNou = p.carroPerCella.get(k)
-              const carroNouObj = carroIdNou !== undefined ? p.carrosLot.find(c => c.id === carroIdNou) || null : null
-              return (
-                <MemoCell key={pos}
-                  incId={inc.id} pos={pos} zona={null} gridCol={gridCol} gridRow={gridRow}
-                  carroNouObj={carroNouObj}
-                  ocupAltre={p.ocupatsAltresFulls.get(k)}
-                  lliureAviat={p.lliureAviatPerCella.get(k)}
-                  isSeleccionada={p.seleccionades.has(k)}
-                  numCarro={p.numCarroPerCella.get(k)}
-                  mostrarProjectat={p.mostrarProjectat}
-                  onClicCella={p.onClicCella}
-                  onDropCell={p.onDropCell}
-                  onDragStartCarro={p.onDragStartCarro}
-                  onDragOverCell={p.onDragOverCell}
-                  onClicCarroColocat={p.onClicCarroColocat}
-                />
-              )
-            })()
-          )
-        })}
-      </div>
-      <div style={{ fontSize: 9, color: '#6b7280', textAlign: 'center', marginTop: 4 }}>↓ porta frontal ↓</div>
-    </div>
-  )
-}
-
-function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada, ...p }: CellPropsCommon & {
-  inc: Incubadora
-  sub: 'MSG' | 'MSP'
-  filtrada: boolean
-  anyFiltrada: boolean
-  onToggleFiltrada: () => void
-}) {
-  const ocupNous = Array.from(p.colocats.values()).filter(c => c.incId === inc.id).length
-  const ocupAltres = Array.from(p.ocupatsAltresFulls.keys()).filter(k => k.startsWith(`${inc.id}|`)).length
-  const profunditat = sub === 'MSG' ? 4 : 2
-  const posEsq = sub === 'MSG' ? [1, 2, 3, 4] : [1, 2]
-  const posDre = sub === 'MSG' ? [5, 6, 7, 8] : [3, 4]
-  const exclosa = anyFiltrada && !filtrada
-
-  return (
-    <div style={{ ...cardInc(), outline: filtrada ? '2px solid #2563eb' : exclosa ? '1px solid #e5e7eb' : undefined, opacity: exclosa ? 0.5 : 1 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, gap: 4 }}>
-        <button onClick={onToggleFiltrada} title={filtrada ? 'Exclou del suggeriment' : 'Inclou al suggeriment'} style={{ fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: filtrada ? '#2563eb' : '#1f2937', fontSize: 13 }}>
-          {filtrada ? '✓ ' : ''}Inc {inc.numero}
-        </button>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ color: '#6b7280', fontSize: 11 }}>{ocupNous + ocupAltres}/{inc.capacitat_carros}</span>
-          <button onClick={() => p.onSelLliures(inc)} style={btnSelLliures()} title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr', gap: 3 }}>
-        {/* Capçaleres */}
-        {[{ z: 'paret', d: '~7d', col: 1 }, { z: 'central', d: '~0d', col: 2 }, { z: 'pulsator', d: '~14d', col: 3 },
-          { z: 'pulsator', d: '~14d', col: 5 }, { z: 'central', d: '~0d', col: 6 }, { z: 'paret', d: '~7d', col: 7 }].map((h, i) => (
-          <div key={i} style={{ gridColumn: h.col, gridRow: 1, fontSize: 8, textAlign: 'center', color: '#6b7280', lineHeight: 1.05 }}>
-            {h.z}<br /><span style={{ color: '#9ca3af' }}>{h.d}</span>
-          </div>
-        ))}
-        <div style={{ gridColumn: 4, gridRow: `2 / ${2 + profunditat}`, background: '#1f2937', borderRadius: 1 }} />
-        {/* Costat esq: zones paret/central/pulsator (cols 1-3) */}
-        {MS_ZONES_ESQ.map((z, zi) => posEsq.map(pos => {
-            const k = keyCell(inc.id, pos, z);
-            const carroIdNou = p.carroPerCella.get(k);
-            const carroNouObj = carroIdNou !== undefined ? p.carrosLot.find(c => c.id === carroIdNou) || null : null;
-            return (
-              <MemoCell key={`esq-${pos}-${z}`}
-                incId={inc.id} pos={pos} zona={z} gridCol={zi + 1} gridRow={2 + (profunditat - pos)} zonaClass={z}
-                carroNouObj={carroNouObj} ocupAltre={p.ocupatsAltresFulls.get(k)} lliureAviat={p.lliureAviatPerCella.get(k)}
-                isSeleccionada={p.seleccionades.has(k)} numCarro={p.numCarroPerCella.get(k)} mostrarProjectat={p.mostrarProjectat}
-                onClicCella={p.onClicCella} onDropCell={p.onDropCell} onDragStartCarro={p.onDragStartCarro} onDragOverCell={p.onDragOverCell} onClicCarroColocat={p.onClicCarroColocat}
-              />
-            );
-          }))}
-        {/* Costat dre: zones pulsator/central/paret (cols 5-7) */}
-        {MS_ZONES_DRE.map((z, zi) => posDre.map(pos => {
-          const posLocal = pos - (sub === 'MSG' ? 4 : 2)
-          return (
-            (() => {
-              const k = keyCell(inc.id, pos, z)
-              const carroIdNou = p.carroPerCella.get(k)
-              const carroNouObj = carroIdNou !== undefined ? p.carrosLot.find(c => c.id === carroIdNou) || null : null
-              return (
-                <MemoCell key={`dre-${pos}-${z}`}
-                  incId={inc.id} pos={pos} zona={z} gridCol={zi + 5} gridRow={2 + (profunditat - posLocal)} zonaClass={z}
-                  carroNouObj={carroNouObj} ocupAltre={p.ocupatsAltresFulls.get(k)} lliureAviat={p.lliureAviatPerCella.get(k)}
-                  isSeleccionada={p.seleccionades.has(k)} numCarro={p.numCarroPerCella.get(k)} mostrarProjectat={p.mostrarProjectat}
-                  onClicCella={p.onClicCella} onDropCell={p.onDropCell} onDragStartCarro={p.onDragStartCarro} onDragOverCell={p.onDragOverCell} onClicCarroColocat={p.onClicCarroColocat}
-                />
-              )
-            })()
-          )
-        }))}
-      </div>
-      <div style={{ fontSize: 9, color: '#6b7280', textAlign: 'center', marginTop: 4 }}>↓ porta frontal ↓</div>
-    </div>
-  )
-}
-
-// ── Cel·la individual ──────────────────────────────────────────────────────
-
-interface CellProps {
-  incId: number; pos: number; zona: ZonaMS | null; gridCol: number; gridRow: number; zonaClass?: ZonaMS;
-  carroNouObj: CarroEstoc | null;
-  ocupAltre: { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null } | undefined;
-  lliureAviat: { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string } | undefined;
-  isSeleccionada: boolean; numCarro: number | undefined; mostrarProjectat: boolean;
-  onClicCella: (incId: number, pos: number, zona: ZonaMS | null) => void;
-  onDropCell: (e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) => void;
-  onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void;
-  onDragOverCell: (e: React.DragEvent) => void;
-  onClicCarroColocat: (id: number) => void;
-}
-
-function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouObj, ocupAltre, lliureAviat, isSeleccionada: sel, numCarro, mostrarProjectat, onClicCella, onDropCell, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellProps) {
-  const carroIdNou = carroNouObj ? carroNouObj.id : undefined;
-  const k = keyCell(incId, pos, zona)
-
-  // lliureAviat té prioritat sobre ocupAltre (és un subconjunt que permet interacció)
-  // En mode projectat, les cel·les "lliure aviat" es mostren com a buides
-  const tractarComBuit = mostrarProjectat && !!lliureAviat && carroIdNou === undefined
-  const blocat = !!ocupAltre && !lliureAviat
-
-  let bg = '#fefefe'
-  let border = '1px dashed #cbd5e1'
-  let color = '#1f2937'
-  let cursor: 'default' | 'pointer' | 'grab' = 'default'
-
-  if (zonaClass) {
-    bg = zonaClass === 'paret' ? '#fee2e2' : zonaClass === 'central' ? '#f3f4f6' : '#fed7aa'
-  }
-  if (blocat) {
-    bg = '#4b5563'
-    color = '#fff'
-    border = '1px solid #4b5563'
-  } else if (lliureAviat && !carroIdNou && !tractarComBuit) {
-    // Ocupat ara però lliure a temps — verd suau (mode no projectat)
-    bg = '#dcfce7'
-    border = '1px dashed #16a34a'
-    color = '#14532d'
-    cursor = 'pointer'
-  } else if (carroIdNou !== undefined) {
-    bg = '#bfdbfe'
-    border = '1px solid #2563eb'
-    color = '#1e3a8a'
-    cursor = 'grab'
-  } else if (sel) {
-    bg = '#fde68a'
-    border = '1px solid #f59e0b'
-    color = '#92400e'
-    cursor = 'pointer'
-  } else {
-    cursor = 'pointer'
-  }
-
-  // carroNouObj passat per props
-
-  // Text del comptador de dies per a cel·les "lliure aviat"
-  function textDiesFins(dies: number): string {
-    if (dies <= 0) return 'avui'
-    if (dies === 1) return 'demà'
-    return `${dies}d`
-  }
-
-  // Tooltip detallat
-  const titleText = blocat
-    ? `Ocupat · càrrega ${ocupAltre!.num_carrega}/#${ocupAltre!.num_carro_full}${ocupAltre!.data_transferencia_full ? ' · transf ' + ocupAltre!.data_transferencia_full : ''}`
-    : lliureAviat && !carroIdNou
-    ? `Lliure en ${textDiesFins(lliureAviat.diesFins)} · transferència ${lliureAviat.data_transferencia_full} · carrega ${lliureAviat.num_carrega}/#${lliureAviat.num_carro_full} · click o arrossega per assignar`
-    : carroNouObj
-    ? `${nomCarroCurt(carroNouObj)} · ${carroNouObj.quantitat_ous} ous · click per treure`
-    : `Pos ${pos}${zona ? ' · ' + zona : ''}`
-
-  return (
-    <div
-      style={{ gridColumn: gridCol, gridRow, minHeight: 48, borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 10, fontWeight: 600, padding: 2, lineHeight: 1.05, overflow: 'hidden', background: bg, border, color, cursor }}
-      onClick={() => {
-        if (carroIdNou !== undefined) onClicCarroColocat(carroIdNou)
-        else if (!blocat) onClicCella(incId, pos, zona)
-      }}
-      draggable={carroIdNou !== undefined}
-      onDragStart={(e) => carroIdNou !== undefined && onDragStartCarro(e, carroIdNou, k)}
-      onDragOver={!blocat ? onDragOverCell : undefined}
-      onDrop={!blocat ? (e) => onDropCell(e, incId, pos, zona) : undefined}
-      title={titleText}
-    >
-      {blocat && ocupAltre && <span>#{ocupAltre.num_carro_full}</span>}
-      {lliureAviat && !carroIdNou && !tractarComBuit && (
-        <>
-          <span style={{ fontSize: 8, opacity: 0.7, textAlign: 'center' }}>#{lliureAviat.num_carro_full}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d' }}>{textDiesFins(lliureAviat.diesFins)}</span>
-        </>
-      )}
-      {carroNouObj && (
-        <>
-          {numCarro !== undefined && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#1e3a8a', background: '#dbeafe', borderRadius: 3, padding: '0 3px', marginBottom: 1 }}>#{numCarro}</span>
-          )}
-          <span style={{ fontSize: 10, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nomCarroCurt(carroNouObj)}</span>
-          <span style={{ fontSize: 9, opacity: 0.75 }}>{carroNouObj.quantitat_ous.toLocaleString('ca')} ous</span>
-        </>
-      )}
-      {!blocat && (tractarComBuit || !lliureAviat) && !carroNouObj && (
-        <>
-          {numCarro !== undefined
-            ? <span style={{ fontSize: 9, fontWeight: 600, color: '#94a3b8' }}>#{numCarro}</span>
-            : <span style={{ fontSize: 9, opacity: 0.35 }}>{pos}</span>
-          }
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Estils helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function cardSeccio(): React.CSSProperties { return { background: '#fff', border: '1px solid #d4d4d4', borderRadius: 8, padding: 14 } }
-function h2Seccio(): React.CSSProperties { return { margin: '0 0 12px', fontSize: 15, display: 'flex', gap: 8, alignItems: 'center' } }
-function badgeStyle(): React.CSSProperties { return { background: '#f7f7f5', border: '1px solid #d4d4d4', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500, color: '#6b7280' } }
-function cardInc(): React.CSSProperties { return { border: '1px solid #d4d4d4', borderRadius: 6, padding: 8, background: '#fafafa' } }
-function btnSelLliures(): React.CSSProperties { return { background: '#fde68a', border: '1px solid #f59e0b', borderRadius: 4, padding: '2px 6px', fontSize: 10, cursor: 'pointer', color: '#92400e', fontWeight: 600 } }
-function chipNaix(): React.CSSProperties { return { background: '#4b5563', color: '#fff', padding: '4px 6px', borderRadius: 4, fontSize: 11 } }
-function miniBtn(): React.CSSProperties { return { background: '#fff', border: '1px solid #d4d4d4', borderRadius: 3, cursor: 'pointer', fontSize: 10 } }
-function btnStyle(primari: boolean): React.CSSProperties {
-  return primari
-    ? { padding: '8px 14px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 8, fontWeight: 600 }
-    : { padding: '8px 14px', borderRadius: 6, border: '1px solid #6b7280', background: '#f3f4f6', color: '#1f2937', cursor: 'pointer', fontSize: 13, marginLeft: 8, fontWeight: 500 }
-}

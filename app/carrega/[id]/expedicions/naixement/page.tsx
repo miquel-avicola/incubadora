@@ -90,6 +90,28 @@ export default function ExpedicionsNaixement() {
   const [guardant, setGuardant] = useState(false)
   const [distribucio, setDistribucio] = useState<DistribucioSaved>({})
 
+  // Helpers per accedir a la distribució d'una expedició
+  function getGrupKey(e: Expedicio): string | null {
+    if (!e.transportistes || e.num_viatge == null) return null
+    return `${e.transportistes.id}_${e.num_viatge}`
+  }
+
+  function getDistExp(e: Expedicio) {
+    const key = getGrupKey(e)
+    if (!key || !distribucio[key]) return null
+    return distribucio[key].per_expedicio[String(e.id)] ?? null
+  }
+
+  function getDistGrup(e: Expedicio) {
+    const key = getGrupKey(e)
+    if (!key) return null
+    return distribucio[key] ?? null
+  }
+
+  function getPolletsRealsOComanda(e: Expedicio) {
+    return e.pollets_servits || getDistExp(e)?.pollets_reals || e.pollets_comanda || 0
+  }
+
   const [polletsServits, setPolletsServits] = useState('')
   const [polletsPerLot, setPolletsPerLot] = useState<Record<number, string>>({})
 
@@ -120,7 +142,7 @@ export default function ExpedicionsNaixement() {
       return
     }
     setExpedicioOberta(exp.id)
-    setPolletsServits(String(exp.pollets_servits || exp.pollets_comanda || ''))
+    setPolletsServits(String(getPolletsRealsOComanda(exp) || ''))
     const lotsExistents: Record<number, string> = {}
     exp.expedicio_lots.forEach(el => {
       lotsExistents[el.lots_reproductores.id] = String(el.pollets)
@@ -192,7 +214,7 @@ export default function ExpedicionsNaixement() {
 
   const lotsDisponibles = Object.entries(statsPerLot)
   const totalNascuts = Object.values(statsPerLot).reduce((s, l) => s + l.nascuts, 0)
-  const totalAssignats = expedicions.reduce((s, e) => s + (e.pollets_servits || e.pollets_comanda || 0), 0)
+  const totalAssignats = expedicions.reduce((s, e) => s + getPolletsRealsOComanda(e), 0)
 
   const expedicionsOrdenades = [...expedicions].sort((a, b) => {
     const clientA = a.comandes?.clients?.nom || ''
@@ -225,23 +247,7 @@ export default function ExpedicionsNaixement() {
 
   const lotIds = Object.keys(statsPerLot).map(Number)
 
-  // Helpers per accedir a la distribució d'una expedició
-  function getGrupKey(e: Expedicio): string | null {
-    if (!e.transportistes || e.num_viatge == null) return null
-    return `${e.transportistes.id}_${e.num_viatge}`
-  }
 
-  function getDistExp(e: Expedicio) {
-    const key = getGrupKey(e)
-    if (!key || !distribucio[key]) return null
-    return distribucio[key].per_expedicio[String(e.id)] ?? null
-  }
-
-  function getDistGrup(e: Expedicio) {
-    const key = getGrupKey(e)
-    if (!key) return null
-    return distribucio[key] ?? null
-  }
 
   // Carros compartits que apareixeran a la llegenda
   const carrosCompartitsLlegenda: Array<{
@@ -394,13 +400,13 @@ export default function ExpedicionsNaixement() {
               {cols.map((col) => {
                 if (col.type === 'single') {
                   const e = col.exp
-                  return <td key={e.id}>{(e.pollets_servits || e.pollets_comanda || 0).toLocaleString()}</td>
+                  return <td key={e.id}>{getPolletsRealsOComanda(e).toLocaleString()}</td>
                 } else {
                   const { expM, expF } = col
                   return (
                     <td key={`par_${expM.id}`}>
-                      <span>♂ {(expM.pollets_servits || expM.pollets_comanda || 0).toLocaleString()}</span><br />
-                      <span>♀ {(expF.pollets_servits || expF.pollets_comanda || 0).toLocaleString()}</span>
+                      <span>♂ {getPolletsRealsOComanda(expM).toLocaleString()}</span><br />
+                      <span>♀ {getPolletsRealsOComanda(expF).toLocaleString()}</span>
                     </td>
                   )
                 }
@@ -482,96 +488,90 @@ export default function ExpedicionsNaixement() {
       </div>
 
       {/* Pàgina normal (amagada en imprimir) */}
-      <main className="no-print" style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1rem' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="no-print bg-bg min-h-full p-4 md:p-6 pb-20">
+        <div className="max-w-2xl mx-auto w-full space-y-4 md:space-y-6">
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <Link href={`/carrega/${params.id}/expedicions`} style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Expedicions</Link>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Link href={`/carrega/${params.id}/expedicions`} className="hidden md:block text-text-dim no-underline text-sm mono hover:text-accent transition-colors">← Expedicions</Link>
               <div>
-                <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Dia del naixement</p>
-                <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Repartiment final</h1>
+                <p className="text-accent mono text-[11px] tracking-wider uppercase m-0">Dia del naixement</p>
+                <h1 className="text-xl md:text-2xl font-bold m-0">Repartiment final</h1>
               </div>
             </div>
-            <button onClick={() => window.print()} style={{
-              padding: '0.5rem 1rem', background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: '8px', color: 'var(--text)', fontFamily: 'IBM Plex Sans',
-              fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600,
-            }}>
+            <button onClick={() => window.print()} className="w-full md:w-auto px-4 py-2.5 bg-surface border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-bg transition-colors shadow-sm">
               🖨 Imprimir
             </button>
           </div>
 
           {/* Comptador viu per lot */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '0.875rem 1rem', marginBottom: '1rem' }}>
-            <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+          <div className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm">
+            <div className="text-[11px] mono text-text-dim uppercase tracking-wider mb-3">
               Pollets per lot
             </div>
-            {lotsDisponibles.map(([lotId, stats]) => {
-              const disponibles = stats.nascuts - stats.assignats
-              return (
-                <div key={lotId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem' }}>
-                  <span style={{ color: 'var(--text)' }}>{stats.nom}</span>
-                  <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem' }}>
-                    <span style={{ color: disponibles < 0 ? 'var(--danger)' : disponibles === 0 ? 'var(--success)' : 'var(--accent)' }}>
-                      {disponibles.toLocaleString()} disp.
-                    </span>
-                    <span style={{ color: 'var(--text-dim)', marginLeft: '0.4rem' }}>
-                      / {stats.nascuts.toLocaleString()} nascuts
-                    </span>
+            <div className="flex flex-col gap-1">
+              {lotsDisponibles.map(([lotId, stats]) => {
+                const disponibles = stats.nascuts - stats.assignats
+                return (
+                  <div key={lotId} className="flex justify-between items-center py-1.5 border-b border-border text-sm">
+                    <span className="font-semibold text-text">{stats.nom}</span>
+                    <div className="text-right mono text-xs">
+                      <span className={disponibles < 0 ? 'text-danger' : disponibles === 0 ? 'text-success' : 'text-accent'}>
+                        {disponibles.toLocaleString()} disp.
+                      </span>
+                      <span className="text-text-dim ml-2">
+                        / {stats.nascuts.toLocaleString()} nascuts
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
             {lotsDisponibles.length === 0 && (
-              <p style={{ color: 'var(--text-dim)', fontSize: '0.8rem', margin: 0 }}>Sense pollets registrats encara</p>
+              <p className="text-text-dim text-xs m-0 py-2">Sense pollets registrats encara</p>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono' }}>
-              <span style={{ color: 'var(--text-dim)' }}>Total assignat</span>
-              <span style={{ color: totalAssignats > totalNascuts ? 'var(--danger)' : 'var(--text)' }}>
+            <div className="flex justify-between mt-3 text-xs mono pt-2 border-t border-border border-dashed">
+              <span className="text-text-dim font-bold">Total assignat</span>
+              <span className={`font-bold ${totalAssignats > totalNascuts ? 'text-danger' : 'text-text'}`}>
                 {totalAssignats.toLocaleString()} / {totalNascuts.toLocaleString()}
               </span>
             </div>
           </div>
 
           {/* Llista d'expedicions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div className="flex flex-col gap-3">
             {expedicions.map(e => {
               const obert = expedicioOberta === e.id
               const tePollets = e.pollets_servits !== null
               const distExp = getDistExp(e)
               const distGrup = getDistGrup(e)
               return (
-                <div key={e.id} style={{ background: 'var(--surface)', border: '1px solid', borderColor: obert ? 'var(--accent)' : tePollets ? 'var(--success)' : 'var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-                  <button onClick={() => obrirExpedicio(e)} style={{
-                    width: '100%', padding: '0.875rem 1rem', background: 'transparent',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{nomDestinacio(e.destinacions)}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.15rem' }}>
+                <div key={e.id} className={`bg-surface border rounded-xl overflow-hidden shadow-sm transition-colors ${obert ? 'border-accent' : tePollets ? 'border-success' : 'border-border'}`}>
+                  <button onClick={() => obrirExpedicio(e)} className="w-full p-4 bg-transparent border-none cursor-pointer text-left flex justify-between items-center hover:bg-bg transition-colors">
+                    <div className="flex-1">
+                      <div className="font-bold text-[15px]">{nomDestinacio(e.destinacions)}</div>
+                      <div className="text-xs text-text-dim mono mt-1">
                         {e.comandes?.clients?.nom}
                         {e.hora_prevista_naixement && ` · ${e.hora_prevista_naixement}`}
                         {e.num_viatge != null && e.transportistes && (
-                          <span style={{ color: 'var(--accent)' }}> · {e.transportistes.nom} V{e.num_viatge}</span>
+                          <span className="text-accent font-bold"> · {e.transportistes.nom} V{e.num_viatge}</span>
                         )}
                       </div>
                       {distExp && distGrup && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
+                        <div className="text-[11px] text-text-dim mono mt-1.5">
                           {distExp.carros_sencers}c + {distExp.pico_caixes} cx pico
-                          <span style={{ marginLeft: '0.4rem', color: 'var(--text-dim)' }}>
+                          <span className="ml-2 text-text-dim opacity-70">
                             · {distGrup.alcada} cx · {distGrup.pollets_caixa} p/cx
                           </span>
                         </div>
                       )}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.88rem', fontWeight: 700, color: tePollets ? 'var(--success)' : 'var(--text-dim)' }}>
-                        {(e.pollets_servits ?? e.pollets_comanda ?? 0).toLocaleString()}
+                    <div className="text-right">
+                      <div className={`mono text-sm font-bold ${tePollets ? 'text-success' : 'text-text-dim'}`}>
+                        {getPolletsRealsOComanda(e).toLocaleString()}
                       </div>
                       {e.pollets_comanda && e.pollets_servits && e.pollets_servits !== e.pollets_comanda && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                        <div className="text-[10px] text-text-dim mono mt-0.5 opacity-70">
                           prev. {e.pollets_comanda.toLocaleString()}
                         </div>
                       )}
@@ -579,34 +579,34 @@ export default function ExpedicionsNaixement() {
                   </button>
 
                   {obert && (
-                    <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      <div style={{ marginTop: '0.75rem' }}>
-                        <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                    <div className="px-4 pb-4 border-t border-border flex flex-col gap-4 pt-4">
+                      <div>
+                        <div className="text-[10px] mono text-text-dim uppercase tracking-wider mb-2">
                           Pollets servits
                         </div>
-                        <input type="number" value={polletsServits} onChange={e => setPolletsServits(e.target.value)} inputMode="numeric" style={inputStyle} />
+                        <input type="number" value={polletsServits} onChange={e => setPolletsServits(e.target.value)} inputMode="numeric" 
+                          className="bg-bg border border-border rounded-lg px-3 py-2 text-text text-base w-full outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all" 
+                        />
                       </div>
 
                       {lotsDisponibles.length > 0 && (
                         <div>
-                          <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                          <div className="text-[10px] mono text-text-dim uppercase tracking-wider mb-2">
                             De quin lot
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          <div className="flex flex-col gap-2">
                             {lotsDisponibles.map(([lotId, stats]) => {
                               const lotIdNum = parseInt(lotId)
                               const valorActual = parseInt(polletsPerLot[lotIdNum] || '0') || 0
-                              // Pollets que aquesta expedició ja tenia assignats d'aquest lot (estat guardat)
                               const jaTenia = e.expedicio_lots.find(el => el.lots_reproductores.id === lotIdNum)?.pollets || 0
-                              // Disponibles dinàmics: nascuts − assignats_a_altres_expedicions − valor_camp_actual
                               const assignatsAltres = stats.assignats - jaTenia
                               const disponiblesDinamic = stats.nascuts - assignatsAltres - valorActual
-                              const colorDisp = disponiblesDinamic < 0 ? 'var(--danger)' : disponiblesDinamic === 0 ? 'var(--text-dim)' : 'var(--accent)'
+                              const colorDisp = disponiblesDinamic < 0 ? 'text-danger' : disponiblesDinamic === 0 ? 'text-text-dim' : 'text-accent'
                               return (
-                                <div key={lotId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ fontSize: '0.82rem', color: 'var(--text)' }}>{stats.nom}</span>
-                                    <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: colorDisp }}>
+                                <div key={lotId} className="flex items-center gap-2">
+                                  <div className="flex-1 flex flex-col">
+                                    <span className="text-sm text-text font-semibold">{stats.nom}</span>
+                                    <span className={`text-[11px] mono ${colorDisp}`}>
                                       {disponiblesDinamic.toLocaleString()} disp.
                                     </span>
                                   </div>
@@ -616,7 +616,7 @@ export default function ExpedicionsNaixement() {
                                     onChange={ev => setPolletsPerLot(prev => ({ ...prev, [lotIdNum]: ev.target.value }))}
                                     inputMode="numeric"
                                     placeholder="0"
-                                    style={{ ...inputStyle, width: '7rem', textAlign: 'right', fontSize: '0.9rem' }}
+                                    className="bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm w-28 text-right outline-none focus:border-accent"
                                   />
                                 </div>
                               )
@@ -628,16 +628,16 @@ export default function ExpedicionsNaixement() {
                             if (total === 0 && sumaLots === 0) return null
                             const diff = total - sumaLots
                             let label = ''
-                            let color = 'var(--text-dim)'
-                            if (diff > 0) { label = `Falten ${diff.toLocaleString()}`; color = 'var(--danger)' }
-                            else if (diff < 0) { label = `Sobren ${(-diff).toLocaleString()}`; color = 'var(--danger)' }
-                            else { label = '✓ Complet'; color = 'var(--success)' }
+                            let color = 'text-text-dim'
+                            if (diff > 0) { label = `Falten ${diff.toLocaleString()}`; color = 'text-danger' }
+                            else if (diff < 0) { label = `Sobren ${(-diff).toLocaleString()}`; color = 'text-danger' }
+                            else { label = '✓ Complet'; color = 'text-success' }
                             return (
-                              <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'baseline', gap: '0.6rem' }}>
-                                <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
+                              <div className="mt-3 flex justify-end items-baseline gap-2 pt-2 border-t border-border border-dashed">
+                                <span className="text-xs mono text-text-dim">
                                   {sumaLots.toLocaleString()} / {total.toLocaleString()}
                                 </span>
-                                <span style={{ fontSize: '0.85rem', fontFamily: 'IBM Plex Sans', fontWeight: 700, color }}>
+                                <span className={`text-sm font-bold ${color}`}>
                                   {label}
                                 </span>
                               </div>
@@ -646,12 +646,10 @@ export default function ExpedicionsNaixement() {
                         </div>
                       )}
 
-                      <button onClick={() => guardarExpedicio(e)} disabled={guardant} style={{
-                        padding: '0.875rem', border: 'none', borderRadius: '8px', fontWeight: 700,
-                        fontFamily: 'IBM Plex Sans', fontSize: '1rem', cursor: 'pointer',
-                        background: guardant ? 'var(--border)' : 'var(--accent)',
-                        color: guardant ? 'var(--text-dim)' : '#0f1117',
-                      }}>
+                      <button onClick={() => guardarExpedicio(e)} disabled={guardant} className={`
+                        w-full py-3 border-none rounded-lg font-bold text-base cursor-pointer transition-colors mt-2
+                        ${guardant ? 'bg-border text-text-dim' : 'bg-accent text-[#0f1117] hover:bg-accent-dim'}
+                      `}>
                         {guardant ? 'Guardant...' : 'Confirmar'}
                       </button>
                     </div>
@@ -661,7 +659,7 @@ export default function ExpedicionsNaixement() {
             })}
           </div>
         </div>
-      </main>
+      </div>
     </>
   )
 }

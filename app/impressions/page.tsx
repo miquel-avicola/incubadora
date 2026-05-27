@@ -1,0 +1,205 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { formatData } from '@/lib/dates'
+
+interface Comanda {
+  id: number
+  tipus: string
+  quantitat_pollets: number | null
+  clients: { nom: string }
+}
+
+interface Full {
+  id: number
+  num_carrega: number
+  carrega: string
+  estat: string
+  comandes: Comanda[]
+}
+
+export default function ImpressionsHub() {
+  const [carregues, setCarregues] = useState<Full[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/carrega')
+      .then(r => r.json())
+      .then(data => {
+        setCarregues(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const selectedCarrega = carregues.find(c => c.id === selectedId)
+
+  // Calculem alguns totals de la càrrega seleccionada per mostrar info útil
+  const totalPollets = selectedCarrega?.comandes
+    .filter(c => c.tipus === 'Pollets')
+    .reduce((acc, c) => acc + (c.quantitat_pollets || 0), 0) || 0
+
+  return (
+    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '2rem 1.5rem', fontFamily: 'IBM Plex Sans' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        
+        {/* Header */}
+        <div style={{ marginBottom: '2.5rem' }}>
+          <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono', display: 'inline-block', marginBottom: '1rem' }}>← Inici</Link>
+          <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem', margin: 0 }}>Documents</p>
+          <h1 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+            Centre d'Impressions
+          </h1>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
+            Selecciona una càrrega per generar i imprimir la documentació corresponent.
+          </p>
+        </div>
+
+        {/* Càrrega Selector */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem', marginBottom: '2.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+          <label style={{ display: 'block', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
+            Número de Càrrega
+          </label>
+          {loading ? (
+            <div style={{ padding: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>Carregant càrregues...</div>
+          ) : (
+            <select 
+              value={selectedId || ''} 
+              onChange={e => setSelectedId(e.target.value ? parseInt(e.target.value) : null)}
+              style={{
+                width: '100%',
+                padding: '0.85rem 1rem',
+                fontSize: '1rem',
+                fontFamily: 'IBM Plex Sans',
+                background: 'var(--bg)',
+                border: '1px solid var(--accent)',
+                borderRadius: '8px',
+                color: 'var(--text)',
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+              }}
+            >
+              <option value="">— Selecciona una càrrega —</option>
+              {carregues.map(c => (
+                <option key={c.id} value={c.id}>
+                  Càrrega #{c.num_carrega} — {formatData(c.carrega)} {c.estat === 'Finalitzat' ? '(Finalitzada)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Info Summary about selected load */}
+          {selectedCarrega && (
+            <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px', border: '1px dashed var(--border)', display: 'flex', gap: '2rem' }}>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Data Càrrega</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{formatData(selectedCarrega.carrega)}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Objectiu Pollets</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{totalPollets.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Estat</span>
+                <strong style={{ fontSize: '1rem', color: selectedCarrega.estat === 'Finalitzat' ? 'var(--success)' : 'var(--accent)' }}>{selectedCarrega.estat}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Opcions d'Impressió */}
+        <div style={{ opacity: selectedId ? 1 : 0.5, transition: 'opacity 0.3s ease', pointerEvents: selectedId ? 'auto' : 'none' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1.25rem' }}>
+            Documents disponibles
+          </h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+            
+            {/* Targeta 1: Full de treball */}
+            <PrintCard 
+              href={`/carrega/${selectedId}/imprimir`}
+              icon="🖨️"
+              title="Full de treball"
+              description="Document principal amb assignacions, carros de la granja i previsions per la incubadora."
+            />
+
+            {/* Targeta 2: Etiquetes de càrrega */}
+            <PrintCard 
+              href={`/carrega/${selectedId}/etiquetes`}
+              icon="🏷️"
+              title="Etiquetes càrrega"
+              description="Etiquetes petites per enganxar als carros amb el lot, edat i incubadora de destí."
+            />
+
+            {/* Targeta 3: Etiquetes de pollets */}
+            <PrintCard 
+              href={`/carrega/${selectedId}/expedicions/etiquetes-pollets`}
+              icon="🐣"
+              title="Etiquetes pollets"
+              description="Etiquetes per a les caixes de pollets (format 105x148mm) per a l'expedició."
+            />
+
+            {/* Targeta 4: Full de repartiment */}
+            <PrintCard 
+              href={`/carrega/${selectedId}/expedicions`}
+              icon="🚚"
+              title="Full de repartiment"
+              description="La pàgina d'expedicions amb el detall de tots els enviaments, destinacions i lots."
+            />
+
+            {/* Targeta 5: Estadístiques */}
+            <PrintCard 
+              href={`/carrega/${selectedId}/estadistiques`}
+              icon="📊"
+              title="Estadístiques"
+              description="Resultats d'incubació de la càrrega, percentatges de naixement per lots i granges."
+            />
+
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function PrintCard({ href, icon, title, description }: { href: string, icon: string, title: string, description: string }) {
+  return (
+    <Link href={href} target="_blank" style={{ textDecoration: 'none', display: 'block' }}>
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        height: '100%',
+        boxSizing: 'border-box',
+        transition: 'all 0.2s ease',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-4px)'
+        e.currentTarget.style.borderColor = 'var(--accent)'
+        e.currentTarget.style.boxShadow = '0 8px 24px rgba(240, 180, 41, 0.15)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'none'
+        e.currentTarget.style.borderColor = 'var(--border)'
+        e.currentTarget.style.boxShadow = 'none'
+      }}
+      >
+        <div style={{ fontSize: '2.5rem', marginBottom: '1rem', lineHeight: 1 }}>{icon}</div>
+        <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: 'var(--text)', fontWeight: 600 }}>{title}</h3>
+        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.4, flexGrow: 1 }}>
+          {description}
+        </p>
+        <div style={{ marginTop: '1rem', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 600, fontFamily: 'IBM Plex Sans' }}>
+          Obrir i Imprimir →
+        </div>
+      </div>
+    </Link>
+  )
+}

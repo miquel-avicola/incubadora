@@ -54,6 +54,17 @@ export default async function Home() {
             </Link>
           )}
 
+          {showCarrega && (
+            <Link href="/impressions" style={{ textDecoration: 'none' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', right: '-15px', top: '-15px', fontSize: '6rem', opacity: 0.05 }}>🖨️</div>
+                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📄</div>
+                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Documents i Impressions</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Central de generació d'etiquetes, fulls de treball i expedició</div>
+              </div>
+            </Link>
+          )}
+
           {role === 'admin' && (
             <Link href="/previsio-comercial" style={{ textDecoration: 'none' }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>

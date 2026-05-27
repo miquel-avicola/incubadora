@@ -99,11 +99,7 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
         model,
         tipus,
         capacitat_carros,
-        activa,
-        maquina_fase,
-        nom_fase,
-        planta,
-        localitzacio
+        activa
       `)
       .order('numero', { ascending: true }),
 

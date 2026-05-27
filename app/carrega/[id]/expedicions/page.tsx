@@ -132,14 +132,19 @@ function etiquetaSexe(sexe: string | null) {
   return null
 }
 
-function calcularOpcions(exps: Expedicio[], t: Transportista): Opcio[] {
+function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: number, forcaPc?: number): Opcio[] {
   const { alcada_min, alcada_max, pollets_caixa_min, pollets_caixa_max, max_carros } = t
   if (!alcada_min || !alcada_max || !pollets_caixa_min || !pollets_caixa_max || !max_carros) return []
 
   const opcions: Opcio[] = []
 
-  for (let alcada = alcada_min; alcada <= alcada_max; alcada++) {
-    for (let pc = pollets_caixa_min; pc <= pollets_caixa_max; pc++) {
+  const minA = forcaAlcada || alcada_min;
+  const maxA = forcaAlcada || alcada_max;
+  const minPc = forcaPc || pollets_caixa_min;
+  const maxPc = forcaPc || pollets_caixa_max;
+
+  for (let alcada = minA; alcada <= maxA; alcada++) {
+    for (let pc = minPc; pc <= maxPc; pc++) {
       const pollets_per_carro = alcada * pc
 
       const resultats: ResultatExpedicio[] = exps.map(e => {
@@ -156,6 +161,10 @@ function calcularOpcions(exps: Expedicio[], t: Transportista): Opcio[] {
 
       const total_sencers = resultats.reduce((s, r) => s + r.carros_sencers, 0)
       const amPico = resultats.filter(r => r.pico_caixes > 0)
+
+      const total_picos_caixes = amPico.reduce((s, r) => s + r.pico_caixes, 0)
+      if (total_sencers * alcada + total_picos_caixes > max_carros * alcada) continue
+
       let carros_compartits: CarroCompartit[] = []
 
       if (amPico.length > 0) {
@@ -182,6 +191,8 @@ function calcularOpcions(exps: Expedicio[], t: Transportista): Opcio[] {
           }
         }
       }
+
+      if (carros_compartits.some(g => g.alcada_carro > alcada)) continue
 
       const total_carros = total_sencers + carros_compartits.length
       if (total_carros > max_carros) continue
@@ -238,6 +249,7 @@ export default function Expedicions() {
 
   const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
   const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
+  const [filtresGrup, setFiltresGrup] = useState<Record<string, { alcada: string, pc: string }>>({})
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
@@ -389,7 +401,10 @@ export default function Expedicions() {
   }
 
   function calcularGrup(grupKey: string, exps: Expedicio[], transportista: Transportista) {
-    const opcions = calcularOpcions(exps, transportista)
+    const f = filtresGrup[grupKey] || {}
+    const forcaAlcada = f.alcada ? parseInt(f.alcada) : undefined
+    const forcaPc = f.pc ? parseInt(f.pc) : undefined
+    const opcions = calcularOpcions(exps, transportista, forcaAlcada, forcaPc)
     setOpcionsPerViatge(prev => ({ ...prev, [grupKey]: opcions }))
   }
 
@@ -432,9 +447,9 @@ export default function Expedicions() {
   }
 
   if (loading || !full) return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
-    </main>
+    <div className="bg-bg min-h-[50vh] p-4 md:p-6 flex items-center justify-center">
+      <p className="text-text-dim mono text-center">Carregant...</p>
+    </div>
   )
 
   const vacunesNaixement = vacunes.filter(v => v.via?.toLowerCase().startsWith('naix'))
@@ -481,62 +496,54 @@ export default function Expedicions() {
     return nc !== 0 ? nc : a.num_viatge - b.num_viatge
   })
 
-  const inputStyle = {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
-    padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
-    outline: 'none', fontFamily: 'IBM Plex Sans', width: '100%',
-  }
-  const labelStyle = {
-    display: 'block' as const, fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
-    color: 'var(--text-dim)', textTransform: 'uppercase' as const,
-    letterSpacing: '0.1em', marginBottom: '0.4rem',
-  }
+  const inputClasses = "bg-bg border border-border rounded-lg p-2.5 text-text text-sm outline-none font-sans w-full focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+  const labelClasses = "block text-[11px] mono text-text-dim uppercase tracking-wider mb-1.5"
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+    <div className="bg-bg min-h-full p-4 md:p-6 pb-20">
+      <div className="max-w-3xl mx-auto w-full space-y-4 md:space-y-6">
 
         {/* Capçalera */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link href={`/carrega/${full.id}`} style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Càrrega #{full.num_carrega}</Link>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+          <div className="flex items-center gap-4">
+            <Link href={`/carrega/${full.id}`} className="hidden md:block text-text-dim no-underline text-sm mono hover:text-accent transition-colors">← Càrrega #{full.num_carrega}</Link>
             <div>
-              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Expedicions</p>
-              <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Repartiment de pollets</h1>
+              <p className="text-accent mono text-[11px] tracking-wider uppercase m-0">Expedicions</p>
+              <h1 className="text-xl md:text-2xl font-bold m-0">Repartiment de pollets</h1>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Link href={`/carrega/${params.id}/expedicions/naixement`} style={{ textDecoration: 'none' }}>
-              <button style={{ padding: '0.6rem 1rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/carrega/${params.id}/expedicions/naixement`} className="no-underline flex-1 md:flex-none">
+              <button className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-surface transition-colors shadow-sm">
                 Dia del naixement
               </button>
             </Link>
-            <Link href={`/carrega/${params.id}/expedicions/etiquetes-pollets`} style={{ textDecoration: 'none' }}>
-              <button style={{ padding: '0.6rem 1rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
+            <Link href={`/carrega/${params.id}/expedicions/etiquetes-pollets`} className="no-underline flex-1 md:flex-none">
+              <button className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-surface transition-colors shadow-sm">
                 🏷 Etiquetes
               </button>
             </Link>
-            <button onClick={() => setMostrarForm(!mostrarForm)} style={{ padding: '0.6rem 1rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>
+            <button onClick={() => setMostrarForm(!mostrarForm)} className="w-full md:w-auto px-4 py-2.5 bg-accent border-none rounded-lg text-white font-bold text-sm cursor-pointer hover:bg-accent-dim transition-colors shadow-sm">
               + Nova expedició
             </button>
           </div>
         </div>
 
         {/* Resum per comanda */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Resum comandes</div>
+        <div className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm">
+          <div className="text-[11px] mono text-text-dim uppercase tracking-wider mb-3">Resum comandes</div>
           {full.comandes.filter(c => c.tipus === 'Pollets').map(c => {
             const { objectiu, assignats } = polletsPerComanda[c.id] || { objectiu: 0, assignats: 0 }
             const diff = objectiu - assignats
             return (
-              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.85rem' }}>
-                <span style={{ fontWeight: 600 }}>{c.clients.nom}</span>
-                <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem' }}>
-                  <span style={{ color: assignats === objectiu ? 'var(--success)' : 'var(--accent)' }}>
+              <div key={c.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-border text-sm gap-1 sm:gap-0">
+                <span className="font-semibold">{c.clients.nom}</span>
+                <div className="text-left sm:text-right mono text-sm">
+                  <span className={assignats === objectiu ? 'text-success' : 'text-accent'}>
                     {assignats.toLocaleString()} / {objectiu.toLocaleString()}
                   </span>
                   {diff !== 0 && (
-                    <span style={{ marginLeft: '0.5rem', color: diff > 0 ? 'var(--danger)' : 'var(--text-dim)', fontSize: '0.75rem' }}>
+                    <span className={`ml-2 text-xs ${diff > 0 ? 'text-danger' : 'text-text-dim'}`}>
                       {diff > 0 ? `−${diff.toLocaleString()} pendent` : `+${Math.abs(diff).toLocaleString()} excés`}
                     </span>
                   )}
@@ -556,12 +563,12 @@ export default function Expedicions() {
 
         {/* Formulari nova expedició */}
         {mostrarForm && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>Nova expedició</div>
+          <div className="bg-surface border border-accent/30 shadow-md rounded-xl p-4 md:p-5 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+            <div className="text-sm font-bold">Nova expedició</div>
 
             <div>
-              <label style={labelStyle}>Comanda (client)</label>
-              <select value={comandaId} onChange={e => { setComandaId(e.target.value); setDestinacioId(''); setCercaDestinacio('') }} style={{ ...inputStyle, appearance: 'none' }}>
+              <label className={labelClasses}>Comanda (client)</label>
+              <select value={comandaId} onChange={e => { setComandaId(e.target.value); setDestinacioId(''); setCercaDestinacio('') }} className={inputClasses}>
                 <option value="">Selecciona client...</option>
                 {full.comandes.filter(c => c.tipus === 'Pollets').map(c => (
                   <option key={c.id} value={c.id}>{c.clients.nom} — {(c.quantitat_pollets || 0).toLocaleString()} pollets</option>
@@ -571,18 +578,16 @@ export default function Expedicions() {
 
             {comandaId && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                  <label style={{ ...labelStyle, marginBottom: 0 }}>Destinació</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={`${labelClasses} !mb-0`}>Destinació</label>
                   <button
                     type="button"
                     onClick={() => { setMostrarNovaGranja(!mostrarNovaGranja); setErrorGranja('') }}
-                    style={{
-                      fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', padding: '0.2rem 0.6rem',
-                      borderRadius: '5px', cursor: 'pointer', border: '1px solid',
-                      borderColor: mostrarNovaGranja ? 'var(--accent)' : 'var(--border)',
-                      background: mostrarNovaGranja ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
-                      color: mostrarNovaGranja ? 'var(--accent)' : 'var(--text-dim)',
-                    }}
+                    className={`text-xs px-2.5 py-1 rounded-md cursor-pointer border font-mono transition-colors ${
+                      mostrarNovaGranja 
+                        ? 'border-accent bg-accent/10 text-accent' 
+                        : 'border-border bg-bg text-text-dim hover:text-text'
+                    }`}
                   >
                     + Nova granja
                   </button>
@@ -593,46 +598,46 @@ export default function Expedicions() {
                     <div style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nova granja</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.5rem' }}>
                       <div>
-                        <label style={labelStyle}>Nom granja *</label>
+                        <label className={labelClasses}>Nom granja *</label>
                         <input
                           type="text"
                           value={novaGranjaNom}
                           onChange={e => setNovaGranjaNom(e.target.value)}
                           placeholder="Ex: Can Puig"
-                          style={inputStyle}
+                          className={inputClasses}
                           autoFocus
                         />
                       </div>
                       <div>
-                        <label style={labelStyle}>Nau</label>
+                        <label className={labelClasses}>Nau</label>
                         <input
                           type="text"
                           value={novaGranjaNau}
                           onChange={e => setNovaGranjaNau(e.target.value)}
                           placeholder="Ex: A"
-                          style={inputStyle}
+                          className={inputClasses}
                         />
                       </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                       <div>
-                        <label style={labelStyle}>Població</label>
+                        <label className={labelClasses}>Població</label>
                         <input
                           type="text"
                           value={novaGranjaPoblacio}
                           onChange={e => setNovaGranjaPoblacio(e.target.value)}
                           placeholder="Ex: Girona"
-                          style={inputStyle}
+                          className={inputClasses}
                         />
                       </div>
                       <div>
-                        <label style={labelStyle}>Codi REGA</label>
+                        <label className={labelClasses}>Codi REGA</label>
                         <input
                           type="text"
                           value={novaGranjaRega}
                           onChange={e => setNovaGranjaRega(e.target.value)}
                           placeholder="Ex: ES170120000012"
-                          style={inputStyle}
+                          className={inputClasses}
                         />
                       </div>
                     </div>
@@ -666,8 +671,8 @@ export default function Expedicions() {
                   </div>
                 )}
 
-                <input type="text" placeholder="Cerca granja..." value={cercaDestinacio} onChange={e => setCercaDestinacio(e.target.value)} style={{ ...inputStyle, marginBottom: '0.4rem' }} />
-                <select value={destinacioId} onChange={e => setDestinacioId(e.target.value)} style={{ ...inputStyle, appearance: 'none' }} size={5}>
+                <input type="text" placeholder="Cerca granja..." value={cercaDestinacio} onChange={e => setCercaDestinacio(e.target.value)} className={`${inputClasses} mb-1.5`} />
+                <select value={destinacioId} onChange={e => setDestinacioId(e.target.value)} className={`${inputClasses} appearance-none`} size={5}>
                   <option value="">Selecciona destinació...</option>
                   {destinacionsFiltrades.map(d => (
                     <option key={d.id} value={d.id}>{nomDestinacio(d)}{d.poblacio ? ` — ${d.poblacio}` : ''}</option>
@@ -678,7 +683,7 @@ export default function Expedicions() {
 
             {/* Toggle sexat */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ ...labelStyle, margin: 0 }}>Sexat</span>
+              <span className={`${labelClasses} !m-0`}>Sexat</span>
               <button
                 type="button"
                 onClick={() => { setSexatToggle(!sexatToggle); setPolletsM(''); setPolletsF('') }}
@@ -698,42 +703,42 @@ export default function Expedicions() {
             {!sexatToggle ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={labelStyle}>Pollets previstos</label>
-                  <input type="number" value={polletsComanda} onChange={e => setPolletsComanda(e.target.value)} placeholder="0" style={inputStyle} />
+                  <label className={labelClasses}>Pollets previstos</label>
+                  <input type="number" value={polletsComanda} onChange={e => setPolletsComanda(e.target.value)} placeholder="0" className={inputClasses} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Hora prevista</label>
-                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" style={inputStyle} />
+                  <label className={labelClasses}>Hora prevista</label>
+                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" className={inputClasses} />
                 </div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={labelStyle}>♂ Mascles</label>
-                  <input type="number" value={polletsM} onChange={e => setPolletsM(e.target.value)} placeholder="0" style={inputStyle} />
+                  <label className={labelClasses}>♂ Mascles</label>
+                  <input type="number" value={polletsM} onChange={e => setPolletsM(e.target.value)} placeholder="0" className={inputClasses} />
                 </div>
                 <div>
-                  <label style={labelStyle}>♀ Femelles</label>
-                  <input type="number" value={polletsF} onChange={e => setPolletsF(e.target.value)} placeholder="0" style={inputStyle} />
+                  <label className={labelClasses}>♀ Femelles</label>
+                  <input type="number" value={polletsF} onChange={e => setPolletsF(e.target.value)} placeholder="0" className={inputClasses} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Hora prevista</label>
-                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" style={inputStyle} />
+                  <label className={labelClasses}>Hora prevista</label>
+                  <input type="text" value={horaPrevist} onChange={e => setHoraPrevist(e.target.value)} placeholder="8:00" className={inputClasses} />
                 </div>
               </div>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label style={labelStyle}>Transportista</label>
-                <select value={transportistaId} onChange={e => setTransportistaId(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                <label className={labelClasses}>Transportista</label>
+                <select value={transportistaId} onChange={e => setTransportistaId(e.target.value)} className={`${inputClasses} appearance-none`}>
                   <option value="">Cap / per definir</option>
                   {transportistes.map(t => <option key={t.id} value={t.id}>{t.nom}</option>)}
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Matrícula</label>
-                <input type="text" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="0000 AAA" style={inputStyle} />
+                <label className={labelClasses}>Matrícula</label>
+                <input type="text" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="0000 AAA" className={inputClasses} />
               </div>
             </div>
 
@@ -760,37 +765,36 @@ export default function Expedicions() {
         )}
 
         {/* Llista d'expedicions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div className="flex flex-col gap-3">
           {expedicions.length === 0 && (
-            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem', fontFamily: 'IBM Plex Mono' }}>Sense expedicions</p>
+            <p className="text-text-dim text-sm text-center p-8 mono">Sense expedicions</p>
           )}
           {expedicions.map(e => (
-            <div key={e.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                    {e.ordre && <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', color: 'var(--text-dim)', minWidth: '1.5rem' }}>#{e.ordre}</span>}
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{nomDestinacio(e.destinacions)}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>{e.comandes?.clients?.nom}</span>
+            <div key={e.id} className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    {e.ordre && <span className="mono text-[11px] text-text-dim min-w-[1.5rem]">#{e.ordre}</span>}
+                    <span className="font-bold text-[15px]">{nomDestinacio(e.destinacions)}</span>
+                    <span className="text-xs text-text-dim mono">{e.comandes?.clients?.nom}</span>
                     {e.sexe && (
-                      <span style={{
-                        fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', fontWeight: 700,
-                        padding: '0.1rem 0.5rem', borderRadius: '4px',
-                        background: e.sexe === 'F' ? 'rgba(236,72,153,0.15)' : 'rgba(59,130,246,0.15)',
-                        color: e.sexe === 'F' ? '#ec4899' : '#3b82f6',
-                      }}>
+                      <span className={`text-[11px] mono font-bold px-2 py-0.5 rounded ${
+                        e.sexe === 'F' 
+                          ? 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400' 
+                          : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>
                         {etiquetaSexe(e.sexe)}
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                  <div className="text-[12px] text-text-dim mono">
                     {e.pollets_comanda ? `${e.pollets_comanda.toLocaleString()} pollets previstos` : 'sense quantitat'}
                     {e.hora_prevista_naixement && ` · ${e.hora_prevista_naixement}`}
                     {e.transportistes && ` · ${e.transportistes.nom}`}
                     {e.matricula && ` · ${e.matricula}`}
                   </div>
                   {e.expedicio_lots.length > 0 && (
-                    <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--success)' }}>
+                    <div className="mt-1.5 text-[12px] mono text-success">
                       {e.expedicio_lots.map(el => {
                         const granja = el.lots_reproductores.granges_reproductores.nom_informal || el.lots_reproductores.granges_reproductores.granja
                         return `${el.pollets.toLocaleString()} de ${granja}${el.lots_reproductores.estirp ? ` ${el.lots_reproductores.estirp}` : ''}`
@@ -799,12 +803,12 @@ export default function Expedicions() {
                   )}
 
                   {/* Selector viatge */}
-                  <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Viatge</span>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <span className="text-[11px] mono text-text-dim uppercase tracking-wider">Viatge</span>
                     <select
                       value={e.num_viatge ?? ''}
                       onChange={ev => actualitzarNumViatge(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
-                      style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.2rem 0.5rem', color: e.num_viatge ? 'var(--accent)' : 'var(--text-dim)', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', cursor: 'pointer', outline: 'none', fontWeight: e.num_viatge ? 700 : 400 }}
+                      className={`bg-bg border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.num_viatge ? 'text-accent font-bold' : 'text-text-dim font-normal'}`}
                     >
                       <option value="">—</option>
                       {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
@@ -812,25 +816,21 @@ export default function Expedicions() {
                   </div>
 
                   {/* Vacunes naixement */}
-                  <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(240,180,41,0.08)', border: '1px solid var(--accent)', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+                  <div className="mt-3 p-3 bg-accent/5 border border-accent/20 rounded-lg">
+                    <div className="text-[10px] mono text-accent uppercase tracking-wider mb-2">
                       Vacunes naixement ({vacunesNaixement.length})
                     </div>
                     {vacunesNaixement.length === 0 ? (
-                      <span style={{ fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>Cap vacuna de via Naixement a la BD</span>
+                      <span className="text-[11px] mono text-text-dim">Cap vacuna de via Naixement a la BD</span>
                     ) : (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      <div className="flex flex-wrap gap-2">
                         {vacunesNaixement.map(v => {
                           const activa = e.expedicio_vacunes.some(ev => ev.vacuna_id === v.id)
                           return (
-                            <button key={v.id} onClick={() => toggleVacunaExpedicio(e.id, v.id, activa)} style={{
-                              padding: '0.3rem 0.7rem', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono',
-                              borderRadius: '6px', cursor: 'pointer', border: '1px solid',
-                              borderColor: activa ? 'var(--success)' : 'var(--border)',
-                              background: activa ? 'rgba(34,197,94,0.15)' : 'var(--bg)',
-                              color: activa ? 'var(--success)' : 'var(--text)',
-                              fontWeight: activa ? 700 : 400,
-                            }}>
+                            <button key={v.id} onClick={() => toggleVacunaExpedicio(e.id, v.id, activa)} className={`
+                              px-3 py-1.5 text-[12px] mono rounded-lg border transition-colors
+                              ${activa ? 'bg-success/10 border-success text-success font-bold' : 'bg-bg border-border text-text hover:bg-surface'}
+                            `}>
                               {activa ? '✓ ' : ''}{v.nom}
                             </button>
                           )
@@ -839,7 +839,7 @@ export default function Expedicions() {
                     )}
                   </div>
                 </div>
-                <button onClick={() => eliminarExpedicio(e.id)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.2rem 0.4rem', marginLeft: '0.5rem' }}>✕</button>
+                <button onClick={() => eliminarExpedicio(e.id)} className="bg-transparent border-none text-danger cursor-pointer text-sm p-1 ml-2 hover:bg-danger/10 rounded">✕</button>
               </div>
             </div>
           ))}
@@ -847,11 +847,11 @@ export default function Expedicions() {
 
         {/* Distribució de carros per viatge */}
         {grupsViatge.length > 0 && (
-          <div style={{ marginTop: '2rem' }}>
-            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '1rem' }}>
+          <div className="mt-8">
+            <div className="text-[11px] mono text-text-dim uppercase tracking-wider mb-4">
               Distribució de carros per viatge
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="flex flex-col gap-4">
               {grupsViatge.map(g => {
                 const opcions = opcionsPerViatge[g.key]
                 const selIdx = opcioSeleccionada[g.key] ?? -1
@@ -859,27 +859,49 @@ export default function Expedicions() {
                   g.transportista.pollets_caixa_min && g.transportista.pollets_caixa_max && g.transportista.max_carros)
 
                 return (
-                  <div key={g.key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <div key={g.key} className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
                       <div>
-                        <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{g.transportista.nom}</span>
-                        <span style={{ marginLeft: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 700 }}>Viatge {g.num_viatge}</span>
+                        <span className="font-bold text-[15px]">{g.transportista.nom}</span>
+                        <span className="ml-2 mono text-xs text-accent font-bold">Viatge {g.num_viatge}</span>
                         {g.transportista.max_carros && (
-                          <span style={{ marginLeft: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.72rem', color: 'var(--text-dim)' }}>(màx. {g.transportista.max_carros} carros)</span>
+                          <span className="ml-2 mono text-[11px] text-text-dim">(màx. {g.transportista.max_carros} carros)</span>
                         )}
                       </div>
-                      <button onClick={() => calcularGrup(g.key, g.exps, g.transportista)} disabled={!teParametres}
-                        title={!teParametres ? 'El transportista no té els paràmetres de carro configurats' : undefined}
-                        style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', borderRadius: '6px', border: '1px solid', borderColor: teParametres ? 'var(--accent)' : 'var(--border)', background: 'var(--bg)', color: teParametres ? 'var(--accent)' : 'var(--text-dim)', cursor: teParametres ? 'pointer' : 'not-allowed', fontWeight: 600 }}>
-                        Calcular opcions
-                      </button>
+                      <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
+                        <div className="flex gap-1 items-center flex-1 md:flex-none">
+                          <span className="text-xs mono text-text-dim">Alçada:</span>
+                          <input type="number" placeholder="Auto" min="1"
+                            value={filtresGrup[g.key]?.alcada || ''} 
+                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { ...(prev[g.key] || {pc: ''}), alcada: e.target.value } }))} 
+                            className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent"
+                          />
+                        </div>
+                        <div className="flex gap-1 items-center flex-1 md:flex-none">
+                          <span className="text-xs mono text-text-dim">Pollets/cx:</span>
+                          <input type="number" placeholder="Auto" min="1"
+                            value={filtresGrup[g.key]?.pc || ''} 
+                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { ...(prev[g.key] || {alcada: ''}), pc: e.target.value } }))} 
+                            className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent"
+                          />
+                        </div>
+                        <button onClick={() => calcularGrup(g.key, g.exps, g.transportista)} disabled={!teParametres}
+                          title={!teParametres ? 'El transportista no té els paràmetres de carro configurats' : undefined}
+                          className={`w-full md:w-auto px-4 py-1.5 text-xs mono rounded-lg border font-bold transition-colors ${
+                            teParametres 
+                              ? 'border-accent bg-bg text-accent cursor-pointer hover:bg-accent/10' 
+                              : 'border-border bg-bg text-text-dim cursor-not-allowed opacity-50'
+                          }`}>
+                          Calcular opcions
+                        </button>
+                      </div>
                     </div>
 
-                    <div style={{ marginBottom: '0.75rem' }}>
+                    <div className="mb-3 space-y-1">
                       {g.exps.map(e => (
-                        <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <div key={e.id} className="flex justify-between text-sm py-1 border-b border-border">
                           <span>{e.comandes?.clients?.nom} — {nomDestinacio(e.destinacions)}</span>
-                          <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                          <span className="mono text-text-dim text-xs mt-1">
                             {e.pollets_comanda ? e.pollets_comanda.toLocaleString() : '—'} pollets
                           </span>
                         </div>
@@ -887,50 +909,54 @@ export default function Expedicions() {
                     </div>
 
                     {opcions !== undefined && opcions.length === 0 && (
-                      <div style={{ padding: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem', color: 'var(--danger)' }}>
+                      <div className="p-2 mono text-xs text-danger bg-danger/10 rounded-md">
                         Cap combinació vàlida amb els paràmetres actuals.
                       </div>
                     )}
 
                     {opcions && opcions.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <div className="flex flex-col gap-2.5">
                         {opcions.map((opcio, idx) => {
                           const sel = selIdx === idx
                           return (
-                            <div key={idx} style={{ border: '1px solid', borderColor: sel ? 'var(--success)' : 'var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', background: sel ? 'rgba(34,197,94,0.06)' : 'var(--bg)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <div style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.82rem' }}>
-                                  <span style={{ fontWeight: 700 }}>Alçada: {opcio.alcada} cx · Pollets/caixa: {opcio.pollets_caixa}</span>
-                                  <span style={{ marginLeft: '0.6rem', color: 'var(--text-dim)', fontWeight: 400 }}>
+                            <div key={idx} className={`border rounded-lg p-3 md:p-4 transition-colors ${sel ? 'border-success bg-success/5' : 'border-border bg-bg'}`}>
+                              <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 mb-2 md:mb-3">
+                                <div className="mono text-xs">
+                                  <span className="font-bold">Alçada: {opcio.alcada} cx · Pollets/caixa: {opcio.pollets_caixa}</span>
+                                  <span className="block md:inline md:ml-2.5 text-text-dim mt-1 md:mt-0 font-normal">
                                     {opcio.total_carros} carros
                                     {opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 0 && (
-                                      <span style={{ color: 'var(--accent)' }}>{' '}({opcio.carros_compartits.filter(cc => cc.items.length > 1).length} compartit{opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 1 ? 's' : ''})</span>
+                                      <span className="text-accent">{' '}({opcio.carros_compartits.filter(cc => cc.items.length > 1).length} compartit{opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 1 ? 's' : ''})</span>
                                     )}
                                   </span>
                                 </div>
                                 <button onClick={() => triarOpcio(g.key, idx, opcio, g.transportista, g.num_viatge)}
-                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono', borderRadius: '6px', cursor: 'pointer', border: '1px solid', borderColor: sel ? 'var(--success)' : 'var(--border)', background: sel ? 'rgba(34,197,94,0.18)' : 'var(--bg)', color: sel ? 'var(--success)' : 'var(--text)', fontWeight: sel ? 700 : 400, whiteSpace: 'nowrap' }}>
+                                  className={`w-full md:w-auto px-3 py-1.5 text-xs mono rounded-md border font-bold transition-colors whitespace-nowrap ${
+                                    sel 
+                                      ? 'border-success bg-success/20 text-success' 
+                                      : 'border-border bg-bg text-text hover:border-text-dim'
+                                  }`}>
                                   {sel ? '✓ Triada' : 'Triar aquesta opció'}
                                 </button>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: opcio.carros_compartits.some(cc => cc.items.length > 1) ? '0.5rem' : 0 }}>
+                              <div className={`flex flex-col gap-1 ${opcio.carros_compartits.some(cc => cc.items.length > 1) ? 'mb-3' : ''}`}>
                                 {opcio.resultats.map(r => (
-                                  <div key={r.expedicio_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontFamily: 'IBM Plex Mono' }}>
-                                    <span style={{ color: 'var(--text)' }}>{r.client}</span>
-                                    <span>
-                                      <span style={{ color: 'var(--text)' }}>{r.carros_sencers}c</span>
-                                      {r.pico_caixes > 0 && <span style={{ color: 'var(--accent)' }}> + {r.pico_caixes} cx pico</span>}
-                                      <span style={{ color: 'var(--text-dim)' }}> · {r.pollets_reals.toLocaleString()} pollets</span>
-                                      {r.diferencia > 0 && <span style={{ color: r.diferencia >= 50 ? 'var(--danger)' : 'var(--text-dim)' }}> (Δ{r.diferencia})</span>}
+                                  <div key={r.expedicio_id} className="flex justify-between text-xs mono py-0.5">
+                                    <span className="text-text">{r.client}</span>
+                                    <span className="text-right">
+                                      <span className="text-text">{r.carros_sencers}c</span>
+                                      {r.pico_caixes > 0 && <span className="text-accent"> + {r.pico_caixes} cx pico</span>}
+                                      <span className="text-text-dim"> · {r.pollets_reals.toLocaleString()} pollets</span>
+                                      {r.diferencia > 0 && <span className={r.diferencia >= 50 ? 'text-danger' : 'text-text-dim'}> (Δ{r.diferencia})</span>}
                                     </span>
                                   </div>
                                 ))}
                               </div>
                               {opcio.carros_compartits.some(cc => cc.items.length > 1) && (
-                                <div style={{ padding: '0.45rem 0.6rem', background: 'rgba(240,180,41,0.07)', borderRadius: '6px', border: '1px solid rgba(240,180,41,0.2)' }}>
-                                  <div style={{ fontSize: '0.62rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.3rem' }}>Carros compartits</div>
+                                <div className="p-2 bg-accent/5 rounded border border-accent/20 mt-1">
+                                  <div className="text-[10px] mono text-accent uppercase tracking-wider mb-1">Carros compartits</div>
                                   {opcio.carros_compartits.filter(cc => cc.items.length > 1).map((cc, ci) => (
-                                    <div key={ci} style={{ fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                                    <div key={ci} className="text-[11px] mono text-text-dim leading-relaxed">
                                       Carro {ci + 1} ({cc.alcada_carro} cx): {cc.items.map(it => `${it.client} ${it.caixes}cx`).join(' + ')}
                                     </div>
                                   ))}
@@ -948,6 +974,6 @@ export default function Expedicions() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   )
 }

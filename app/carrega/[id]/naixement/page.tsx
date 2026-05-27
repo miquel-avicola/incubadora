@@ -29,7 +29,7 @@ interface Assignacio {
       granges_reproductores: { granja: string; nom_informal: string | null }
     }
   }
-  incubadores: { numero: number }
+  incubadores: { numero: number; tipus: string }
   transferencies: Transferencia[]
 }
 
@@ -39,9 +39,18 @@ interface Full {
   assignacions: Assignacio[]
 }
 
+interface Previsio {
+  pollets_previstos: number
+  pct_naixement_previst: number
+  eclosio_esperada: number
+  font: string
+  n_registres: number
+}
+
 export default function Naixement() {
   const params = useParams()
   const [full, setFull] = useState<Full | null>(null)
+  const [previsions, setPrevisions] = useState<Record<number, Previsio>>({})
   const [loading, setLoading] = useState(true)
   const [seleccionats, setSeleccionats] = useState<number[]>([])
   const [totalPollets, setTotalPollets] = useState('')
@@ -49,12 +58,35 @@ export default function Naixement() {
   const [guardant, setGuardant] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
+  const carregarPrevisions = useCallback(async (fullData: Full) => {
+    const transferenciaIds: number[] = []
+    for (const a of fullData.assignacions) {
+      for (const t of a.transferencies) transferenciaIds.push(t.id)
+    }
+    if (transferenciaIds.length === 0) return
+
+    const resultats = await Promise.all(
+      transferenciaIds.map(id =>
+        fetch(`/api/previsio-post-transferencia?transferencia_id=${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
+    )
+    const map: Record<number, Previsio> = {}
+    transferenciaIds.forEach((id, i) => {
+      const r = resultats[i]
+      if (r && !r.error) map[id] = r
+    })
+    setPrevisions(map)
+  }, [])
+
   const carregarDades = useCallback(async () => {
     if (!params.id) return
     const fullRes = await fetch(`/api/carrega/${params.id}`).then(r => r.json())
     setFull(fullRes)
     setLoading(false)
-  }, [params.id])
+    carregarPrevisions(fullRes)
+  }, [params.id, carregarPrevisions])
 
   useEffect(() => { carregarDades() }, [carregarDades])
 
@@ -110,22 +142,9 @@ export default function Naixement() {
     setGuardant(false)
   }
 
-  async function eliminarNaixement(assignacions: Assignacio[]) {
-    const transferencia_ids = assignacions
-      .filter(a => a.transferencies.length > 0)
-      .map(a => a.transferencies[0].id)
-
-    await fetch(`/api/carrega/${params.id}/naixement`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transferencia_ids }),
-    })
-    carregarDades()
-  }
-
   if (loading || !full) return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
+    <main className="bg-bg min-h-screen p-6">
+      <p className="text-text-dim font-mono text-center p-8">Carregant...</p>
     </main>
   )
 
@@ -137,13 +156,90 @@ export default function Naixement() {
     perLot[lotId].push(a)
   })
 
-  const lotsOrdenats = Object.entries(perLot).map(([lotId, assignacions]) => ({
-    lotId: parseInt(lotId),
-    assignacions: assignacions.sort((a, b) => a.num_carro_full - b.num_carro_full),
-    granja: assignacions[0].carros_estoc.lots_reproductores.granges_reproductores.nom_informal ||
-      assignacions[0].carros_estoc.lots_reproductores.granges_reproductores.granja,
-    estirp: assignacions[0].carros_estoc.lots_reproductores.estirp,
-  }))
+  const lotsOrdenats = Object.entries(perLot).map(([lotId, assignacions]) => {
+    const assignacionsLot = assignacions.sort((a, b) => a.num_carro_full - b.num_carro_full)
+    
+    // Càlculs pel Dashboard de cada lot (només considerem carros transferits)
+    const transferits = assignacionsLot.filter(a => a.transferencies.length > 0)
+    
+    let totalOusIncubats = 0
+    let totalOusFertils = 0
+    let polletsReals = 0
+    
+    // Agrupar stats per tipus d'incubadora per no barrejar SS i MS
+    const statsPerTipus: Record<string, { fertilsRegistrats: number, polletsReals: number }> = {}
+    
+    let polletsPrevistosPendents = 0
+    let previsioInicialBaseTotal = 0
+
+    transferits.forEach(a => {
+      totalOusIncubats += a.carros_estoc.quantitat_ous
+      const t = a.transferencies[0]
+      totalOusFertils += t.ous_fertils_vacunats
+
+      // Previsio línia base de l'algoritme (si encara no està carregada, fem un petit fallback)
+      const p = previsions[t.id]
+      if (p) previsioInicialBaseTotal += p.pollets_previstos
+      else previsioInicialBaseTotal += t.ous_fertils_vacunats
+
+      const tipusIncubadora = a.incubadores?.tipus || 'MS'
+      if (!statsPerTipus[tipusIncubadora]) {
+        statsPerTipus[tipusIncubadora] = { fertilsRegistrats: 0, polletsReals: 0 }
+      }
+
+      if (t.resultats_naix.length > 0) {
+        polletsReals += t.resultats_naix[0].pollets_nascuts
+        statsPerTipus[tipusIncubadora].polletsReals += t.resultats_naix[0].pollets_nascuts
+        statsPerTipus[tipusIncubadora].fertilsRegistrats += t.ous_fertils_vacunats
+      }
+    })
+
+    transferits.forEach(a => {
+      const t = a.transferencies[0]
+      if (t.resultats_naix.length === 0) {
+        const tipusIncubadora = a.incubadores?.tipus || 'MS'
+        const s = statsPerTipus[tipusIncubadora]
+        const pctExitReal = s && s.fertilsRegistrats > 0 ? (s.polletsReals / s.fertilsRegistrats) : null
+
+        if (pctExitReal !== null) {
+          polletsPrevistosPendents += t.ous_fertils_vacunats * pctExitReal
+        } else {
+          // Previsio inicial basada en l'API transferència per aquest carro
+          const p = previsions[t.id]
+          if (p) {
+            polletsPrevistosPendents += p.pollets_previstos
+          } else {
+            // Fallback
+            polletsPrevistosPendents += t.ous_fertils_vacunats
+          }
+        }
+      }
+    })
+
+    const previsioTotal = polletsReals + polletsPrevistosPendents
+    const diferenciaPrevisio = Math.round(previsioTotal - previsioInicialBaseTotal)
+    const pctFertilitat = totalOusIncubats > 0 ? (totalOusFertils / totalOusIncubats) * 100 : 0
+    const pctPrevisioFinal = totalOusIncubats > 0 ? (previsioTotal / totalOusIncubats) * 100 : 0
+    const teRegistrats = transferits.some(a => a.transferencies[0].resultats_naix.length > 0)
+
+    return {
+      lotId: parseInt(lotId),
+      assignacions: assignacionsLot,
+      granja: assignacionsLot[0].carros_estoc.lots_reproductores.granges_reproductores.nom_informal ||
+        assignacionsLot[0].carros_estoc.lots_reproductores.granges_reproductores.granja,
+      estirp: assignacionsLot[0].carros_estoc.lots_reproductores.estirp,
+      stats: {
+        totalOusIncubats,
+        totalOusFertils,
+        pctFertilitat,
+        polletsReals,
+        previsioTotal,
+        pctPrevisioFinal,
+        teRegistrats,
+        diferenciaPrevisio
+      }
+    }
+  })
 
   const assignacionsSeleccionades = full.assignacions.filter(a => seleccionats.includes(a.id))
   const totalOusFertilsSeleccionats = assignacionsSeleccionades
@@ -155,88 +251,133 @@ export default function Naixement() {
   ).length
   const transferits = full.assignacions.filter(a => a.transferencies.length > 0).length
 
-  const inputStyle = {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
-    padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
-    outline: 'none', fontFamily: 'IBM Plex Sans', width: '100%',
-  }
-  const labelStyle = {
-    display: 'block' as const, fontSize: '0.7rem', fontFamily: 'IBM Plex Mono',
-    color: 'var(--text-dim)', textTransform: 'uppercase' as const,
-    letterSpacing: '0.1em', marginBottom: '0.4rem',
-  }
+  const inputClasses = "bg-bg border border-border rounded-lg px-3 py-2 text-text text-sm outline-none w-full"
+  const labelClasses = "block text-[11px] font-mono text-text-dim uppercase tracking-wider mb-1.5"
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+    <main className="bg-bg min-h-screen p-4 md:p-6 pb-[100px]">
+      <div className="max-w-[1000px] mx-auto flex flex-col gap-5">
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-          <Link href={`/carrega/${full.id}`} style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Càrrega #{full.num_carrega}</Link>
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-2">
+          <Link href={`/carrega/${full.id}`} className="text-text-dim hover:text-text text-sm font-mono transition-colors">
+            ← Càrrega #{full.num_carrega}
+          </Link>
           <div>
-            <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Naixement</p>
-            <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Registrar naixement</h1>
+            <p className="text-accent font-mono text-[11px] tracking-[0.15em] uppercase m-0">Naixement</p>
+            <h1 className="text-xl font-bold m-0 text-text">Registrar naixement</h1>
           </div>
         </div>
 
-        {/* Progrés */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', marginBottom: '0.5rem' }}>
-            <span style={{ color: 'var(--text-dim)' }}>Carros registrats</span>
-            <span style={{ color: registrats === transferits ? 'var(--success)' : 'var(--accent)' }}>{registrats} / {transferits}</span>
+        {/* Dashboard Naixement */}
+        <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-mono text-text-dim uppercase tracking-wider m-0">Resum i Previsió</h2>
+            <div className="text-xs font-mono text-text-dim">
+              Progés general: <span className={registrats === transferits ? 'text-success' : 'text-accent'}>{registrats} / {transferits}</span> carros
+            </div>
           </div>
-          <div style={{ background: 'var(--border)', borderRadius: '4px', height: '6px' }}>
-            <div style={{ background: registrats === transferits ? 'var(--success)' : 'var(--accent)', borderRadius: '4px', height: '6px', width: `${transferits > 0 ? (registrats / transferits) * 100 : 0}%`, transition: 'width 0.3s' }} />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {lotsOrdenats.map(({ lotId, granja, estirp, stats }) => {
+              if (stats.totalOusIncubats === 0) return null
+              return (
+                <div key={lotId} className="bg-bg border border-border rounded-lg p-3">
+                  <div className="text-sm font-bold text-text mb-1 truncate">{granja} {estirp ? `(${estirp})` : ''}</div>
+                  
+                  <div className="flex justify-between items-baseline mb-2">
+                    <span className="text-[11px] font-mono text-text-dim">Fertilitat</span>
+                    <span className="text-sm font-bold text-text">
+                      {stats.pctFertilitat.toFixed(1)}%
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-baseline pt-2 border-t border-border">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-mono text-text-dim flex items-center gap-1">
+                        Previsió pollets
+                        {stats.teRegistrats && <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" title="Basat en resultats reals per tipus de màquina"></span>}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-lg font-bold text-text">
+                          {Math.round(stats.previsioTotal).toLocaleString()}
+                        </span>
+                        {stats.diferenciaPrevisio !== 0 && previsions && Object.keys(previsions).length > 0 && (
+                          <span className={`text-[11px] font-mono font-bold ${stats.diferenciaPrevisio > 0 ? 'text-success' : 'text-danger'}`}>
+                            {stats.diferenciaPrevisio > 0 ? '+' : ''}{stats.diferenciaPrevisio.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-sm font-bold font-mono ${stats.teRegistrats ? 'text-success' : 'text-accent'}`}>
+                      {stats.pctPrevisioFinal.toFixed(1)}%
+                    </span>
+                  </div>
+                  
+                  {stats.polletsReals > 0 && (
+                    <div className="text-[10px] font-mono text-text-dim mt-1.5 text-right">
+                      Ja nascuts: <span className="text-text">{stats.polletsReals.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'start' }}>
+        {/* Llista i Panell Lateral */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
 
-          {/* Columna esquerra: lots */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* Columna esquerra: lots i carros */}
+          <div className="flex flex-col gap-4">
             {lotsOrdenats.map(({ lotId, assignacions, granja, estirp }) => {
-              const totRegistrats = assignacions.filter(a =>
-                a.transferencies.length > 0 && a.transferencies[0].resultats_naix.length > 0
-              ).length
-              const totTransferits = assignacions.filter(a => a.transferencies.length > 0).length
-              const totSeleccionats = assignacions.filter(a => seleccionats.includes(a.id)).length
+              const assignacionsAmbTransf = assignacions.filter(a => a.transferencies.length > 0)
+              if (assignacionsAmbTransf.length === 0) return null
+              
+              const totRegistrats = assignacionsAmbTransf.filter(a => a.transferencies[0].resultats_naix.length > 0).length
+              const totTransferits = assignacionsAmbTransf.length
 
               return (
-                <div key={lotId} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div key={lotId} className="bg-surface border border-border rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
                     <div>
-                      <div style={{ fontSize: '0.88rem', fontWeight: 700 }}>{granja}{estirp ? ` ${estirp}` : ''}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                      <div className="text-sm font-bold text-text">{granja}{estirp ? ` ${estirp}` : ''}</div>
+                      <div className="text-[11px] text-text-dim font-mono">
                         {totRegistrats}/{totTransferits} registrats
                       </div>
                     </div>
-                    <button onClick={() => seleccionarLot(assignacions.filter(a => a.transferencies.length > 0))}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.75rem', fontFamily: 'IBM Plex Mono' }}>
-                      {assignacions.filter(a => a.transferencies.length > 0).every(a => seleccionats.includes(a.id)) ? 'Cap' : 'Tots'}
+                    <button 
+                      onClick={() => seleccionarLot(assignacionsAmbTransf)}
+                      className="bg-transparent border-none text-accent text-xs font-mono cursor-pointer hover:underline"
+                    >
+                      {assignacionsAmbTransf.every(a => seleccionats.includes(a.id)) ? 'Desmarcar' : 'Sel·leccionar tots'}
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    {assignacions.map(a => {
-                      if (a.transferencies.length === 0) return null
+                  <div className="flex flex-col gap-2">
+                    {assignacionsAmbTransf.map(a => {
                       const t = a.transferencies[0]
                       const registrat = t.resultats_naix.length > 0
                       const seleccionat = seleccionats.includes(a.id)
+                      
                       return (
-                        <button key={a.id} onClick={() => !registrat && toggleSeleccio(a.id)} style={{
-                          padding: '0.4rem 0.6rem', border: '1px solid',
-                          borderColor: seleccionat ? 'var(--accent)' : registrat ? 'var(--success)' : 'var(--border)',
-                          borderRadius: '6px', textAlign: 'left', cursor: registrat ? 'default' : 'pointer',
-                          background: seleccionat ? 'rgba(240,180,41,0.1)' : registrat ? 'rgba(34,197,94,0.05)' : 'var(--bg)',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        }}>
-                          <span style={{ fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', color: seleccionat ? 'var(--accent)' : 'var(--text-dim)' }}>
+                        <button 
+                          key={a.id} 
+                          onClick={() => !registrat && toggleSeleccio(a.id)} 
+                          className={`
+                            flex justify-between items-center px-3 py-2 border rounded-lg text-left transition-colors
+                            ${registrat ? 'cursor-default bg-success/5 border-success/30' : 'cursor-pointer hover:bg-bg/80'}
+                            ${seleccionat ? 'bg-accent/10 border-accent' : !registrat ? 'bg-bg border-border' : ''}
+                          `}
+                        >
+                          <span className={`font-mono text-xs ${seleccionat ? 'text-accent font-bold' : 'text-text-dim'}`}>
                             C{a.num_carro_full} · Naix.{t.naixedores.numero}
                           </span>
                           {registrat ? (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--success)', fontFamily: 'IBM Plex Mono' }}>
+                            <span className="text-[11px] text-success font-mono font-bold">
                               {t.resultats_naix[0].pollets_nascuts.toLocaleString()} {t.resultats_naix[0].sexat ? '· sexat' : ''}
                             </span>
                           ) : (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
+                            <span className="text-[11px] text-text-dim font-mono">
                               {t.ous_fertils_vacunats.toLocaleString()} fèrtils
                             </span>
                           )}
@@ -250,44 +391,55 @@ export default function Naixement() {
           </div>
 
           {/* Columna dreta: panell registre */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {seleccionats.length > 0 && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          <div className="flex flex-col gap-4 sticky top-4">
+            {seleccionats.length > 0 ? (
+              <div className="bg-surface border border-accent rounded-xl p-4 flex flex-col gap-4 shadow-sm">
+                <div className="text-[11px] font-mono text-text-dim uppercase tracking-wider">
                   {seleccionats.length} carro{seleccionats.length !== 1 ? 's' : ''} seleccionat{seleccionats.length !== 1 ? 's' : ''}
                 </div>
 
                 {totalOusFertilsSeleccionats > 0 && (
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
-                    Total ous fèrtils: {totalOusFertilsSeleccionats.toLocaleString()}
+                  <div className="text-xs text-text-dim font-mono">
+                    Total ous fèrtils: <span className="text-text font-bold">{totalOusFertilsSeleccionats.toLocaleString()}</span>
                   </div>
                 )}
 
                 <div>
-                  <label style={labelStyle}>Total pollets nascuts</label>
-                  <input type="number" value={totalPollets} onChange={e => setTotalPollets(e.target.value)}
-                    min="0" max={totalOusFertilsSeleccionats || undefined} placeholder="35000"
-                    style={{ ...inputStyle, borderColor: totalPollets !== '' && parseInt(totalPollets) > totalOusFertilsSeleccionats ? 'var(--danger)' : undefined }} />
+                  <label className={labelClasses}>Total pollets nascuts</label>
+                  <input 
+                    type="number" 
+                    value={totalPollets} 
+                    onChange={e => setTotalPollets(e.target.value)}
+                    min="0" 
+                    max={totalOusFertilsSeleccionats || undefined} 
+                    placeholder="Ex: 35000"
+                    className={`${inputClasses} ${totalPollets !== '' && parseInt(totalPollets) > totalOusFertilsSeleccionats ? 'border-danger' : ''}`} 
+                  />
                   {totalPollets !== '' && parseInt(totalPollets) > totalOusFertilsSeleccionats && totalOusFertilsSeleccionats > 0 && (
-                    <div style={{ marginTop: '0.3rem', fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--danger)' }}>
+                    <div className="mt-1 text-[11px] font-mono text-danger">
                       Màxim: {totalOusFertilsSeleccionats.toLocaleString()} (total ous fèrtils)
                     </div>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <input type="checkbox" id="sexat" checked={sexat} onChange={e => setSexat(e.target.checked)}
-                    style={{ width: '1rem', height: '1rem', cursor: 'pointer' }} />
-                  <label htmlFor="sexat" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>Sexat</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="sexat" 
+                    checked={sexat} 
+                    onChange={e => setSexat(e.target.checked)}
+                    className="w-4 h-4 cursor-pointer accent-accent" 
+                  />
+                  <label htmlFor="sexat" className="text-sm text-text cursor-pointer select-none">L'expedició és sexada?</label>
                 </div>
 
                 {totalPollets && totalOusFertilsSeleccionats > 0 && (
-                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.75rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>
-                    Previsió per carro:
+                  <div className="bg-bg border border-border rounded-lg p-3 text-xs font-mono text-text-dim flex flex-col gap-1.5">
+                    <div className="font-bold text-text mb-1">Repartiment automàtic previst:</div>
                     {assignacionsSeleccionades.filter(a => a.transferencies.length > 0).map(a => (
-                      <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem' }}>
+                      <div key={a.id} className="flex justify-between items-center">
                         <span>C{a.num_carro_full}</span>
-                        <span style={{ color: 'var(--text)' }}>
+                        <span className="text-text font-bold">
                           {Math.round(parseInt(totalPollets) * (a.transferencies[0].ous_fertils_vacunats / totalOusFertilsSeleccionats)).toLocaleString()}
                         </span>
                       </div>
@@ -296,51 +448,32 @@ export default function Naixement() {
                 )}
 
                 {errorMsg && (
-                  <div style={{ padding: '0.6rem 0.75rem', borderRadius: '6px', background: 'rgba(240,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontFamily: 'IBM Plex Mono', fontSize: '0.78rem' }}>
+                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger text-danger font-mono text-xs">
                     {errorMsg}
                   </div>
                 )}
 
-                <button onClick={guardarNaixement}
+                <button 
+                  onClick={guardarNaixement}
                   disabled={totalPollets === '' || guardant || (totalOusFertilsSeleccionats > 0 && parseInt(totalPollets) > totalOusFertilsSeleccionats)}
-                  style={{
-                    padding: '0.75rem', border: 'none', borderRadius: '8px', fontWeight: 700,
-                    fontFamily: 'IBM Plex Sans', fontSize: '0.9rem', cursor: 'pointer',
-                    background: (totalPollets === '' || guardant || (totalOusFertilsSeleccionats > 0 && parseInt(totalPollets) > totalOusFertilsSeleccionats)) ? 'var(--border)' : 'var(--accent)',
-                    color: (totalPollets === '' || guardant || (totalOusFertilsSeleccionats > 0 && parseInt(totalPollets) > totalOusFertilsSeleccionats)) ? 'var(--text-dim)' : '#0f1117',
-                  }}>
+                  className={`
+                    p-3 border-none rounded-lg font-bold text-sm cursor-pointer transition-colors
+                    ${(totalPollets === '' || guardant || (totalOusFertilsSeleccionats > 0 && parseInt(totalPollets) > totalOusFertilsSeleccionats)) 
+                      ? 'bg-border text-text-dim cursor-not-allowed' 
+                      : 'bg-accent text-[#0f1117] hover:bg-accent/90'}
+                  `}
+                >
                   {guardant ? 'Guardant...' : 'Confirmar naixement'}
                 </button>
               </div>
-            )}
-
-            {/* Resum per lot */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
-                Resum naixement
+            ) : (
+              <div className="bg-surface border border-border rounded-xl p-6 text-center">
+                <span className="text-2xl mb-2 block opacity-50">🐣</span>
+                <p className="text-sm text-text-dim font-mono m-0">
+                  Selecciona un o més carros per registrar el seu naixement.
+                </p>
               </div>
-              {lotsOrdenats.map(({ lotId, assignacions, granja, estirp }) => {
-                const polletsTotals = assignacions
-                  .filter(a => a.transferencies.length > 0 && a.transferencies[0].resultats_naix.length > 0)
-                  .reduce((s, a) => s + a.transferencies[0].resultats_naix[0].pollets_nascuts, 0)
-                const ousTotals = assignacions
-  .filter(a => a.transferencies.length > 0)
-  .reduce((s, a) => s + a.carros_estoc.quantitat_ous, 0)
-const percentatge = ousTotals > 0 ? Math.round((polletsTotals / ousTotals) * 100) : 0
-
-                if (polletsTotals === 0) return null
-                return (
-                  <div key={lotId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.82rem' }}>
-                    <span>{granja}{estirp ? ` ${estirp}` : ''}</span>
-                    <div style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono' }}>
-                      <div style={{ color: 'var(--text)' }}>{polletsTotals.toLocaleString()} pollets</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{percentatge}% naix.</div>
-                    </div>
-                  </div>
-                )
-              })}
-              {registrats === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.8rem', margin: 0 }}>Sense registres</p>}
-            </div>
+            )}
           </div>
         </div>
       </div>
