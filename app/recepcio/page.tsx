@@ -111,11 +111,11 @@ export default function Recepcio() {
               value={lotId}
               onChange={e => setLotId(e.target.value)}
               required
-              style={{ ...inputStyle, appearance: 'none' }}
+              style={inputStyle}
             >
-              <option value="">Selecciona un lot...</option>
+              <option value="" style={{ background: 'var(--bg)', color: 'var(--text)' }}>Selecciona un lot...</option>
               {lots.map(lot => (
-                <option key={lot.id} value={lot.id}>{nomLot(lot)}</option>
+                <option key={lot.id} value={lot.id} style={{ background: 'var(--bg)', color: 'var(--text)' }}>{nomLot(lot)}</option>
               ))}
             </select>
           </div>
