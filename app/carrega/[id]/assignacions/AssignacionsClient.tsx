@@ -313,7 +313,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
   }
 
   return (
-    <main className="bg-bg min-h-screen pb-[90px]">
+    <main className="bg-bg min-h-screen pb-[150px]">
       <HeaderPlan full={full} dia={dia} setDia={setDia} pendents={carrosPendents.length} total={carrosSeleccionats.size} colocats={colocats.size} onTornarSeleccio={() => setFase('seleccio')} />
 
       {/* Toggle vista projectada */}

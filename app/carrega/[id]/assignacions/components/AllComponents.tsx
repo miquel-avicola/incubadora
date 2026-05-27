@@ -157,7 +157,7 @@ export function IncubadoraSS({ inc, filtrada, anyFiltrada, onToggleFiltrada, ...
           <button onClick={() => p.onSelLliures(inc)} className="bg-accent/10 border border-accent/30 rounded px-1.5 py-0.5 text-[10px] cursor-pointer text-accent font-bold hover:bg-accent/20 transition-colors" title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
         </span>
       </div>
-      <div className="grid gap-1" style={{ gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr' }}>
+      <div className="grid gap-[2px]" style={{ gridTemplateColumns: '1fr 1fr 1fr 4px 1fr 1fr 1fr' }}>
         {['Paret esq', 'Central esq', 'Pulsator esq', '', 'Pulsator dre', 'Central dre', 'Paret dre'].map((h, i) => (
           <div key={i} className="text-[9px] text-center text-text-dim" style={{ gridColumn: i + 1, gridRow: 1 }}>{h}</div>
         ))}
@@ -221,7 +221,7 @@ export function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada
           <button onClick={() => p.onSelLliures(inc)} className="bg-accent/10 border border-accent/30 rounded px-1.5 py-0.5 text-[10px] cursor-pointer text-accent font-bold hover:bg-accent/20 transition-colors" title="Selecciona totes les cel·les lliures">+ sel. lliures</button>
         </span>
       </div>
-      <div className="grid gap-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 6px 1fr 1fr 1fr' }}>
+      <div className="grid gap-[2px]" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 4px 1fr 1fr 1fr' }}>
         {/* Capçaleres */}
         {[{ z: 'paret', d: '~7d', col: 1 }, { z: 'central', d: '~0d', col: 2 }, { z: 'pulsator', d: '~14d', col: 3 },
           { z: 'pulsator', d: '~14d', col: 5 }, { z: 'central', d: '~0d', col: 6 }, { z: 'paret', d: '~7d', col: 7 }].map((h, i) => (
@@ -467,7 +467,7 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
 
   return (
     <div
-      className={`${bgClass} ${borderClass} ${colorClass} ${cursor} border rounded flex flex-col items-center justify-center gap-[1px] text-[10px] font-semibold p-0.5 leading-[1.05] overflow-hidden min-h-[48px]`}
+      className={`${bgClass} ${borderClass} ${colorClass} ${cursor} border rounded flex flex-col items-center justify-center gap-[1px] text-[10px] font-semibold p-0.5 leading-[1.05] overflow-hidden min-h-[38px]`}
       style={{ gridColumn: gridCol, gridRow }}
       onClick={() => {
         if (carroIdNou !== undefined) onClicCarroColocat(carroIdNou)
