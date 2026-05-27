@@ -420,3 +420,217 @@ Aquest document és el punt de partida. La idea és:
 3. **Quan acabem la seguretat**, passar al bloc de rendiment, i finalment al visual.
 
 A mesura que canviem coses, aquest document s'ha d'anar actualitzant. Mai ha de quedar desfasat — si una troballa es resol, marquem-la com a "Resolt el AAAA-MM-DD" en lloc d'esborrar-la, per tenir l'historial.
+
+---
+
+## 10. Auditoria 2026-05-27 (post-canvis UI, API i BD)
+
+Aquesta segona auditoria s'ha fet després de canvis substancials: refactor visual cap a dark mode, migració parcial a Server Components (assignacions), addició del dashboard d'auditoria, nous endpoints API i optimitzacions de rendiment a la planificació. He verificat manualment que M-1, M-2 i M-3 estan **resolts**:
+
+- **M-1 (search_path):** les 7 funcions SQL ara tenen `SET search_path = public, pg_temp`.
+- **M-2 (força bruta):** rate-limit per IP funcionant a `/api/auth` (20 fallits/5min → 429).
+- **M-3 (audit logs):** `withAudit` aplicat a totes les mutacions, taula `audit_log` amb RLS deny-all, redacció de secrets i truncament a 5KB.
+
+### Convenció
+
+Les troballes noves es numeren amb prefix **N-** (Noves). L'ordre és per importància decreixent.
+
+### 10.1. CRÍTIC
+
+#### N-1. `/api/lots/[id]` PUT sense `withAudit` i accessible per `carregues`
+
+**Model recomanat: [Sonnet 4.6]** — Embolcallar amb `withAudit` i afegir entrada a la llista `requiresAdmin` de `canAccess`.
+
+**Què és:** A `app/api/lots/[id]/route.ts:128-144`, el handler `PUT` actualitza el camp `actiu` d'un lot reproductor però no està embolcallat amb `withAudit`. El middleware autentica la petició però `canAccess` no inclou `/api/lots` a la llista d'admin-only (la regex `/^\/lots($|\/)/` només cobreix la pàgina `/lots`, no `/api/lots`). A més, aquest handler usa el client compartit de `lib/supabase.ts` mentre la resta de rutes usen `getServiceClient` local — inconsistència.
+
+**Per què importa:** Un usuari amb rol `carregues` (no admin) pot enviar `PUT /api/lots/123` amb `{"actiu":false}` i deixar un lot inactiu. Com que no hi ha `withAudit`, l'acció no quedarà a `audit_log` i ningú sabrà qui ha estat.
+
+**Què caldria fer:** Envoltar el `PUT` amb `withAudit`. Afegir `/^\/api\/lots\/[^/]+$/` a `requiresAdmin` dins `canAccess` (`lib/auth.ts:88-96`).
+
+#### N-2. Backdoor de contrasenya `'1234'` al codi font
+
+**Model recomanat: [Sonnet 4.6]** — Eliminar 3 línies.
+
+**Què és:** A `lib/auth.ts:69-71`:
+```typescript
+if (process.env.NODE_ENV === 'development' && password === '1234') {
+  valid = true
+}
+```
+
+**Per què importa:** Dues raons. Primer, qualsevol persona que llegeixi el codi font (col·laborador, exemployat, fuita) sap el backdoor. Segon, si en algun moment l'app es desplega amb `NODE_ENV` mal configurat (un container nou, un preview de Vercel, un fork local), qualsevol usuari pot entrar amb `1234`. Defensa en profunditat: no s'hauria de confiar només en `NODE_ENV`.
+
+**Què caldria fer:** Eliminar la condició. Si cal una contrasenya fàcil per a dev, posar-la a `.env.local` (no commitejada) i carregar-la des d'allí, o desar-la a la taula `users` només a l'entorn de desenvolupament local.
+
+#### N-3. Default insegur `role = 'admin'` quan la sessió és null
+
+**Model recomanat: [Sonnet 4.6]** — Canvi d'una línia.
+
+**Què és:** A `app/page.tsx:9`: `const role = session?.role ?? 'admin'`. El middleware impedeix arribar a aquesta pàgina sense sessió, però el fallback és el rol més permissiu.
+
+**Per què importa:** És un patró fràgil. Si algun dia es modifica l'ordre de middlewares, si la pàgina es re-renderitza des d'un context sense cookies (test, RSC streaming amb error), o si verifySession falla en silenci, es mostren tots els enllaços d'admin a un usuari no autenticat. El fallback hauria de ser el rol més restrictiu.
+
+**Què caldria fer:** Canviar a `?? 'recepcio'` o, millor, `if (!session) redirect('/login')` amb `redirect` de `next/navigation`.
+
+### 10.2. IMPORTANT
+
+#### N-4. Falta de comprovacions d'ownership a mutacions
+
+**Model recomanat: [Mixt]** — Decidir el model d'ownership requereix entendre què pot fer cada rol amb objectes d'altres clients/fulls. Opus per al disseny, Sonnet per als helpers de verificació.
+
+**Què és:** Diverses rutes PATCH/DELETE no validen que l'objecte modificat pertanyi al full/client esperat:
+
+- `app/api/comandes/[id]/route.ts` PATCH: permet canviar `full_carrega_id` sense validar que el full destí existeix o que la comanda pertany a un context legítim.
+- `app/api/carrega/[id]/assignacions/route.ts` DELETE: no comprova que `carro_id` pertany al full `[id]` indicat a la URL.
+- `app/api/carrega/[id]/naixement/route.ts` POST: distribueix `total_pollets` entre `transferencia_id` rebuts sense comprovar que pertanyen al full `[id]`.
+
+**Per què importa:** En una empresa interna petita amb tres usuaris de confiança és un risc baix, però convertir l'`audit_log` en font de veritat sense ownership checks deixa la BD inconsistent davant un error humà (un usuari que escriu un id equivocat) o un usuari hostil.
+
+**Què caldria fer:** Crear un helper `assertOwnership(supabase, table, id, fullId)` que faci la verificació en una query barata abans de cada mutació. Aplicar-lo sistemàticament.
+
+#### N-5. Validació inline en lloc de Zod a 5 rutes mutatives
+
+**Model recomanat: [Sonnet 4.6]** — Mecànic.
+
+**Què és:** A I-3 vam unificar amb Zod, però han quedat fora:
+
+- `app/api/previsio-comercial/cell/route.ts` (PUT)
+- `app/api/previsio-recurrent/route.ts` (POST)
+- `app/api/previsio-recurrent/[id]/route.ts` (PATCH)
+- `app/api/carrega/[id]/maquila-grup/route.ts` (PATCH)
+- `app/api/carrega/[id]/previsio-grup/route.ts` (PATCH)
+- `app/api/assignacions/[id]/route.ts` (PATCH)
+
+**Per què importa:** Validació inline és més fàcil d'errar i deixa passar valors `null`/`undefined` no esperats. Tenir tots els schemas al mateix lloc (`lib/schemas.ts`) també és més fàcil de revisar.
+
+**Què caldria fer:** Per a cada ruta, definir un schema a `lib/schemas.ts` i aplicar `parseBody`.
+
+#### N-6. Índexs absents a `login_attempts` i `audit_log`
+
+**Model recomanat: [Sonnet 4.6]** — Migració SQL curta.
+
+**Què és:** Les queries de rate-limit a `/api/auth` (`route.ts:31-50`) fan dos `.eq('ip', ip)` amb `order` i `count exact`. La pàgina d'auditoria (`/api/admin/auditoria` línies 28-35) filtra per `ts`, `user_id` i `path` (ILIKE) i ordena per `ts DESC`. Sense índexs adequats, ambdues degeneren a table scan en uns mesos.
+
+**Per què importa:** El login és el coll d'ampolla d'un atac de força bruta — si la query lenta, l'atacant pot esgotar capacitat. L'`audit_log` creixerà i la pàgina d'admin es farà inservible.
+
+**Què caldria fer:** Aplicar via SQL Editor:
+```sql
+CREATE INDEX idx_login_attempts_ip_attempted_at
+  ON login_attempts(ip, attempted_at DESC);
+CREATE INDEX idx_audit_log_ts_desc ON audit_log(ts DESC);
+CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
+-- Opcional si l'ILIKE per `path` creix en ús:
+-- CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- CREATE INDEX idx_audit_log_path_trgm ON audit_log USING gin(path gin_trgm_ops);
+```
+
+#### N-7. `audit_log` sense política de retenció i sense doble check de rol
+
+**Model recomanat: [Mixt]** — Decidir el període de retenció requereix valorar legal i comercial. Opus per a la decisió, Sonnet per al cron i el check.
+
+**Què és:** No hi ha cron que esborri entrades velles de `audit_log`. A més, l'única protecció de `/api/admin/auditoria` és el middleware via `canAccess`. Si en algun moment es modifica `canAccess` per error, qualsevol amb sessió veuria tot l'audit log (que conté payloads, encara que redactats).
+
+**Per què importa:** Una taula que mai es neteja escala malament. Una lectura mal protegida exposa l'historial sencer d'operacions.
+
+**Què caldria fer:** Definir període de retenció (per exemple, 12 mesos), implementar cron a Supabase Edge Function. Afegir `if (session.role !== 'admin') return 403` dins de la ruta com a defensa en profunditat.
+
+#### N-8. `app/carrega/[id]/page.tsx` és un Client Component de 743 línies amb 2 fetches client
+
+**Model recomanat: [Mixt]** — Decidir què queda al servidor i què al client requereix entendre les interaccions. Opus per al disseny, Sonnet per a la implementació.
+
+**Què és:** La pàgina principal de detall de càrrega (`app/carrega/[id]/page.tsx:1-743`) és tota `'use client'`. Fa dos `useEffect` per descarregar dades (`/api/carrega/[id]` i `/api/clients-list`) i mostra un spinner. Mateix patró que vau migrar correctament per a `assignacions/page.tsx`.
+
+**Per què importa:** L'usuari veu un spinner 1-2 segons en cada visita. Al servidor podríeu carregar les dades en paral·lel des de Supabase i lliurar HTML llest.
+
+**Què caldria fer:** Partir en `page.tsx` (Server Component) + `DetallCarregaClient.tsx` (Client Component que rep dades per props). Carregar amb `Promise.all` les dades del full i la llista de clients al servidor.
+
+#### N-9. Inconsistència visual: inline styles vs Tailwind
+
+**Model recomanat: [Sonnet 4.6]** — Mecànic, pàgina a pàgina.
+
+**Què és:** `app/login/page.tsx`, `app/page.tsx`, `app/estoc/page.tsx`, `app/recepcio/page.tsx` i `app/lots/page.tsx` usen `style={{...}}` inline per a tots els elements. `AppLayout`, `assignacions` i altres usen classes Tailwind amb variables CSS (`bg-surface`, `text-text-dim`, etc.) ja definides a `globals.css` i `tailwind.config.ts`.
+
+**Per què importa:** Dos sistemes paral·lels fan que canvis globals (per exemple, modificar el dark mode o afegir un mode clar) requereixen tocar 10+ fitxers i és fàcil que alguna pàgina quedi desincronitzada.
+
+**Què caldria fer:** Migrar les pàgines inline a classes Tailwind utilitzant les variables ja existents. No urgent però marca el deute.
+
+### 10.3. MITJÀ
+
+#### N-10. Login amb labels sense `htmlFor`
+
+**Què és:** `app/login/page.tsx:59-71` i 74-85: els `<label>` no porten `htmlFor` i els `<input>` no porten `id`.
+
+**Per què importa:** Els lectors de pantalla no enllacen el text del label amb el camp. Trenca WCAG 1.3.1.
+
+**Què caldria fer:** Afegir `id="username"` / `id="password"` als inputs i `htmlFor="username"` / `htmlFor="password"` als labels. Aprofitar per afegir `autoFocus` al d'usuari.
+
+#### N-11. `maximum-scale=1` al viewport impedeix el zoom
+
+**Què és:** `app/layout.tsx:23`. Trenca WCAG 1.4.4 (Resize text).
+
+**Què caldria fer:** Treure `maximum-scale=1` del viewport. Deixar `width=device-width, initial-scale=1`.
+
+#### N-12. `next.config.js` sense `reactStrictMode` i sense cache headers
+
+**Què és:** `reactStrictMode` no està activat — perdem la detecció de doble render en dev. No hi ha cache headers per a `/_next/static/*` (Vercel els posa per defecte, però explicitar-los és més robust).
+
+**Què caldria fer:** Afegir `reactStrictMode: true` i un block `source: '/_next/static/:path*'` amb `Cache-Control: public, max-age=31536000, immutable`.
+
+#### N-13. `tailwind.config.ts` apunta a un path inexistent
+
+**Què és:** El glob `./components/**/*.{js,ts,jsx,tsx,mdx}` no apunta enlloc. Els components estan dins `./app/components/` i `./app/carrega/[id]/assignacions/components/` — ja coberts pel glob de `./app/**`.
+
+**Què caldria fer:** Treure la línia.
+
+#### N-14. CSP permet `'unsafe-inline'` i `'unsafe-eval'` a scripts
+
+**Què és:** `next.config.js:28`. Next.js requereix `'unsafe-inline'` per a alguns scripts d'hidratació. `'unsafe-eval'` només cal en dev.
+
+**Per què importa:** Una CSP amb `'unsafe-inline'` permet executar scripts injectats inline; perd una part important de la defensa contra XSS.
+
+**Què caldria fer:** Implementar `nonce` per a scripts via middleware (Next 14 ho suporta amb una mica de feina). Treure `'unsafe-eval'` en producció.
+
+### 10.4. BAIX
+
+#### N-15. Sense política documentada de backup i restauració
+
+**Què és:** El document no descriu com es fa el backup de Supabase ni el procediment de restauració.
+
+**Què caldria fer:** Documentar (a) la política de backup automàtic del pla actiu de Supabase, (b) com baixar un export periòdic manualment, (c) la prova de restauració a fer com a mínim un cop l'any.
+
+#### N-16. `lib/supabase.ts` exposa un client singleton mentre la resta crea clients locals
+
+**Què és:** `app/api/lots/[id]/route.ts` importa `supabase` de `lib/supabase.ts`. La resta crea localment amb `getServiceClient()`. Cap problema funcional, però és inconsistència.
+
+**Què caldria fer:** Convergir a un patró. El singleton és bona pràctica i estalvia creacions repetides.
+
+#### N-17. `login_attempts` sense rotació garantida
+
+**Què és:** La neteja és probabilística (2%). Si l'app rep poques peticions un dia, les entrades velles queden.
+
+**Què caldria fer:** Substituir la neteza amortitzada per un cron a Supabase Edge Function (un cop al dia).
+
+---
+
+### 10.5. Mini-millores fàcils en bloc
+
+Aquestes són canvis de poques línies (< 30 línies totals + un SQL) que es poden aplicar en una única sessió curta:
+
+1. **Treure el backdoor `password === '1234'`** de `lib/auth.ts:69-71` (N-2).
+2. **Canviar `?? 'admin'` per `?? 'recepcio'`** a `app/page.tsx:9` (N-3).
+3. **Treure `maximum-scale=1`** del viewport a `app/layout.tsx:23` (N-11).
+4. **Afegir `reactStrictMode: true`** a `next.config.js` (N-12).
+5. **Treure la línia `./components/**/*`** de `tailwind.config.ts` (N-13).
+6. **Afegir `htmlFor` + `id` als camps del login** i `autoFocus` a l'usuari (N-10).
+7. **Afegir guard `if (session.role !== 'admin') return 403`** a `/api/admin/auditoria` (N-7, defensa en profunditat).
+8. **Crear els 3 índexs** a Supabase via SQL Editor (N-6).
+9. **Embolcallar `PUT /api/lots/[id]` amb `withAudit`** i afegir `/api/lots/[id]` a `requiresAdmin` (N-1).
+10. **Afegir cache headers per a `/_next/static/`** a `next.config.js` (N-12).
+
+**Bloc recomanat per a una sessió Sonnet 4.6**: tots aquests punts són mecànics, sense decisions de disseny.
+
+### 10.6. Pròxims passos suggerits
+
+Per importància de seguretat: **N-2 i N-1 primer**, després **N-4 (ownership)** i **N-7 (defensa en profunditat audit_log)**. Per rendiment: **N-8** és el guany més gran (eliminar el spinner inicial de la pàgina principal de càrrega). Per a la salut a llarg termini de la BD: **N-6 (índexs)** i **N-17 (cron de neteja)**.
+
+La resta de troballes (visuals, validació inline, CSP estricta) són deute que es pot anar pagant sense pressa.
