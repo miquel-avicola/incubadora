@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { withAudit } from '@/lib/audit'
+import { verifySession } from '@/lib/auth'
 
 function getServiceClient() {
   return createClient(
@@ -14,6 +15,13 @@ function getServiceClient() {
 // Paràmetres opcionals: user_id, path_like, from (ISO date), to (ISO date), limit (default 50), offset (default 0)
 // Només accessible per rol admin (middleware + withAudit verifiquen sessió; canAccess filtra per admin)
 export const GET = withAudit(async (request: Request) => {
+  // Defensa en profunditat: doble check de rol dins la ruta
+  const token = (request as NextRequest).cookies.get('session')?.value ?? null
+  const session = token ? await verifySession(token) : null
+  if (!session || session.role !== 'admin') {
+    return NextResponse.json({ error: 'No autoritzat' }, { status: 403 })
+  }
+
   const url = new URL(request.url)
   const userId = url.searchParams.get('user_id') || null
   const pathLike = url.searchParams.get('path_like') || null

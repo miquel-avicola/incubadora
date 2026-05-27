@@ -6,7 +6,7 @@ export default async function Home() {
   const cookieStore = await cookies()
   const token = cookieStore.get('session')?.value
   const session = token ? await verifySession(token) : null
-  const role = session?.role ?? 'admin'
+  const role = session?.role ?? 'recepcio'
 
   const showLots = role === 'admin'
   const showCarrega = role === 'carregues' || role === 'admin'

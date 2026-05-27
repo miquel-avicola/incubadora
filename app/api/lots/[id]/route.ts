@@ -1,10 +1,20 @@
 // app/api/lots/[id]/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
+
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const supabase = getServiceClient()
   const lotId = parseInt(params.id)
 
   // 1. Info del lot
@@ -125,8 +135,9 @@ const fullIds = Array.from(fullIdsSet)
   })
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const lotId = parseInt(params.id)
+export const PUT = withAudit(async (request: Request, ctx?: { params: { id: string } }) => {
+  const supabase = getServiceClient()
+  const lotId = parseInt(ctx?.params?.id ?? '')
   const raw = await request.json().catch(() => null)
   if (raw === null || typeof raw.actiu !== 'boolean') {
     return NextResponse.json({ error: 'Payload invàlid' }, { status: 400 })
@@ -141,4 +152,4 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
-}
+})

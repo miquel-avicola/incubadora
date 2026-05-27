@@ -437,9 +437,11 @@ Les troballes noves es numeren amb prefix **N-** (Noves). L'ordre és per import
 
 ### 10.1. CRÍTIC
 
-#### N-1. `/api/lots/[id]` PUT sense `withAudit` i accessible per `carregues`
+#### N-1. `/api/lots/[id]` PUT sense `withAudit` i accessible per `carregues` ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Embolcallar amb `withAudit` i afegir entrada a la llista `requiresAdmin` de `canAccess`.
+
+**Resolució:** `PUT` embolcallat amb `withAudit`. Substituït `import { supabase }` del singleton per `getServiceClient()` local (consistent amb la resta de rutes). Afegida regex `/^\/api\/lots\/[^/]+$/` a `requiresAdmin` de `lib/auth.ts`.
 
 **Què és:** A `app/api/lots/[id]/route.ts:128-144`, el handler `PUT` actualitza el camp `actiu` d'un lot reproductor però no està embolcallat amb `withAudit`. El middleware autentica la petició però `canAccess` no inclou `/api/lots` a la llista d'admin-only (la regex `/^\/lots($|\/)/` només cobreix la pàgina `/lots`, no `/api/lots`). A més, aquest handler usa el client compartit de `lib/supabase.ts` mentre la resta de rutes usen `getServiceClient` local — inconsistència.
 
@@ -447,9 +449,11 @@ Les troballes noves es numeren amb prefix **N-** (Noves). L'ordre és per import
 
 **Què caldria fer:** Envoltar el `PUT` amb `withAudit`. Afegir `/^\/api\/lots\/[^/]+$/` a `requiresAdmin` dins `canAccess` (`lib/auth.ts:88-96`).
 
-#### N-2. Backdoor de contrasenya `'1234'` al codi font
+#### N-2. Backdoor de contrasenya `'1234'` al codi font ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Eliminar 3 línies.
+
+**Resolució:** Eliminades les 3 línies del condicional `NODE_ENV === 'development' && password === '1234'` de `lib/auth.ts`. `valid` torna a ser `const`.
 
 **Què és:** A `lib/auth.ts:69-71`:
 ```typescript
@@ -462,9 +466,11 @@ if (process.env.NODE_ENV === 'development' && password === '1234') {
 
 **Què caldria fer:** Eliminar la condició. Si cal una contrasenya fàcil per a dev, posar-la a `.env.local` (no commitejada) i carregar-la des d'allí, o desar-la a la taula `users` només a l'entorn de desenvolupament local.
 
-#### N-3. Default insegur `role = 'admin'` quan la sessió és null
+#### N-3. Default insegur `role = 'admin'` quan la sessió és null ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Canvi d'una línia.
+
+**Resolució:** `?? 'admin'` canviat a `?? 'recepcio'` a `app/page.tsx:9`. El fallback ara és el rol més restrictiu.
 
 **Què és:** A `app/page.tsx:9`: `const role = session?.role ?? 'admin'`. El middleware impedeix arribar a aquesta pàgina sense sessió, però el fallback és el rol més permissiu.
 
@@ -505,9 +511,11 @@ if (process.env.NODE_ENV === 'development' && password === '1234') {
 
 **Què caldria fer:** Per a cada ruta, definir un schema a `lib/schemas.ts` i aplicar `parseBody`.
 
-#### N-6. Índexs absents a `login_attempts` i `audit_log`
+#### N-6. Índexs absents a `login_attempts` i `audit_log` ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Migració SQL curta.
+
+**Resolució:** Creats els 3 índexs via SQL Editor: `idx_login_attempts_ip_attempted_at ON login_attempts(ip, attempted_at DESC)`, `idx_audit_log_ts_desc ON audit_log(ts DESC)`, `idx_audit_log_user_id ON audit_log(user_id)`. Verificats amb `pg_indexes`.
 
 **Què és:** Les queries de rate-limit a `/api/auth` (`route.ts:31-50`) fan dos `.eq('ip', ip)` amb `order` i `count exact`. La pàgina d'auditoria (`/api/admin/auditoria` línies 28-35) filtra per `ts`, `user_id` i `path` (ILIKE) i ordena per `ts DESC`. Sense índexs adequats, ambdues degeneren a table scan en uns mesos.
 
@@ -524,9 +532,11 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 -- CREATE INDEX idx_audit_log_path_trgm ON audit_log USING gin(path gin_trgm_ops);
 ```
 
-#### N-7. `audit_log` sense política de retenció i sense doble check de rol
+#### N-7. `audit_log` sense política de retenció i sense doble check de rol *(parcialment resolt)*
 
 **Model recomanat: [Mixt]** — Decidir el període de retenció requereix valorar legal i comercial. Opus per a la decisió, Sonnet per al cron i el check.
+
+**Resolució parcial (2026-05-27):** Afegit guard explícit `if (session.role !== 'admin') return 403` dins el handler GET de `/api/admin/auditoria/route.ts` com a defensa en profunditat (doble check). La política de retenció i el cron de neteja queden pendents (N-17 relacionat).
 
 **Què és:** No hi ha cron que esborri entrades velles de `audit_log`. A més, l'única protecció de `/api/admin/auditoria` és el middleware via `canAccess`. Si en algun moment es modifica `canAccess` per error, qualsevol amb sessió veuria tot l'audit log (que conté payloads, encara que redactats).
 
@@ -556,29 +566,37 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 ### 10.3. MITJÀ
 
-#### N-10. Login amb labels sense `htmlFor`
+#### N-10. Login amb labels sense `htmlFor` ✅ Resolt el 2026-05-27
 
-**Què és:** `app/login/page.tsx:59-71` i 74-85: els `<label>` no porten `htmlFor` i els `<input>` no porten `id`.
+**Resolució:** Afegits `id="username"` i `id="password"` als inputs, `htmlFor` corresponent als labels, i `autoFocus` al camp d'usuari. `app/login/page.tsx`.
+
+**Què era:** `app/login/page.tsx:59-71` i 74-85: els `<label>` no portaven `htmlFor` i els `<input>` no portaven `id`.
 
 **Per què importa:** Els lectors de pantalla no enllacen el text del label amb el camp. Trenca WCAG 1.3.1.
 
 **Què caldria fer:** Afegir `id="username"` / `id="password"` als inputs i `htmlFor="username"` / `htmlFor="password"` als labels. Aprofitar per afegir `autoFocus` al d'usuari.
 
-#### N-11. `maximum-scale=1` al viewport impedeix el zoom
+#### N-11. `maximum-scale=1` al viewport impedeix el zoom ✅ Resolt el 2026-05-27
 
-**Què és:** `app/layout.tsx:23`. Trenca WCAG 1.4.4 (Resize text).
+**Resolució:** Eliminat `maximum-scale=1` de la metadata de viewport a `app/layout.tsx`. Queda `width=device-width, initial-scale=1`.
+
+**Què era:** `app/layout.tsx:23`. Trencava WCAG 1.4.4 (Resize text).
 
 **Què caldria fer:** Treure `maximum-scale=1` del viewport. Deixar `width=device-width, initial-scale=1`.
 
-#### N-12. `next.config.js` sense `reactStrictMode` i sense cache headers
+#### N-12. `next.config.js` sense `reactStrictMode` i sense cache headers ✅ Resolt el 2026-05-27
 
-**Què és:** `reactStrictMode` no està activat — perdem la detecció de doble render en dev. No hi ha cache headers per a `/_next/static/*` (Vercel els posa per defecte, però explicitar-los és més robust).
+**Resolució:** Afegit `reactStrictMode: true` a `next.config.js`. Afegit bloc `source: '/_next/static/:path*'` amb `Cache-Control: public, max-age=31536000, immutable`.
+
+**Què era:** `reactStrictMode` no estava activat — perdem la detecció de doble render en dev. No hi havia cache headers per a `/_next/static/*` (Vercel els posa per defecte, però explicitar-los és més robust).
 
 **Què caldria fer:** Afegir `reactStrictMode: true` i un block `source: '/_next/static/:path*'` amb `Cache-Control: public, max-age=31536000, immutable`.
 
-#### N-13. `tailwind.config.ts` apunta a un path inexistent
+#### N-13. `tailwind.config.ts` apunta a un path inexistent ✅ Resolt el 2026-05-27
 
-**Què és:** El glob `./components/**/*.{js,ts,jsx,tsx,mdx}` no apunta enlloc. Els components estan dins `./app/components/` i `./app/carrega/[id]/assignacions/components/` — ja coberts pel glob de `./app/**`.
+**Resolució:** Eliminada la línia `'./components/**/*.{js,ts,jsx,tsx,mdx}'` de `tailwind.config.ts`.
+
+**Què era:** El glob `./components/**/*.{js,ts,jsx,tsx,mdx}` no apuntava enlloc. Els components estan dins `./app/components/` i `./app/carrega/[id]/assignacions/components/` — ja coberts pel glob de `./app/**`.
 
 **Què caldria fer:** Treure la línia.
 
@@ -612,22 +630,20 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 ---
 
-### 10.5. Mini-millores fàcils en bloc
+### 10.5. Mini-millores fàcils en bloc ✅ Resolt el 2026-05-27
 
-Aquestes són canvis de poques línies (< 30 línies totals + un SQL) que es poden aplicar en una única sessió curta:
+Tots els 10 punts aplicats en una única sessió Sonnet 4.6:
 
-1. **Treure el backdoor `password === '1234'`** de `lib/auth.ts:69-71` (N-2).
-2. **Canviar `?? 'admin'` per `?? 'recepcio'`** a `app/page.tsx:9` (N-3).
-3. **Treure `maximum-scale=1`** del viewport a `app/layout.tsx:23` (N-11).
-4. **Afegir `reactStrictMode: true`** a `next.config.js` (N-12).
-5. **Treure la línia `./components/**/*`** de `tailwind.config.ts` (N-13).
-6. **Afegir `htmlFor` + `id` als camps del login** i `autoFocus` a l'usuari (N-10).
-7. **Afegir guard `if (session.role !== 'admin') return 403`** a `/api/admin/auditoria` (N-7, defensa en profunditat).
-8. **Crear els 3 índexs** a Supabase via SQL Editor (N-6).
-9. **Embolcallar `PUT /api/lots/[id]` amb `withAudit`** i afegir `/api/lots/[id]` a `requiresAdmin` (N-1).
-10. **Afegir cache headers per a `/_next/static/`** a `next.config.js` (N-12).
-
-**Bloc recomanat per a una sessió Sonnet 4.6**: tots aquests punts són mecànics, sense decisions de disseny.
+1. ✅ **Backdoor `password === '1234'`** eliminat de `lib/auth.ts` (N-2).
+2. ✅ **`?? 'admin'` → `?? 'recepcio'`** a `app/page.tsx` (N-3).
+3. ✅ **`maximum-scale=1`** tret del viewport a `app/layout.tsx` (N-11).
+4. ✅ **`reactStrictMode: true`** afegit a `next.config.js` (N-12).
+5. ✅ **Glob inexistent `./components/**/*`** tret de `tailwind.config.ts` (N-13).
+6. ✅ **`htmlFor` + `id` + `autoFocus`** afegits al formulari de login (N-10).
+7. ✅ **Guard `role !== 'admin'` → 403** dins `/api/admin/auditoria` (N-7).
+8. ✅ **3 índexs creats** a Supabase (N-6).
+9. ✅ **`PUT /api/lots/[id]`** embolcallat amb `withAudit` + regex a `requiresAdmin` + singleton → `getServiceClient()` (N-1).
+10. ✅ **Cache headers `/_next/static/`** afegits a `next.config.js` (N-12).
 
 ### 10.6. Pròxims passos suggerits
 
