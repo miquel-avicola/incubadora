@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
+import { calcularNaixement, formatData } from '@/lib/dates'
 
 interface ExpedicioLot {
   id: number
@@ -83,6 +84,7 @@ function nomLot(lot: { estirp: string | null; granges_reproductores: { granja: s
 
 export default function ExpedicionsNaixement() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const [full, setFull] = useState<Full | null>(null)
   const [expedicions, setExpedicions] = useState<Expedicio[]>([])
   const [loading, setLoading] = useState(true)
@@ -135,6 +137,13 @@ export default function ExpedicionsNaixement() {
       if (raw) setDistribucio(JSON.parse(raw))
     } catch { /* ignore */ }
   }, [params.id])
+
+  useEffect(() => {
+    if (!loading && searchParams.get('print') === 'true') {
+      // Donem temps a que el navegador renderitzi la taula completament
+      setTimeout(() => window.print(), 500)
+    }
+  }, [loading, searchParams])
 
   function obrirExpedicio(exp: Expedicio) {
     if (expedicioOberta === exp.id) {
@@ -280,6 +289,7 @@ export default function ExpedicionsNaixement() {
   return (
     <>
       <style>{`
+        @page { size: landscape; margin: 0; }
         @media print {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
@@ -306,7 +316,12 @@ export default function ExpedicionsNaixement() {
       <div className="print-only" style={{ padding: '1cm' }}>
         <div className="print-header">
           <h2>Repartiment de pollets — Càrrega #{full.num_carrega}</h2>
-          <p>Data càrrega: {full.carrega} · Total nascuts: {totalNascuts.toLocaleString()} · Total assignats: {totalAssignats.toLocaleString()}</p>
+          <p>
+            Data càrrega: {formatData(full.carrega)} · 
+            Data naixement: {formatData(calcularNaixement(full.carrega))} · 
+            Total nascuts: {totalNascuts.toLocaleString()} · 
+            Total assignats: {totalAssignats.toLocaleString()}
+          </p>
         </div>
         <table className="print-table">
           <thead>

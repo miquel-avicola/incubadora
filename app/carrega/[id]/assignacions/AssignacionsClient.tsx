@@ -1,6 +1,6 @@
 'use client'
 import { useAssignacions } from './useAssignacions'
-import { IndeterminateCheckbox, HeaderPlan, OrdreMSP, Safata, SeccioInc, IncubadoraSS, IncubadoraMS, Cell, MemoCell, btnStyle, cardSeccio, h2Seccio, badgeStyle, cardInc, btnSelLliures, chipNaix, miniBtn } from './components/AllComponents';
+import { IndeterminateCheckbox, HeaderPlan, OrdreMSP, Safata, SeccioInc, IncubadoraSS, IncubadoraMS, IncubadoraMSP, Cell, MemoCell, btnStyle, cardSeccio, h2Seccio, badgeStyle, cardInc, btnSelLliures, chipNaix, miniBtn } from './components/AllComponents';
 
 
 
@@ -42,7 +42,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
     estatInstProjectat, estatInstEffectiu,
     ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
-    onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat,
+    onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat, onDropMSPGeneral,
     aplicarPreSuggerit, aplicarOptimitzacioTermica, guardar
   } = hook
 
@@ -393,26 +393,19 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
             extra={
               <OrdreMSP ordre={mspOrdre} onChange={setMspOrdre} />
             }
-            children={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSP').map(inc => (
-              <IncubadoraMS key={inc.id} inc={inc} sub="MSP" carrosLot={carrosLot}
-                carroPerCella={carroPerCella}
-                ocupatsAltresFulls={ocupatsAltresFullsPerCella}
-                lliureAviatPerCella={lliureAviatPerCella}
-                mostrarProjectat={mostrarProjectat}
+            children={incs.filter(i => subtipus(i.tipus, i.capacitat_carros) === 'MSP').map(inc => {
+              const instInc = estatInstEffectiu?.incubadores.find((x: any) => x.id === inc.id);
+              return (
+              <IncubadoraMSP key={inc.id} inc={inc} instInc={instInc} carrosLot={carrosLot}
                 colocats={colocats}
-                seleccionades={seleccionades}
                 numCarroPerCella={numCarroPerCella}
-                filtrada={incsFiltrades.has(inc.id)}
-                anyFiltrada={incsFiltrades.size > 0}
-                onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
-                onClicCella={toggleSeleccio}
-                onSelLliures={seleccionarLliuresInc}
+                onDropMSPGeneral={onDropMSPGeneral}
+                onClicCarroColocat={clicarCarroColocat}
                 onDragStartCarro={onDragStartCarro}
                 onDragOverCell={onDragOverCell}
-                onDropCell={onDropCell}
-                onClicCarroColocat={clicarCarroColocat}
               />
-            ))} />
+              );
+            })} />
 
           {/* Naixedores només lectura */}
           {estatInst && estatInst.naixedores.length > 0 && (

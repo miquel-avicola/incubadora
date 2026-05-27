@@ -68,23 +68,11 @@ export default function ImpressionsHub() {
             <select 
               value={selectedId || ''} 
               onChange={e => setSelectedId(e.target.value ? parseInt(e.target.value) : null)}
-              style={{
-                width: '100%',
-                padding: '0.85rem 1rem',
-                fontSize: '1rem',
-                fontFamily: 'IBM Plex Sans',
-                background: 'var(--bg)',
-                border: '1px solid var(--accent)',
-                borderRadius: '8px',
-                color: 'var(--text)',
-                outline: 'none',
-                cursor: 'pointer',
-                appearance: 'none',
-              }}
+              className="w-full px-4 py-3 text-base font-sans bg-bg border border-accent rounded-lg text-text outline-none cursor-pointer appearance-none"
             >
-              <option value="">— Selecciona una càrrega —</option>
+              <option value="" className="bg-slate-900 text-slate-50">— Selecciona una càrrega —</option>
               {carregues.map(c => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} className="bg-slate-900 text-slate-50">
                   Càrrega #{c.num_carrega} — {formatData(c.carrega)} {c.estat === 'Finalitzat' ? '(Finalitzada)' : ''}
                 </option>
               ))}
@@ -144,7 +132,7 @@ export default function ImpressionsHub() {
 
             {/* Targeta 4: Full de repartiment */}
             <PrintCard 
-              href={`/carrega/${selectedId}/expedicions`}
+              href={`/carrega/${selectedId}/expedicions/naixement?print=true`}
               icon="🚚"
               title="Full de repartiment"
               description="La pàgina d'expedicions amb el detall de tots els enviaments, destinacions i lots."

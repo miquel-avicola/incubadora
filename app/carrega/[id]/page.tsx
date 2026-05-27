@@ -271,8 +271,8 @@ export default function DetallCarrega() {
   }
 
   if (loading) return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', textAlign: 'center', padding: '2rem' }}>Carregant...</p>
+    <main className="bg-bg min-h-screen p-6">
+      <p className="text-text-dim font-mono text-sm text-center p-8">Carregant...</p>
     </main>
   )
 
@@ -299,51 +299,37 @@ export default function DetallCarrega() {
   const totalPolletsPrevistos = totalPolletsPrevistosPropis + totalPolletsPrevistosMaquila
 
   // Agrupar assignacions per incubadora
-  const perIncubadora: Record<number, Assignacio[]> = {}
+  const perIncubadora: Record<number, Assignacio[]> = {};
   full.assignacions.forEach(a => {
-    const num = a.incubadores.numero
-    if (!perIncubadora[num]) perIncubadora[num] = []
-    perIncubadora[num].push(a)
-  })
+    const num = a.incubadores.numero;
+    if (!perIncubadora[num]) perIncubadora[num] = [];
+    perIncubadora[num].push(a);
+  });
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+    <main className="bg-bg min-h-screen p-6">
+      <div className="max-w-3xl mx-auto">
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link href="/carrega" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Càrregues</Link>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Link href="/carrega" className="text-text-dim no-underline text-sm font-mono hover:text-text transition-colors">← Càrregues</Link>
             <div>
-              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Càrrega</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>#{full.num_carrega}</h1>
+              <p className="text-accent font-mono text-xs tracking-widest uppercase m-0 mb-1">Càrrega</p>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-2xl font-bold m-0 text-text">#{full.num_carrega}</h1>
                 {full.estat === 'Finalitzat' && (
-                  <span style={{
-                    background: 'var(--success)',
-                    color: '#0f1117',
-                    fontFamily: 'IBM Plex Mono',
-                    fontSize: '0.65rem',
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: '4px',
-                    fontWeight: 700,
-                  }}>Finalitzat</span>
+                  <span className="bg-success text-white font-mono text-[0.65rem] tracking-widest uppercase px-2 py-1 rounded font-bold">
+                    Finalitzat
+                  </span>
                 )}
               </div>
             </div>
           </div>
-         <div style={{ position: 'relative' }}>
+         <div className="relative">
             <button
               onClick={() => setMenuObert(!menuObert)}
-              style={{
-                padding: '0.6rem 1.1rem',
-                background: 'var(--accent)',
-                border: 'none', borderRadius: '8px',
-                color: '#0f1117', fontWeight: 700, fontSize: '0.9rem',
-                cursor: 'pointer', fontFamily: 'IBM Plex Sans',
-              }}
+              className="px-4 py-2.5 bg-accent hover:bg-accent-dim transition-colors border-none rounded-lg text-white font-bold text-sm cursor-pointer font-sans shadow-sm"
             >
               Accions ▾
             </button>
@@ -351,15 +337,9 @@ export default function DetallCarrega() {
               <>
                 <div
                   onClick={() => setMenuObert(false)}
-                  style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                  className="fixed inset-0 z-40"
                 />
-                <div style={{
-                  position: 'absolute', right: 0, top: '110%',
-                  background: 'var(--surface)', border: '1px solid var(--border)',
-                  borderRadius: '10px', overflow: 'hidden', zIndex: 100,
-                  minWidth: '200px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                }}>
+                <div className="absolute right-0 top-[110%] bg-surface border border-border rounded-xl overflow-hidden z-50 min-w-[200px] shadow-lg">
                   {[
                     { href: `/carrega/${full.id}/imprimir`, label: '🖨️ Imprimir', target: '_blank' },
                     { href: `/carrega/${full.id}/etiquetes`, label: '🏷️ Etiquetes càrrega' },
@@ -431,7 +411,7 @@ export default function DetallCarrega() {
         </div>
 
         {/* Info dates */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+        <div className="bg-surface border border-border rounded-xl p-5 mb-4 grid grid-cols-3 gap-3 shadow-sm">
           <div>
             <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.2rem' }}>Càrrega</div>
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{formatData(full.carrega)}</div>
@@ -450,8 +430,8 @@ export default function DetallCarrega() {
         </div>
 
         {/* Resum pollets */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Resum</div>
+        <div className="bg-surface border border-border rounded-xl p-5 mb-4 shadow-sm">
+          <div className="text-xs font-mono text-text-dim uppercase tracking-widest mb-3">Resum</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'IBM Plex Mono', color: 'var(--accent)' }}>{full.assignacions.length}</div>
@@ -482,9 +462,9 @@ export default function DetallCarrega() {
         </div>
 
         {/* Comandes */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Comandes</div>
+        <div className="bg-surface border border-border rounded-xl p-5 mb-4 shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-xs font-mono text-text-dim uppercase tracking-widest">Comandes</div>
             <button
               onClick={() => { setMostrarFormComanda(v => !v); setErrorComanda('') }}
               style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--accent)', background: mostrarFormComanda ? 'var(--accent)' : 'transparent', color: mostrarFormComanda ? '#fff' : 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
@@ -583,9 +563,9 @@ export default function DetallCarrega() {
 
         {/* Assignacions per incubadora */}
         {full.assignacions.length > 0 && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem' }}>
-            <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Assignacions ({full.assignacions.length} carros)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+            <div className="text-xs font-mono text-text-dim uppercase tracking-widest mb-3">Assignacions ({full.assignacions.length} carros)</div>
+            <div className="flex flex-col gap-3">
               {Object.entries(perIncubadora).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([num, assigs]) => {
                 const perLot: Record<number, Assignacio[]> = {}
                 for (const a of assigs) {
@@ -599,11 +579,11 @@ export default function DetallCarrega() {
                   return m1 - m2
                 })
                 return (
-                  <div key={num}>
-                    <div style={{ fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', marginBottom: '0.4rem' }}>
+                  <div key={num} className="mb-4">
+                    <div className="text-sm font-mono text-accent mb-2">
                       Incubadora {num} — {assigs[0].incubadores.model} ({assigs[0].incubadores.tipus === 'Singlestage' ? 'SS' : 'MS'})
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div className="flex flex-col gap-2">
                       {grups.map(carrosLot => {
                         const primer = carrosLot[0]
                         const lot = primer.carros_estoc.lots_reproductores
@@ -616,10 +596,10 @@ export default function DetallCarrega() {
                         const algunsManuals = carrosLot.some(c => c.previsio_manual)
                         const totsManuals = carrosLot.every(c => c.previsio_manual)
                         return (
-                          <div key={grupKey} style={{ background: 'var(--bg)', borderRadius: 8, padding: '0.5rem 0.75rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
-                              <span style={{ fontWeight: 600 }}>{granja} {lot.estirp || ''} · {carrosLot.length} carro{carrosLot.length > 1 ? 's' : ''}</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <div key={grupKey} className="bg-bg rounded-lg p-2.5">
+                            <div className="flex justify-between items-center mb-1.5 text-sm">
+                              <span className="font-semibold">{granja} {lot.estirp || ''} · {carrosLot.length} carro{carrosLot.length > 1 ? 's' : ''}</span>
+                              <span className="flex items-center gap-2.5">
                                 <button
                                   onClick={() => toggleMaquilaGrup(lot.id, incubadoraId, carrosLot.every(c => c.es_maquila))}
                                   disabled={desantMaquila}
@@ -634,11 +614,11 @@ export default function DetallCarrega() {
                                     borderRadius: '4px',
                                     cursor: desantMaquila ? 'wait' : 'pointer',
                                     background: carrosLot.every(c => c.es_maquila) ? '#f59e0b' : carrosLot.some(c => c.es_maquila) ? 'rgba(245,158,11,0.3)' : 'transparent',
-                                    color: carrosLot.every(c => c.es_maquila) ? '#0f1117' : carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--text-dim)',
+                                    color: carrosLot.every(c => c.es_maquila) ? '#ffffff' : carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--text-dim)',
                                     borderColor: carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--border)',
                                   }}
                                 >MAQ</button>
-                                <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem' }}>tot el grup:</span>
+                                <span className="text-text-dim font-mono text-xs">tot el grup:</span>
                                 {editantGrupKey === grupKey ? (
                                   <input
                                     type="number"
@@ -680,10 +660,10 @@ export default function DetallCarrega() {
                                 )}
                               </span>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <div className="flex flex-col gap-1">
                               {carrosLot.sort((c1, c2) => c1.num_carro_full - c2.num_carro_full).map(a => (
-                                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}>
-                                  <span style={{ fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', minWidth: '2rem' }}>C{a.num_carro_full}</span>
+                                <div key={a.id} className="flex justify-between items-center px-2 py-1.5 text-sm">
+                                  <span className="font-mono text-text-dim min-w-[2rem]">C{a.num_carro_full}</span>
                                   <button
                                     onClick={() => toggleMaquilaCarro(a.id, a.es_maquila)}
                                     disabled={desantMaquila}
@@ -698,12 +678,12 @@ export default function DetallCarrega() {
                                       borderRadius: '3px',
                                       cursor: desantMaquila ? 'wait' : 'pointer',
                                       background: a.es_maquila ? '#f59e0b' : 'transparent',
-                                      color: a.es_maquila ? '#0f1117' : 'var(--border)',
+                                      color: a.es_maquila ? '#ffffff' : 'var(--border)',
                                       borderColor: a.es_maquila ? '#f59e0b' : 'var(--border)',
                                       lineHeight: 1.2,
                                     }}
                                   >M</button>
-                                  <span style={{ flex: 1, marginLeft: '0.5rem', color: 'var(--text-dim)' }}>{a.carros_estoc.posta}</span>
+                                  <span className="flex-1 ml-2 text-text-dim">{a.carros_estoc.posta}</span>
                                   {editantPrevisioId === a.id ? (
                                     <input
                                       type="number"

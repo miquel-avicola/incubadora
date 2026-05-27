@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
 
-const SECRET: string = process.env.AUTH_SECRET ?? (() => { throw new Error('AUTH_SECRET no definit. Afegeix-lo a les variables d\'entorn.') })()
+// SECRET es llegeix a temps d'execució per evitar que trenqui la compilació estètica de Next.js
+function getSecret(): string {
+  const secret = process.env.AUTH_SECRET
+  if (!secret) throw new Error('AUTH_SECRET no definit. Afegeix-lo a les variables d\'entorn.')
+  return secret
+}
 
 // Client amb service_role: bypassa RLS, mai exposat al navegador
 function getServiceClient() {
@@ -13,7 +18,7 @@ function getServiceClient() {
 async function getKey(): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(SECRET),
+    new TextEncoder().encode(getSecret()),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify'],

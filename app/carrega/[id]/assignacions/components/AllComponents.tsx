@@ -269,6 +269,128 @@ export function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada
   )
 }
 
+// ── Incubadora MSP (Informatiu) ──────────────────────────────────────────────
+
+export function IncubadoraMSP({ inc, instInc, carrosLot, colocats, numCarroPerCella, onDropMSPGeneral, onClicCarroColocat, onDragStartCarro, onDragOverCell }: any) {
+  const carros: any[] = [];
+  if (instInc && instInc.carros) {
+     carros.push(...instInc.carros);
+  }
+  
+  colocats.forEach((p: any, cid: number) => {
+     if (p.incId === inc.id) {
+       const carroObj = carrosLot.find((c: any) => c.id === cid);
+       if (carroObj) {
+         carros.push({
+           ...carroObj,
+           assignacio_id: cid,
+           isNou: true,
+           posicio: p.pos,
+           zona: p.zona,
+           num_carro_full: numCarroPerCella.get(keyCell(inc.id, p.pos, p.zona)) || '?',
+           quantitat_ous: carroObj.quantitat_ous,
+           granja: nomCarroCurt(carroObj),
+           setmanes_lot: setmanesLot(carroObj.lots_reproductores.data_naixement),
+           dia_incubacio: 0,
+           num_carrega: 'Nou',
+         });
+       }
+     }
+  });
+
+  const zonesESQ: Record<'central'|'paret'|'pulsator', any[]> = { central: [], paret: [], pulsator: [] };
+  const zonesDRE: Record<'central'|'paret'|'pulsator', any[]> = { central: [], paret: [], pulsator: [] };
+  const sense: any[] = [];
+
+  carros.forEach((c: any) => {
+    if (!c.zona) {
+      sense.push(c);
+      return;
+    }
+    const z = c.zona as 'central'|'paret'|'pulsator';
+    if (c.posicio !== null && c.posicio >= 1 && c.posicio <= 2) zonesESQ[z].push(c);
+    else if (c.posicio !== null && c.posicio >= 3 && c.posicio <= 4) zonesDRE[z].push(c);
+    else sense.push(c);
+  });
+
+  return (
+    <div 
+      className="bg-bg border border-border rounded-lg p-2 transition-all"
+      onDragOver={onDragOverCell}
+      onDrop={(e) => onDropMSPGeneral(e, inc.id)}
+    >
+      <div className="flex justify-between items-center mb-1 text-sm gap-1">
+        <span className="font-semibold text-text">Inc {inc.numero} (Informativa)</span>
+        <span className="text-text-dim text-[11px]">{carros.length}/{inc.capacitat_carros}</span>
+      </div>
+      
+      <div className="text-[10px] text-text-dim mb-2 bg-surface p-1 rounded text-center border border-dashed border-border cursor-pointer">
+        Arrossega aquí per assignar a MS petita
+      </div>
+
+      <div className="grid grid-cols-[1fr_1fr_1fr_10px_1fr_1fr_1fr] gap-[2px] items-start">
+        {/* Capçaleres */}
+        <div className="text-[8px] text-[#3498db] text-center font-bold uppercase col-start-1">Paret</div>
+        <div className="text-[8px] text-[#27ae60] text-center font-bold uppercase col-start-2">Ctral</div>
+        <div className="text-[8px] text-[#e74c3c] text-center font-bold uppercase col-start-3">Puls</div>
+        
+        <div className="text-[8px] text-[#e74c3c] text-center font-bold uppercase col-start-5">Puls</div>
+        <div className="text-[8px] text-[#27ae60] text-center font-bold uppercase col-start-6">Ctral</div>
+        <div className="text-[8px] text-[#3498db] text-center font-bold uppercase col-start-7">Paret</div>
+
+        {/* Subetiqueta ESQ / DRE */}
+        <div className="text-[8px] text-text-dim text-center uppercase col-start-1 col-span-3">esq</div>
+        <div className="text-[8px] text-text-dim text-center uppercase col-start-5 col-span-3">dre</div>
+
+        <ColumnaZ carros={zonesESQ.paret} accent="#3498db" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-1" />
+        <ColumnaZ carros={zonesESQ.central} accent="#27ae60" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-2" />
+        <ColumnaZ carros={zonesESQ.pulsator} accent="#e74c3c" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-3" />
+        
+        <div className="flex items-center justify-center bg-surface rounded min-h-[40px] text-text-dim text-[10px] font-bold select-none col-start-4">
+          ×
+        </div>
+        
+        <ColumnaZ carros={zonesDRE.pulsator} accent="#e74c3c" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-5" />
+        <ColumnaZ carros={zonesDRE.central} accent="#27ae60" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-6" />
+        <ColumnaZ carros={zonesDRE.paret} accent="#3498db" onClicCarroColocat={onClicCarroColocat} onDragStartCarro={onDragStartCarro} className="col-start-7" />
+      </div>
+      
+      {sense.length > 0 && (
+        <div className="mt-2 text-[10px]">
+          <div className="text-text-dim uppercase">Sense zona ({sense.length})</div>
+          <div className="flex flex-wrap gap-1">
+            {sense.map((c: any) => (
+              <span key={c.assignacio_id} className="bg-surface border border-border rounded px-1 text-text">{c.granja || '—'}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ColumnaZ({ carros, accent, onClicCarroColocat, onDragStartCarro, className }: any) {
+  return (
+    <div className={`bg-surface rounded p-1 min-h-[50px] flex flex-col gap-1 ${className || ''}`}>
+      {carros.map((c: any) => (
+        <div key={c.assignacio_id} 
+           onClick={() => c.isNou && onClicCarroColocat(c.assignacio_id)}
+           draggable={c.isNou}
+           onDragStart={c.isNou ? (e) => onDragStartCarro(e, c.assignacio_id, null) : undefined}
+           className={`p-1 rounded text-[9px] flex flex-col gap-[1px] leading-[1.1] ${c.isNou ? 'bg-accent/20 border border-accent text-accent cursor-pointer' : 'bg-[#2a2c35] border border-[#3a3c45] text-[#e0e0e0] cursor-default'}`}
+           title={c.isNou ? "Clic per treure, arrossega per moure" : ""}
+        >
+           <div className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">{c.granja || '—'}</div>
+           <div className="flex justify-between opacity-80 text-[8px]">
+             <span>{c.num_carrega}/{c.num_carro_full}</span>
+             <span>{c.dia_incubacio}d</span>
+           </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Cel·la individual ──────────────────────────────────────────────────────
 
 interface CellProps {
@@ -294,13 +416,14 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
   const blocat = !!ocupAltre && !lliureAviat
 
   let bgClass = 'bg-surface'
-  let borderClass = 'border-dashed border-border'
+  let borderClass = 'border-dashed border-text/30 hover:border-text/50 transition-colors'
   let colorClass = 'text-text'
   let cursor = 'cursor-pointer'
 
   if (zonaClass) {
     bgClass = zonaClass === 'paret' ? 'bg-danger/10' : zonaClass === 'central' ? 'bg-surface' : 'bg-accent/10'
   }
+
   if (blocat) {
     bgClass = 'bg-bg opacity-50'
     colorClass = 'text-text'
@@ -375,8 +498,8 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
       {!blocat && (tractarComBuit || !lliureAviat) && !carroNouObj && (
         <>
           {numCarro !== undefined
-            ? <span className="text-[9px] font-semibold text-text-dim">#{numCarro}</span>
-            : <span className="text-[9px] opacity-30">{pos}</span>
+            ? <span className="text-[9px] font-bold text-text/70">#{numCarro}</span>
+            : <span className="text-[9px] font-bold text-text/50">{pos}</span>
           }
         </>
       )}

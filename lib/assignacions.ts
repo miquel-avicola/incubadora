@@ -750,11 +750,40 @@ export function suggerirAssignacioCompleta(
       const dreB = nextLotSlice(carrosAquiMS, 0, slotsDre.length)
       const esqB = nextLotSlice(carrosAquiMS, dreB.length, slotsEsq.length)
 
-      const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
-      const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
-      const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqB)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreB)))
-
-      const [esqFinal, dreFinal] = deseqA <= deseqB ? [esqA, dreA] : [esqB, dreB]
+      let esqFinal: typeof esqA, dreFinal: typeof dreA
+      
+      if (sub === 'MSP') {
+        // En MSP només volem assignar un màxim de 4 carros per càrrega.
+        // Ho farem equilibrant entre dreta i esquerra (ex: 2 i 2) fins a 4 carros.
+        const maxMsp = 4
+        // Per simplicitat, limitem la longitud total combinada a 4 en les dues opcions.
+        // Tallem els arrays mantenint l'ordre:
+        const limitA = esqA.slice(0, maxMsp)
+        const limitAdre = dreA.slice(0, maxMsp - limitA.length)
+        
+        const limitBdre = dreB.slice(0, maxMsp)
+        const limitBesq = esqB.slice(0, maxMsp - limitBdre.length)
+        
+        const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
+        const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(limitA)) - calorCostatMS(incInst, sub, 'dre', toNovs(limitAdre)))
+        const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(limitBesq)) - calorCostatMS(incInst, sub, 'dre', toNovs(limitBdre)))
+  
+        if (deseqA <= deseqB) {
+          esqFinal = limitA; dreFinal = limitAdre;
+        } else {
+          esqFinal = limitBesq; dreFinal = limitBdre;
+        }
+      } else {
+        const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
+        const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
+        const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqB)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreB)))
+  
+        if (deseqA <= deseqB) {
+          esqFinal = esqA; dreFinal = dreA;
+        } else {
+          esqFinal = esqB; dreFinal = dreB;
+        }
+      }
 
       for (let i = 0; i < esqFinal.length && i < slotsEsq.length; i++) {
         resultat.set(esqFinal[i].id, { incId: incInst.id, pos: slotsEsq[i].pos, zona: slotsEsq[i].zona })
