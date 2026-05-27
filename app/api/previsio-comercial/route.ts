@@ -236,11 +236,14 @@ export async function GET(request: Request) {
     }
   })
 
-  return NextResponse.json({
-    rang: { inici: iniciStr, fi: fiStr },
-    pollets_per_carro: polletsPerCarro,
-    n_naixements_mitjana: naixRecents?.length || 0,
-    columnes,
-    files,
-  })
+  return NextResponse.json(
+    {
+      rang: { inici: iniciStr, fi: fiStr },
+      pollets_per_carro: polletsPerCarro,
+      n_naixements_mitjana: naixRecents?.length || 0,
+      columnes,
+      files,
+    },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+  )
 }
