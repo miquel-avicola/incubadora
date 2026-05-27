@@ -542,15 +542,13 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 **Què caldria fer:** Definir període de retenció (per exemple, 12 mesos), implementar cron a Supabase Edge Function. Afegir `if (session.role !== 'admin') return 403` dins de la ruta com a defensa en profunditat.
 
-#### N-8. `app/carrega/[id]/page.tsx` és un Client Component de 743 línies amb 2 fetches client
+#### N-8. `app/carrega/[id]/page.tsx` és un Client Component de 743 línies amb 2 fetches client ✅ Resolt el 2026-05-27
 
-**Model recomanat: [Mixt]** — Decidir què queda al servidor i què al client requereix entendre les interaccions. Opus per al disseny, Sonnet per a la implementació.
+**Resolució:** Pàgina partida en Server Component + Client Component. `app/carrega/[id]/page.tsx` ara és un Server Component async que fa `Promise.all` per llegir el full (amb totes les relacions) i la llista de clients directament de Supabase, i passa les dades com a props a `app/carrega/[id]/DetallCarregaClient.tsx`. El Client Component conserva tot l'estat interactiu (editar previsió, afegir comanda, toggle maquila, finalitzar/reobrir) i crida `/api/carrega/[id]` per refrescar dades després de cada mutació. Eliminat el spinner inicial i els dos `useEffect` de càrrega de dades.
 
-**Què és:** La pàgina principal de detall de càrrega (`app/carrega/[id]/page.tsx:1-743`) és tota `'use client'`. Fa dos `useEffect` per descarregar dades (`/api/carrega/[id]` i `/api/clients-list`) i mostra un spinner. Mateix patró que vau migrar correctament per a `assignacions/page.tsx`.
+**Què era:** La pàgina principal de detall de càrrega (`app/carrega/[id]/page.tsx:1-743`) era tota `'use client'`. Feia dos `useEffect` per descarregar dades (`/api/carrega/[id]` i `/api/clients-list`) i mostrava un spinner. Mateix patró que vau migrar correctament per a `assignacions/page.tsx`.
 
-**Per què importa:** L'usuari veu un spinner 1-2 segons en cada visita. Al servidor podríeu carregar les dades en paral·lel des de Supabase i lliurar HTML llest.
-
-**Què caldria fer:** Partir en `page.tsx` (Server Component) + `DetallCarregaClient.tsx` (Client Component que rep dades per props). Carregar amb `Promise.all` les dades del full i la llista de clients al servidor.
+**Per què importa:** L'usuari veia un spinner 1-2 segons en cada visita. Al servidor es carreguen les dades en paral·lel des de Supabase i es lliura HTML llest.
 
 #### N-9. Inconsistència visual: inline styles vs Tailwind ✅ Resolt el 2026-05-27
 
@@ -596,13 +594,11 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 **Què caldria fer:** Treure la línia.
 
-#### N-14. CSP permet `'unsafe-inline'` i `'unsafe-eval'` a scripts
+#### N-14. CSP permet `'unsafe-inline'` i `'unsafe-eval'` a scripts ✅ Resolt el 2026-05-27
 
-**Què és:** `next.config.js:28`. Next.js requereix `'unsafe-inline'` per a alguns scripts d'hidratació. `'unsafe-eval'` només cal en dev.
+**Resolució:** La CSP s'ha tret de `next.config.js` (on era estàtica) i ara es genera de forma dinàmica al middleware per a cada petició. Per a cada request es crea un `nonce` únic (`crypto.randomUUID()` codificat en base64), s'afegeix a la directiva `script-src` com `'nonce-{nonce}'` i s'activa `'strict-dynamic'`. El nonce es propaga al Server Component via el header de request `x-nonce`. `'unsafe-eval'` s'inclou només en entorn de dev (necessari per al HMR de Next.js); en producció desapareix. `'unsafe-inline'` es manté com a fallback ignorat pels navegadors moderns quan hi ha nonce.
 
-**Per què importa:** Una CSP amb `'unsafe-inline'` permet executar scripts injectats inline; perd una part important de la defensa contra XSS.
-
-**Què caldria fer:** Implementar `nonce` per a scripts via middleware (Next 14 ho suporta amb una mica de feina). Treure `'unsafe-eval'` en producció.
+**Què era:** `next.config.js:28`. La CSP era estàtica i incloïa `'unsafe-inline'` i `'unsafe-eval'` sempre, sense nonce.
 
 ### 10.4. BAIX
 
@@ -641,11 +637,12 @@ Tots els 10 punts aplicats en una única sessió Sonnet 4.6:
 9. ✅ **`PUT /api/lots/[id]`** embolcallat amb `withAudit` + regex a `requiresAdmin` + singleton → `getServiceClient()` (N-1).
 10. ✅ **Cache headers `/_next/static/`** afegits a `next.config.js` (N-12).
 
-### 10.6. Pròxims passos suggerits
+### 10.6. Estat final de la revisió (2026-05-27)
 
-Resolts fins ara (N-1, N-2, N-3, N-5, N-6, N-7 parcial, N-9, N-10, N-11, N-12, N-13, N-16, N-17): totes les troballes ALT excepte N-4 (ownership checks). Les pendents més rellevants:
+Resolts: N-1, N-2, N-3, N-4, N-5, N-6, N-7 (cron retenció 12 mesos), N-8, N-9, N-10, N-11, N-12, N-13, N-14, N-16, N-17.
 
-- **N-4 (ownership):** Risc real de seguretat — un usuari autoritzat podria mutar recursos d'un altre full. Requereix helper `assertOwnership`.
-- **N-7 (retenció audit_log):** Definir política de retenció (12 mesos?) i cron de neteja per `audit_log`, similar al que s'ha fet per `login_attempts`.
-- **N-8 (Server Component càrrega):** Guany de rendiment més gran disponible — eliminar el spinner inicial de la pàgina de càrrega.
-- **N-14 (CSP nonce):** Millora de seguretat significativa però complexa d'implementar.
+Pendents menors:
+- **N-15 (documentació backups):** Escriure la política de backup i restauració de Supabase. Cap risc tècnic, purament documental.
+- **N-7 (cron `audit_log`):** Verificar manualment al dashboard de Supabase que el cron job `cleanup-audit-log` s'ha activat correctament (pg_cron + pg_net instal·lats, però no confirmat el job).
+
+La superfície de risc principal de l'app (injeccions, IDOR, autenticació, CSP, fuites de dades) ha quedat coberta.
