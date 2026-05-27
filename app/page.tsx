@@ -12,85 +12,85 @@ export default async function Home() {
   const showCarrega = role === 'carregues' || role === 'admin'
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '2rem 1.5rem' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+    <main className="bg-bg min-h-screen py-8 px-6">
+      <div className="max-w-[480px] mx-auto">
 
-        <div style={{ marginBottom: '3rem' }}>
-          <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+        <div className="mb-12">
+          <p className="text-accent font-mono text-[0.75rem] tracking-[0.15em] uppercase mb-2">
             Miquel Avícola
           </p>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+          <h1 className="text-[1.75rem] font-bold text-text m-0">
             Sala d&apos;incubació
           </h1>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="flex flex-col gap-4">
 
-          <Link href="/estoc" style={{ textDecoration: 'none' }}>
-            <div style={{ background: 'var(--accent)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📋</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0f1117', marginBottom: '0.25rem' }}>Estoc de carros</div>
-              <div style={{ fontSize: '0.85rem', color: '#3a2e00' }}>Consultar carros disponibles i registrar recepcions</div>
+          <Link href="/estoc" className="no-underline">
+            <div className="bg-accent rounded-xl p-6 cursor-pointer">
+              <div className="text-[1.5rem] mb-2">📋</div>
+              <div className="font-bold text-[1.1rem] text-[#0f1117] mb-1">Estoc de carros</div>
+              <div className="text-[0.85rem] text-[#3a2e00]">Consultar carros disponibles i registrar recepcions</div>
             </div>
           </Link>
 
           {showLots && (
-            <Link href="/lots" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🐔</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Lots de reproductores</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Gestionar lots i granges</div>
+            <Link href="/lots" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
+                <div className="text-[1.5rem] mb-2">🐔</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Lots de reproductores</div>
+                <div className="text-[0.85rem] text-text-dim">Gestionar lots i granges</div>
               </div>
             </Link>
           )}
 
           {showCarrega && (
-            <Link href="/carrega" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗓️</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Càrregues</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Gestionar fulls de càrrega i assignacions</div>
+            <Link href="/carrega" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
+                <div className="text-[1.5rem] mb-2">🗓️</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Càrregues</div>
+                <div className="text-[0.85rem] text-text-dim">Gestionar fulls de càrrega i assignacions</div>
               </div>
             </Link>
           )}
 
           {showCarrega && (
-            <Link href="/impressions" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', right: '-15px', top: '-15px', fontSize: '6rem', opacity: 0.05 }}>🖨️</div>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📄</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Documents i Impressions</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Central de generació d'etiquetes, fulls de treball i expedició</div>
+            <Link href="/impressions" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer relative overflow-hidden">
+                <div className="absolute right-[-15px] top-[-15px] text-[6rem] opacity-5">🖨️</div>
+                <div className="text-[1.5rem] mb-2">📄</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Documents i Impressions</div>
+                <div className="text-[0.85rem] text-text-dim">Central de generació d&apos;etiquetes, fulls de treball i expedició</div>
               </div>
             </Link>
           )}
 
           {role === 'admin' && (
-            <Link href="/previsio-comercial" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📅</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Previsió comercial</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Planificar pollets per client i estimar carros necessaris</div>
+            <Link href="/previsio-comercial" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
+                <div className="text-[1.5rem] mb-2">📅</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Previsió comercial</div>
+                <div className="text-[0.85rem] text-text-dim">Planificar pollets per client i estimar carros necessaris</div>
               </div>
             </Link>
           )}
 
           {role === 'admin' && (
-            <Link href="/estadistiques" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📊</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Estadístiques mensuals</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Rendiment d'incubació, fertilitat i comercialització</div>
+            <Link href="/estadistiques" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
+                <div className="text-[1.5rem] mb-2">📊</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Estadístiques mensuals</div>
+                <div className="text-[0.85rem] text-text-dim">Rendiment d&apos;incubació, fertilitat i comercialització</div>
               </div>
             </Link>
           )}
 
           {showCarrega && (
-            <Link href="/instalacions" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', cursor: 'pointer' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🏭</div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)', marginBottom: '0.25rem' }}>Instal·lacions</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>Veure carros a cada incubadora i naixedora en temps real</div>
+            <Link href="/instalacions" className="no-underline">
+              <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
+                <div className="text-[1.5rem] mb-2">🏭</div>
+                <div className="font-bold text-[1.1rem] text-text mb-1">Instal·lacions</div>
+                <div className="text-[0.85rem] text-text-dim">Veure carros a cada incubadora i naixedora en temps real</div>
               </div>
             </Link>
           )}

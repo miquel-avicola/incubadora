@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
+import { parseBody, MaquilaGrupPatchBody } from '@/lib/schemas'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,23 +18,11 @@ export const PATCH = withAudit(async (request: Request, { params }: { params: { 
     return NextResponse.json({ error: 'ID de full no vàlid' }, { status: 400 })
   }
 
-  let body: { lot_id?: number; incubadora_id?: number; es_maquila?: boolean }
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
-  }
-
-  const { lot_id, incubadora_id, es_maquila } = body
-  if (lot_id === undefined || incubadora_id === undefined || es_maquila === undefined) {
-    return NextResponse.json(
-      { error: 'Cal lot_id, incubadora_id i es_maquila' },
-      { status: 400 }
-    )
-  }
-  if (typeof es_maquila !== 'boolean') {
-    return NextResponse.json({ error: 'es_maquila ha de ser true o false' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(MaquilaGrupPatchBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { lot_id, incubadora_id, es_maquila } = parsed.data
 
   // Pas 1: trobar els carros_estoc del lot
   const { data: carros, error: errCarros } = await supabase

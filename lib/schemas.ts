@@ -190,6 +190,61 @@ export const CarregaExpedicioDeleteBody = z.object({
   expedicio_id: zId,
 })
 
+// ── Previsió comercial cell ───────────────────────────────────────────────
+
+export const PrevioCellPutBody = z.object({
+  data: zDate,
+  client_id: zId,
+  tipus: z.enum(['Pollets', 'Maquila'], {
+    errorMap: () => ({ message: "tipus ha de ser 'Pollets' o 'Maquila'" }),
+  }),
+  quantitat: z.number().int().min(0),
+})
+
+// ── Previsió recurrent ────────────────────────────────────────────────────
+
+export const PrevisioRecurrentPostBody = z.object({
+  client_id: zId,
+  dia_setmana: z.number().int().min(0).max(6),
+  tipus: z.enum(['Pollets', 'Maquila'], {
+    errorMap: () => ({ message: "tipus ha de ser 'Pollets' o 'Maquila'" }),
+  }),
+  quantitat: z.number().int().positive(),
+  observacions: z.string().max(500).nullable().optional(),
+})
+
+export const PrevisioRecurrentPatchBody = z.object({
+  quantitat: z.number().int().positive().optional(),
+  dia_setmana: z.number().int().min(0).max(6).optional(),
+  tipus: z.enum(['Pollets', 'Maquila']).optional(),
+  actiu: z.boolean().optional(),
+  observacions: z.string().max(500).nullable().optional(),
+})
+
+// ── Grup d'assignacions ───────────────────────────────────────────────────
+
+export const MaquilaGrupPatchBody = z.object({
+  lot_id: zId,
+  incubadora_id: zId,
+  es_maquila: z.boolean(),
+})
+
+export const PrevisioGrupPatchBody = z.object({
+  lot_id: zId,
+  incubadora_id: zId,
+  previsio_naixement: z.number().min(0).max(1).nullable(),
+})
+
+// ── Assignació [id] ───────────────────────────────────────────────────────
+
+export const AssignacioIdPatchBody = z.object({
+  incubadora_id: zId.optional(),
+  posicio: z.number().int().positive().optional(),
+  zona: z.enum(['central', 'paret', 'pulsator']).nullable().optional(),
+  previsio_naixement: z.number().min(0).max(1).nullable().optional(),
+  es_maquila: z.boolean().optional(),
+})
+
 // ── Assignacions de càrrega ───────────────────────────────────────────────
 
 export const CarregaAssignacionsPostBody = z.object({

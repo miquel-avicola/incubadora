@@ -97,53 +97,34 @@ export default function Lots() {
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: 'var(--text)',
-    fontSize: '0.95rem',
-    outline: 'none',
-    fontFamily: 'IBM Plex Sans',
-  }
-
-  const labelStyle = {
-    display: 'block',
-    fontSize: '0.7rem',
-    fontFamily: 'IBM Plex Mono',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase' as const,
-    color: 'var(--text-dim)',
-    marginBottom: '0.4rem',
-  }
+  const inputCls = 'w-full bg-bg border border-border rounded-lg px-4 py-3 text-text text-[0.95rem] outline-none font-sans'
+  const labelCls = 'block text-[0.7rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-[0.4rem]'
 
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+    <main className="bg-bg min-h-screen p-6">
+      <div className="max-w-[640px] mx-auto">
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-text-dim no-underline text-[1.25rem]">←</Link>
             <div>
-              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>
+              <p className="text-accent font-mono text-[0.7rem] tracking-[0.15em] uppercase m-0">
                 Gestió
               </p>
-              <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Lots de reproductores</h1>
+              <h1 className="text-[1.4rem] font-bold m-0">Lots de reproductores</h1>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex gap-2">
             <button
               onClick={() => { setMostrarFormGranja(!mostrarFormGranja); setMostrarForm(false) }}
-              style={{ padding: '0.5rem 0.75rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}
+              className="px-3 py-2 bg-surface border border-border rounded-lg text-text-dim text-[0.8rem] cursor-pointer font-sans"
             >
               + Granja
             </button>
             <button
               onClick={() => { setMostrarForm(!mostrarForm); setMostrarFormGranja(false) }}
-              style={{ padding: '0.5rem 0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}
+              className="px-3 py-2 bg-accent border-none rounded-lg text-[#0f1117] text-[0.8rem] font-bold cursor-pointer font-sans"
             >
               + Lot
             </button>
@@ -152,53 +133,52 @@ export default function Lots() {
 
         {/* Resultat */}
         {resultat && (
-          <div style={{
-            padding: '0.875rem 1rem', borderRadius: '8px', marginBottom: '1rem',
-            background: resultat.ok ? 'rgba(62,207,142,0.1)' : 'rgba(240,68,68,0.1)',
-            border: `1px solid ${resultat.ok ? 'var(--success)' : 'var(--danger)'}`,
-            color: resultat.ok ? 'var(--success)' : 'var(--danger)',
-            fontFamily: 'IBM Plex Mono', fontSize: '0.85rem',
-          }}>
+          <div className={[
+            'px-4 py-[0.875rem] rounded-lg mb-4 font-mono text-[0.85rem]',
+            resultat.ok
+              ? 'bg-success/10 border border-success text-success'
+              : 'bg-danger/10 border border-danger text-danger',
+          ].join(' ')}>
             {resultat.missatge}
           </div>
         )}
 
         {/* Formulari nova granja */}
         {mostrarFormGranja && (
-          <form onSubmit={crearGranja} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <p style={{ fontWeight: 700, margin: 0, fontSize: '0.95rem' }}>Nova granja reproductora</p>
+          <form onSubmit={crearGranja} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4">
+            <p className="font-bold m-0 text-[0.95rem]">Nova granja reproductora</p>
             <div>
-              <label style={labelStyle}>Nom oficial *</label>
-              <input value={nomGranja} onChange={e => setNomGranja(e.target.value)} required style={inputStyle} placeholder="Ex: SAMANIEGO BOTARELL" />
+              <label className={labelCls}>Nom oficial *</label>
+              <input value={nomGranja} onChange={e => setNomGranja(e.target.value)} required className={inputCls} placeholder="Ex: SAMANIEGO BOTARELL" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label style={labelStyle}>Nom informal</label>
-                <input value={nomInformal} onChange={e => setNomInformal(e.target.value)} style={inputStyle} placeholder="Ex: Botarell" />
+                <label className={labelCls}>Nom informal</label>
+                <input value={nomInformal} onChange={e => setNomInformal(e.target.value)} className={inputCls} placeholder="Ex: Botarell" />
               </div>
               <div>
-                <label style={labelStyle}>Marca oficial</label>
-                <input value={marcaOficial} onChange={e => setMarcaOficial(e.target.value)} style={inputStyle} placeholder="Ex: 1360BU" />
+                <label className={labelCls}>Marca oficial</label>
+                <input value={marcaOficial} onChange={e => setMarcaOficial(e.target.value)} className={inputCls} placeholder="Ex: 1360BU" />
               </div>
             </div>
             <div>
-              <label style={labelStyle}>Codi REGA</label>
-              <input value={codiRega} onChange={e => setCodiRega(e.target.value)} style={inputStyle} placeholder="Ex: ES0001234" />
+              <label className={labelCls}>Codi REGA</label>
+              <input value={codiRega} onChange={e => setCodiRega(e.target.value)} className={inputCls} placeholder="Ex: ES0001234" />
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setMostrarFormGranja(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Cancel·lar</button>
-              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Crear granja</button>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setMostrarFormGranja(false)} className="flex-1 py-3 bg-transparent border border-border rounded-lg text-text-dim cursor-pointer font-sans">Cancel·lar</button>
+              <button type="submit" disabled={loading} className="flex-1 py-3 bg-accent border-none rounded-lg text-[#0f1117] font-bold cursor-pointer font-sans">Crear granja</button>
             </div>
           </form>
         )}
 
         {/* Formulari nou lot */}
         {mostrarForm && (
-          <form onSubmit={crearLot} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <p style={{ fontWeight: 700, margin: 0, fontSize: '0.95rem' }}>Nou lot de reproductores</p>
+          <form onSubmit={crearLot} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4">
+            <p className="font-bold m-0 text-[0.95rem]">Nou lot de reproductores</p>
             <div>
-              <label style={labelStyle}>Granja reproductora *</label>
-              <select value={granjaId} onChange={e => setGranjaId(e.target.value)} required style={{ ...inputStyle, appearance: 'none' }}>
+              <label className={labelCls}>Granja reproductora *</label>
+              <select value={granjaId} onChange={e => setGranjaId(e.target.value)} required className={`${inputCls} appearance-none`}>
                 <option value="">Selecciona una granja...</option>
                 {granges.map(g => (
                   <option key={g.id} value={g.id}>
@@ -208,31 +188,31 @@ export default function Lots() {
                 ))}
               </select>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label style={labelStyle}>Data de naixement *</label>
-                <input type="date" value={dataNaixement} onChange={e => setDataNaixement(e.target.value)} required style={inputStyle} />
+                <label className={labelCls}>Data de naixement *</label>
+                <input type="date" value={dataNaixement} onChange={e => setDataNaixement(e.target.value)} required className={inputCls} />
               </div>
               <div>
-                <label style={labelStyle}>Estirp</label>
-                <select value={estirp} onChange={e => setEstirp(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                <label className={labelCls}>Estirp</label>
+                <select value={estirp} onChange={e => setEstirp(e.target.value)} className={`${inputCls} appearance-none`}>
                   <option value="">Cap</option>
                   <option value="Ross">Ross</option>
                   <option value="Cobb">Cobb</option>
                 </select>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setMostrarForm(false)} style={{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Cancel·lar</button>
-              <button type="submit" disabled={loading} style={{ flex: 1, padding: '0.75rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#0f1117', fontWeight: 700, cursor: 'pointer', fontFamily: 'IBM Plex Sans' }}>Crear lot</button>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setMostrarForm(false)} className="flex-1 py-3 bg-transparent border border-border rounded-lg text-text-dim cursor-pointer font-sans">Cancel·lar</button>
+              <button type="submit" disabled={loading} className="flex-1 py-3 bg-accent border-none rounded-lg text-[#0f1117] font-bold cursor-pointer font-sans">Crear lot</button>
             </div>
           </form>
         )}
 
         {/* Llista de lots */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="flex flex-col gap-3">
           {lots.length === 0 && (
-            <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem' }}>
+            <p className="text-text-dim text-center py-8 font-mono text-[0.85rem]">
               No hi ha lots registrats
             </p>
           )}
@@ -240,33 +220,21 @@ export default function Lots() {
             <div
               key={lot.id}
               onClick={() => router.push(`/lots/${lot.id}`)}
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                padding: '1rem 1.25rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer',
-                transition: 'border-color 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              className="bg-surface border border-border rounded-[10px] px-5 py-4 flex justify-between items-center cursor-pointer transition-colors duration-150 hover:border-accent"
             >
               <div>
-                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                <div className="font-semibold text-[0.95rem]">
                   {lot.granges_reproductores.nom_informal || lot.granges_reproductores.granja}
-                  {lot.estirp && <span style={{ color: 'var(--accent)', marginLeft: '0.5rem', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem' }}>{lot.estirp}</span>}
+                  {lot.estirp && <span className="text-accent ml-2 font-mono text-[0.8rem]">{lot.estirp}</span>}
                 </div>
-                <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', marginTop: '0.2rem' }}>
+                <div className="text-text-dim text-[0.8rem] font-mono mt-[0.2rem]">
                   nascut {lot.data_naixement}
-                  {lot.actiu === false && <span style={{ marginLeft: '0.5rem', color: '#ef4444' }}>[Tancat]</span>}
+                  {lot.actiu === false && <span className="ml-2 text-danger">[Tancat]</span>}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>#{lot.id}</span>
-                <span style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>→</span>
+              <div className="flex items-center gap-3">
+                <span className="text-text-dim font-mono text-[0.75rem]">#{lot.id}</span>
+                <span className="text-text-dim text-[0.9rem]">→</span>
               </div>
             </div>
           ))}

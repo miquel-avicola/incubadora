@@ -66,15 +66,8 @@ export async function POST(request: Request) {
   // Registrar l'intent (èxit o fallada)
   await supabase.from('login_attempts').insert({ ip, success: userInfo !== null })
 
-  // Neteja amortitzada: ~2% de peticions esborren entrades de més de 24h
-  if (Math.random() < 0.02) {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    supabase
-      .from('login_attempts')
-      .delete()
-      .lt('attempted_at', cutoff)
-      .then(() => {})
-  }
+  // Nota: la neteja d'entrades >24h la fa un cron diari (pg_cron).
+  // Veure: supabase/migrations/..._cleanup_cron.sql
 
   if (!userInfo) {
     return NextResponse.json({ error: 'Usuari o contrasenya incorrectes' }, { status: 401 })

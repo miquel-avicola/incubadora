@@ -64,54 +64,34 @@ export default function Recepcio() {
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '0.875rem 1rem',
-    color: 'var(--text)',
-    fontSize: '1rem',
-    outline: 'none',
-    fontFamily: 'IBM Plex Sans',
-  }
-
-  const labelStyle = {
-    display: 'block',
-    fontSize: '0.75rem',
-    fontFamily: 'IBM Plex Mono',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase' as const,
-    color: 'var(--text-dim)',
-    marginBottom: '0.5rem',
-  }
-
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+    <main className="bg-bg min-h-screen p-6">
+      <div className="max-w-[480px] mx-auto">
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <Link href="/estoc" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '1.25rem' }}>←</Link>
+        <div className="flex items-center gap-4 mb-8">
+          <Link href="/estoc" className="text-text-dim no-underline text-[1.25rem]">←</Link>
           <div>
-            <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>
+            <p className="text-accent font-mono text-[0.7rem] tracking-[0.15em] uppercase m-0">
               Recepció
             </p>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Carros d&apos;ous</h1>
+            <h1 className="text-[1.4rem] font-bold m-0">Carros d&apos;ous</h1>
           </div>
         </div>
 
         {/* Formulari */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
           {/* Lot */}
           <div>
-            <label style={labelStyle}>Lot de reproductores</label>
+            <label className="block text-[0.75rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-2">
+              Lot de reproductores
+            </label>
             <select
               value={lotId}
               onChange={e => setLotId(e.target.value)}
               required
-              style={{ ...inputStyle, background: 'var(--surface)' }}
+              className="w-full bg-surface border border-border rounded-lg px-4 py-[0.875rem] text-text text-base outline-none font-sans"
             >
               <option value="">Selecciona un lot...</option>
               {lots.map(lot => (
@@ -122,38 +102,35 @@ export default function Recepcio() {
 
           {/* Data de posta */}
           <div>
-            <label style={labelStyle}>Data de posta</label>
+            <label className="block text-[0.75rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-2">
+              Data de posta
+            </label>
             <input
               type="date"
               value={posta}
               onChange={e => setPosta(e.target.value)}
               required
-              style={inputStyle}
+              className="w-full bg-bg border border-border rounded-lg px-4 py-[0.875rem] text-text text-base outline-none font-sans"
             />
           </div>
 
           {/* Quantitat d'ous */}
           <div>
-            <label style={labelStyle}>Ous per carro</label>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <label className="block text-[0.75rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-2">
+              Ous per carro
+            </label>
+            <div className="flex gap-3">
               {['4800', '2400'].map(q => (
                 <button
                   key={q}
                   type="button"
                   onClick={() => setQuantitat(q)}
-                  style={{
-                    flex: 1,
-                    padding: '0.875rem',
-                    border: '1px solid',
-                    borderColor: quantitat === q ? 'var(--accent)' : 'var(--border)',
-                    borderRadius: '8px',
-                    background: quantitat === q ? 'rgba(240,180,41,0.1)' : 'var(--bg)',
-                    color: quantitat === q ? 'var(--accent)' : 'var(--text-dim)',
-                    fontFamily: 'IBM Plex Mono',
-                    fontSize: '1rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  className={[
+                    'flex-1 py-[0.875rem] border rounded-lg font-mono text-base font-semibold cursor-pointer',
+                    quantitat === q
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border bg-bg text-text-dim',
+                  ].join(' ')}
                 >
                   {q}
                 </button>
@@ -163,21 +140,14 @@ export default function Recepcio() {
 
           {/* Nombre de carros */}
           <div>
-            <label style={labelStyle}>Nombre de carros</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <label className="block text-[0.75rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-2">
+              Nombre de carros
+            </label>
+            <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => setNombreCarros(n => String(Math.max(1, parseInt(n) - 1)))}
-                style={{
-                  width: '3rem', height: '3rem',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
+                className="w-12 h-12 border border-border rounded-lg bg-bg text-text text-[1.5rem] cursor-pointer shrink-0"
               >−</button>
               <input
                 type="number"
@@ -186,36 +156,24 @@ export default function Recepcio() {
                 min="1"
                 max="20"
                 required
-                style={{ ...inputStyle, textAlign: 'center', fontFamily: 'IBM Plex Mono', fontSize: '1.5rem', fontWeight: 700 }}
+                className="w-full bg-bg border border-border rounded-lg px-4 py-[0.875rem] text-text text-[1.5rem] font-bold text-center font-mono outline-none"
               />
               <button
                 type="button"
                 onClick={() => setNombreCarros(n => String(Math.min(20, parseInt(n) + 1)))}
-                style={{
-                  width: '3rem', height: '3rem',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
+                className="w-12 h-12 border border-border rounded-lg bg-bg text-text text-[1.5rem] cursor-pointer shrink-0"
               >+</button>
             </div>
           </div>
 
           {/* Resultat */}
           {resultat && (
-            <div style={{
-              padding: '1rem',
-              borderRadius: '8px',
-              background: resultat.ok ? 'rgba(62,207,142,0.1)' : 'rgba(240,68,68,0.1)',
-              border: `1px solid ${resultat.ok ? 'var(--success)' : 'var(--danger)'}`,
-              color: resultat.ok ? 'var(--success)' : 'var(--danger)',
-              fontFamily: 'IBM Plex Mono',
-              fontSize: '0.9rem',
-            }}>
+            <div className={[
+              'p-4 rounded-lg font-mono text-[0.9rem]',
+              resultat.ok
+                ? 'bg-success/10 border border-success text-success'
+                : 'bg-danger/10 border border-danger text-danger',
+            ].join(' ')}>
               {resultat.missatge}
             </div>
           )}
@@ -224,19 +182,12 @@ export default function Recepcio() {
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: '100%',
-              padding: '1rem',
-              background: loading ? 'var(--border)' : 'var(--accent)',
-              color: loading ? 'var(--text-dim)' : '#0f1117',
-              border: 'none',
-              borderRadius: '10px',
-              fontSize: '1rem',
-              fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontFamily: 'IBM Plex Sans',
-              marginTop: '0.5rem',
-            }}
+            className={[
+              'w-full py-4 border-none rounded-[10px] text-base font-bold font-sans mt-2',
+              loading
+                ? 'bg-border text-text-dim cursor-not-allowed'
+                : 'bg-accent text-[#0f1117] cursor-pointer',
+            ].join(' ')}
           >
             {loading ? 'Registrant...' : `Registrar ${nombreCarros} carro${parseInt(nombreCarros) > 1 ? 's' : ''}`}
           </button>

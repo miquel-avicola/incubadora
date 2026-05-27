@@ -494,11 +494,13 @@ if (process.env.NODE_ENV === 'development' && password === '1234') {
 
 **Què caldria fer:** Crear un helper `assertOwnership(supabase, table, id, fullId)` que faci la verificació en una query barata abans de cada mutació. Aplicar-lo sistemàticament.
 
-#### N-5. Validació inline en lloc de Zod a 5 rutes mutatives
+#### N-5. Validació inline en lloc de Zod a 5 rutes mutatives ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Mecànic.
 
-**Què és:** A I-3 vam unificar amb Zod, però han quedat fora:
+**Resolució:** Afegits 6 nous schemas a `lib/schemas.ts` (`PrevioCellPutBody`, `PrevisioRecurrentPostBody`, `PrevisioRecurrentPatchBody`, `MaquilaGrupPatchBody`, `PrevisioGrupPatchBody`, `AssignacioIdPatchBody`) i aplicat `parseBody` a les 6 rutes. La lògica de negoci complexa d'`assignacions/[id]` (comprovació de col·lisions, tipus d'incubadora) es manté intacta; Zod valida únicament la forma del body d'entrada.
+
+**Què era:** A I-3 vam unificar amb Zod, però havien quedat fora:
 
 - `app/api/previsio-comercial/cell/route.ts` (PUT)
 - `app/api/previsio-recurrent/route.ts` (POST)
@@ -506,10 +508,6 @@ if (process.env.NODE_ENV === 'development' && password === '1234') {
 - `app/api/carrega/[id]/maquila-grup/route.ts` (PATCH)
 - `app/api/carrega/[id]/previsio-grup/route.ts` (PATCH)
 - `app/api/assignacions/[id]/route.ts` (PATCH)
-
-**Per què importa:** Validació inline és més fàcil d'errar i deixa passar valors `null`/`undefined` no esperats. Tenir tots els schemas al mateix lloc (`lib/schemas.ts`) també és més fàcil de revisar.
-
-**Què caldria fer:** Per a cada ruta, definir un schema a `lib/schemas.ts` i aplicar `parseBody`.
 
 #### N-6. Índexs absents a `login_attempts` i `audit_log` ✅ Resolt el 2026-05-27
 
@@ -554,15 +552,13 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 **Què caldria fer:** Partir en `page.tsx` (Server Component) + `DetallCarregaClient.tsx` (Client Component que rep dades per props). Carregar amb `Promise.all` les dades del full i la llista de clients al servidor.
 
-#### N-9. Inconsistència visual: inline styles vs Tailwind
+#### N-9. Inconsistència visual: inline styles vs Tailwind ✅ Resolt el 2026-05-27
 
 **Model recomanat: [Sonnet 4.6]** — Mecànic, pàgina a pàgina.
 
-**Què és:** `app/login/page.tsx`, `app/page.tsx`, `app/estoc/page.tsx`, `app/recepcio/page.tsx` i `app/lots/page.tsx` usen `style={{...}}` inline per a tots els elements. `AppLayout`, `assignacions` i altres usen classes Tailwind amb variables CSS (`bg-surface`, `text-text-dim`, etc.) ja definides a `globals.css` i `tailwind.config.ts`.
+**Resolució:** Migrades les 5 pàgines a classes Tailwind: `app/login/page.tsx`, `app/page.tsx`, `app/estoc/page.tsx`, `app/recepcio/page.tsx` i `app/lots/page.tsx`. Eliminats tots els `style={{...}}` inline i els objectes `inputStyle`/`labelStyle`. Ara usen `bg-surface`, `text-text-dim`, `border-border`, `bg-accent`, etc. Valors puntuals sense equivalent Tailwind (radis exactes, mides tipogràfiques específiques) es mantenen com a classes arbitràries `[valor]`.
 
-**Per què importa:** Dos sistemes paral·lels fan que canvis globals (per exemple, modificar el dark mode o afegir un mode clar) requereixen tocar 10+ fitxers i és fàcil que alguna pàgina quedi desincronitzada.
-
-**Què caldria fer:** Migrar les pàgines inline a classes Tailwind utilitzant les variables ja existents. No urgent però marca el deute.
+**Què era:** Les 5 pàgines citades usaven `style={{...}}` inline mentre la resta de l'app usava Tailwind amb variables CSS.
 
 ### 10.3. MITJÀ
 
@@ -616,17 +612,17 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 **Què caldria fer:** Documentar (a) la política de backup automàtic del pla actiu de Supabase, (b) com baixar un export periòdic manualment, (c) la prova de restauració a fer com a mínim un cop l'any.
 
-#### N-16. `lib/supabase.ts` exposa un client singleton mentre la resta crea clients locals
+#### N-16. `lib/supabase.ts` exposa un client singleton mentre la resta crea clients locals ✅ Resolt el 2026-05-27
 
-**Què és:** `app/api/lots/[id]/route.ts` importa `supabase` de `lib/supabase.ts`. La resta crea localment amb `getServiceClient()`. Cap problema funcional, però és inconsistència.
+**Resolució:** Afegit `{ auth: { persistSession: false } }` al singleton de `lib/supabase.ts`. Revertit `app/api/lots/[id]/route.ts` i `app/api/admin/auditoria/route.ts` per tornar a usar el singleton (mantenint `withAudit` i el doble check de rol que s'hi van afegir prèviament). Ara tots els 36+ route handlers usen el mateix singleton; únicament `lib/audit.ts` i `lib/auth.ts` creen clients locals.
 
-**Què caldria fer:** Convergir a un patró. El singleton és bona pràctica i estalvia creacions repetides.
+**Què era:** `app/api/lots/[id]/route.ts` importava `supabase` de `lib/supabase.ts`. La resta creava localment amb `getServiceClient()`. El singleton no tenia `persistSession: false`.
 
-#### N-17. `login_attempts` sense rotació garantida
+#### N-17. `login_attempts` sense rotació garantida ✅ Resolt el 2026-05-27
 
-**Què és:** La neteja és probabilística (2%). Si l'app rep poques peticions un dia, les entrades velles queden.
+**Resolució:** Eliminat el cleanup probabilístic (2%) de `app/api/auth/route.ts`. Creat `supabase/functions/cleanup-login-attempts/index.ts` (Edge Function Deno). Activades les extensions `pg_net` i `pg_cron` al projecte Supabase. Programat cron `0 3 * * *` via `pg_cron` que fa `POST` a l'Edge Function cada dia a les 03:00 UTC. Migració documentada a `supabase/migrations/20260527000000_cleanup_cron.sql`.
 
-**Què caldria fer:** Substituir la neteza amortitzada per un cron a Supabase Edge Function (un cop al dia).
+**Què era:** La neteja era probabilística (2%). Si l'app rebia poques peticions un dia, les entrades velles quedaven.
 
 ---
 
@@ -647,6 +643,9 @@ Tots els 10 punts aplicats en una única sessió Sonnet 4.6:
 
 ### 10.6. Pròxims passos suggerits
 
-Per importància de seguretat: **N-2 i N-1 primer**, després **N-4 (ownership)** i **N-7 (defensa en profunditat audit_log)**. Per rendiment: **N-8** és el guany més gran (eliminar el spinner inicial de la pàgina principal de càrrega). Per a la salut a llarg termini de la BD: **N-6 (índexs)** i **N-17 (cron de neteja)**.
+Resolts fins ara (N-1, N-2, N-3, N-5, N-6, N-7 parcial, N-9, N-10, N-11, N-12, N-13, N-16, N-17): totes les troballes ALT excepte N-4 (ownership checks). Les pendents més rellevants:
 
-La resta de troballes (visuals, validació inline, CSP estricta) són deute que es pot anar pagant sense pressa.
+- **N-4 (ownership):** Risc real de seguretat — un usuari autoritzat podria mutar recursos d'un altre full. Requereix helper `assertOwnership`.
+- **N-7 (retenció audit_log):** Definir política de retenció (12 mesos?) i cron de neteja per `audit_log`, similar al que s'ha fet per `login_attempts`.
+- **N-8 (Server Component càrrega):** Guany de rendiment més gran disponible — eliminar el spinner inicial de la pàgina de càrrega.
+- **N-14 (CSP nonce):** Millora de seguretat significativa però complexa d'implementar.

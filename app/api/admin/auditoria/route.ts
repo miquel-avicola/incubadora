@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
 import { verifySession } from '@/lib/auth'
-
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-}
 
 // GET /api/admin/auditoria
 // Paràmetres opcionals: user_id, path_like, from (ISO date), to (ISO date), limit (default 50), offset (default 0)
@@ -30,7 +22,6 @@ export const GET = withAudit(async (request: Request) => {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200)
   const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-  const supabase = getServiceClient()
   let query = supabase
     .from('audit_log')
     .select('id, ts, user_id, username, role, ip, method, path, payload, status_code', { count: 'exact' })

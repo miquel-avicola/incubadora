@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
+import { parseBody, PrevisioGrupPatchBody } from '@/lib/schemas'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-
-interface BodyPatch {
-  lot_id: number
-  incubadora_id: number
-  previsio_naixement: number | null
-}
 
 /**
  * PATCH /api/carrega/[id]/previsio-grup
@@ -25,33 +20,14 @@ interface BodyPatch {
 export const PATCH = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const fullId = parseInt(params.id, 10)
   if (!Number.isFinite(fullId)) {
-    return NextResponse.json({ error: 'Full no valid' }, { status: 400 })
+    return NextResponse.json({ error: 'Full no vàlid' }, { status: 400 })
   }
 
-  let body: BodyPatch
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Body JSON invalid' }, { status: 400 })
-  }
-
-  const { lot_id, incubadora_id, previsio_naixement } = body
-  if (!Number.isFinite(lot_id) || !Number.isFinite(incubadora_id)) {
-    return NextResponse.json({ error: 'Falten lot_id o incubadora_id' }, { status: 400 })
-  }
-  if (previsio_naixement !== null) {
-    if (
-      typeof previsio_naixement !== 'number' ||
-      !Number.isFinite(previsio_naixement) ||
-      previsio_naixement < 0 ||
-      previsio_naixement > 1
-    ) {
-      return NextResponse.json(
-        { error: 'previsio_naixement ha de ser un nombre entre 0 i 1, o null' },
-        { status: 400 }
-      )
-    }
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(PrevisioGrupPatchBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { lot_id, incubadora_id, previsio_naixement } = parsed.data
 
   // Trobar les assignacions del full + incubadora amb carros del lot indicat.
   // Cal el filtre carros_estoc.lot_id (join inner perque s'apliqui).

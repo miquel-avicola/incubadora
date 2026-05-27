@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
+import { parseBody, PrevioCellPutBody } from '@/lib/schemas'
 
 // PUT /api/previsio-comercial/cell
 // Body: { data: 'YYYY-MM-DD', client_id: number, tipus: 'Pollets' | 'Maquila', quantitat: number }
@@ -9,16 +10,11 @@ import { withAudit } from '@/lib/audit'
 // No permet modificar comandes reals (amb full_carrega_id).
 
 export const PUT = withAudit(async (request: Request) => {
-  const body = await request.json()
-  const { data, client_id, tipus, quantitat } = body || {}
-
-  if (!data || !client_id || !tipus) {
-    return NextResponse.json({ error: 'Falten paràmetres' }, { status: 400 })
-  }
-  if (tipus !== 'Pollets' && tipus !== 'Maquila') {
-    return NextResponse.json({ error: 'Tipus invàlid' }, { status: 400 })
-  }
-  const q = parseInt(quantitat) || 0
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(PrevioCellPutBody, raw)
+  if (!parsed.ok) return parsed.response
+  const { data, client_id, tipus, quantitat: q } = parsed.data
 
   // Buscar comanda existent (sense full_carrega_id) per a aquesta data + client + tipus
   const { data: existents, error: errBuscar } = await supabase

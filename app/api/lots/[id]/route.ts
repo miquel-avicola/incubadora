@@ -1,20 +1,11 @@
 // app/api/lots/[id]/route.ts
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-}
-
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const supabase = getServiceClient()
   const lotId = parseInt(params.id)
 
   // 1. Info del lot
@@ -57,8 +48,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     .select('carro_id, full_carrega_id, incubadores(tipus)')
     .in('carro_id', carroIds)
 
- const fullIdsSet = new Set((assignacions || []).map(a => a.full_carrega_id).filter(Boolean))
-const fullIds = Array.from(fullIdsSet)
+  const fullIdsSet = new Set((assignacions || []).map(a => a.full_carrega_id).filter(Boolean))
+  const fullIds = Array.from(fullIdsSet)
 
   // 5. Fulls de càrrega
   const { data: fulls } = fullIds.length > 0
@@ -136,7 +127,6 @@ const fullIds = Array.from(fullIdsSet)
 }
 
 export const PUT = withAudit(async (request: Request, ctx?: { params: { id: string } }) => {
-  const supabase = getServiceClient()
   const lotId = parseInt(ctx?.params?.id ?? '')
   const raw = await request.json().catch(() => null)
   if (raw === null || typeof raw.actiu !== 'boolean') {

@@ -28,35 +28,22 @@ export default function Login() {
     router.push('/')
   }
 
-  const inputStyle = {
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    color: 'var(--text)',
-    fontSize: '1rem',
-    outline: 'none',
-    fontFamily: 'IBM Plex Sans',
-    width: '100%',
-    boxSizing: 'border-box' as const,
-  }
-
   return (
-    <main style={{ background: 'var(--bg)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
-      <div style={{ width: '100%', maxWidth: 360 }}>
+    <main className="bg-bg min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-[360px]">
 
-        <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
-          <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+        <div className="mb-10 text-center">
+          <p className="text-accent font-mono text-[0.7rem] tracking-[0.15em] uppercase mb-2">
             Miquel Avícola
           </p>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+          <h1 className="text-[1.5rem] font-bold text-text m-0">
             Sala d&apos;incubació
           </h1>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label htmlFor="username" style={{ display: 'block', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+            <label htmlFor="username" className="block text-[0.7rem] font-mono text-text-dim uppercase tracking-[0.1em] mb-[0.4rem]">
               Usuari
             </label>
             <input
@@ -68,12 +55,12 @@ export default function Login() {
               autoCapitalize="none"
               autoFocus
               required
-              style={inputStyle}
+              className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text text-base outline-none font-sans box-border"
             />
           </div>
 
           <div>
-            <label htmlFor="password" style={{ display: 'block', fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+            <label htmlFor="password" className="block text-[0.7rem] font-mono text-text-dim uppercase tracking-[0.1em] mb-[0.4rem]">
               Contrasenya
             </label>
             <input
@@ -83,12 +70,12 @@ export default function Login() {
               onChange={e => setPassword(e.target.value)}
               autoComplete="current-password"
               required
-              style={inputStyle}
+              className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-text text-base outline-none font-sans box-border"
             />
           </div>
 
           {error && (
-            <div style={{ padding: '0.6rem 0.75rem', borderRadius: '6px', background: 'rgba(240,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem' }}>
+            <div className="px-3 py-[0.6rem] rounded-md bg-danger/10 border border-danger text-danger font-mono text-[0.8rem]">
               {error}
             </div>
           )}
@@ -96,18 +83,12 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            style={{
-              padding: '0.85rem',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: 700,
-              fontFamily: 'IBM Plex Sans',
-              fontSize: '1rem',
-              cursor: loading ? 'default' : 'pointer',
-              background: loading ? 'var(--border)' : 'var(--accent)',
-              color: loading ? 'var(--text-dim)' : '#0f1117',
-              marginTop: '0.25rem',
-            }}
+            className={[
+              'mt-1 py-[0.85rem] rounded-lg font-bold font-sans text-base',
+              loading
+                ? 'bg-border text-text-dim cursor-default'
+                : 'bg-accent text-[#0f1117] cursor-pointer',
+            ].join(' ')}
           >
             {loading ? 'Entrant...' : 'Entrar'}
           </button>

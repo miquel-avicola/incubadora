@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { withAudit } from '@/lib/audit'
+import { parseBody, AssignacioIdPatchBody } from '@/lib/schemas'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
-
-interface BodyPatch {
-  incubadora_id?: number
-  posicio?: number
-  zona?: ZonaMS | null
-  previsio_naixement?: number | null
-  es_maquila?: boolean
-}
 
 /**
  * Mateix "subtipus" físic d'incubadora: SS, MSG (Multistage cap 24) o MSP (cap 12).
@@ -49,12 +42,11 @@ export const PATCH = withAudit(async (request: Request, { params }: { params: { 
     return NextResponse.json({ error: "ID d'assignacio no valid" }, { status: 400 })
   }
 
-  let body: BodyPatch
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Body JSON invalid' }, { status: 400 })
-  }
+  const raw = await request.json().catch(() => null)
+  if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
+  const parsed = parseBody(AssignacioIdPatchBody, raw)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
 
   const teMoviment =
     body.incubadora_id !== undefined ||
