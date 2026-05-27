@@ -3,6 +3,10 @@ import { supabase } from '@/lib/supabase'
 import { parseBody, CarroPostBody, CarroDeleteBody } from '@/lib/schemas'
 import { withAudit } from '@/lib/audit'
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+
 export async function GET() {
   const { data, error } = await supabase
     .from('carros_estoc')

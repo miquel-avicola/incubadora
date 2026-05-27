@@ -3,7 +3,8 @@ import { AssignacionsClient } from './AssignacionsClient'
 import { calcularPrevisioFinal } from '@/lib/previsio'
 
 export const dynamic = 'force-dynamic'
-
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 export default async function AssignacionsPage({ params }: { params: { id: string } }) {
   // Fetch totes les dades en paral·lel
   const [fullRes, carrosRes, incRes, instRes] = await Promise.all([
