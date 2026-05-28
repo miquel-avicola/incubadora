@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useParams } from 'next/navigation'
 import LogoutButton from './LogoutButton'
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children, role }: { children: React.ReactNode, role?: string }) {
   const pathname = usePathname()
   const params = useParams()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -29,10 +29,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (pathname === '/login') return <>{children}</>
 
+  const isCarrega = !!carregaId
+
+  // Vista dedicada i completament aïllada pel responsable
+  if (role === 'responsable') {
+    return (
+      <div className="flex flex-col h-screen bg-bg overflow-hidden text-text font-sans">
+        <div className="h-14 bg-surface border-b border-border z-20 flex items-center justify-between px-6 shadow-sm print:hidden shrink-0">
+          <div className="font-bold text-text truncate">
+            {isCarrega ? `Càrrega #${numCarrega || carregaId}` : 'Miquel Avícola'}
+          </div>
+          <LogoutButton />
+        </div>
+        <main className="flex-1 relative overflow-y-auto pb-safe print:overflow-visible">
+          <div className="min-h-full">
+            {children}
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   // Enllaços contextuals: si estem dins d'una càrrega, mostrem els menús de la càrrega.
   // Si no, mostrem el menú global.
-  const isCarrega = !!carregaId
-  
   const navLinks = isCarrega ? [
     { name: 'Vista General', href: `/carrega/${carregaId}`, icon: '🏠' },
     { name: 'Assignacions', href: `/carrega/${carregaId}/assignacions`, icon: '📋' },
