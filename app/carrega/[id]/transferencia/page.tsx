@@ -192,7 +192,7 @@ export default function Transferencia() {
   const ousFertilsExcedits = ousFertils !== '' && parseInt(ousFertils) > 4800
 
   const inputStyle = {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
     padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
     outline: 'none', fontFamily: 'IBM Plex Sans', width: '100%',
   }
@@ -352,7 +352,7 @@ export default function Transferencia() {
 
                     <div>
                       <label style={labelStyle}>Naixedora</label>
-                      <select value={naixedoraId} onChange={e => { setNaixedoraId(e.target.value); setErrorMsg('') }} style={{ ...inputStyle, appearance: 'none' }}>
+                      <select value={naixedoraId} onChange={e => { setNaixedoraId(e.target.value); setErrorMsg('') }} style={inputStyle}>
                         <option value="">Selecciona...</option>
                         {naixedores.map(n => (
                           <option key={n.id} value={n.id}>Naixedora {n.numero} — {n.model} ({n.capacitat.toLocaleString()})</option>

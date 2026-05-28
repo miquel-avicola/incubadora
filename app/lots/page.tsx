@@ -97,7 +97,7 @@ export default function Lots() {
     }
   }
 
-  const inputCls = 'w-full bg-bg border border-border rounded-lg px-4 py-3 text-text text-[0.95rem] outline-none font-sans'
+  const inputCls = 'w-full bg-surface border border-border rounded-lg px-4 py-3 text-text text-[0.95rem] outline-none font-sans'
   const labelCls = 'block text-[0.7rem] font-mono tracking-[0.1em] uppercase text-text-dim mb-[0.4rem]'
 
   return (
@@ -178,7 +178,7 @@ export default function Lots() {
             <p className="font-bold m-0 text-[0.95rem]">Nou lot de reproductores</p>
             <div>
               <label className={labelCls}>Granja reproductora *</label>
-              <select value={granjaId} onChange={e => setGranjaId(e.target.value)} required className={`${inputCls} appearance-none`}>
+              <select value={granjaId} onChange={e => setGranjaId(e.target.value)} required className={inputCls}>
                 <option value="">Selecciona una granja...</option>
                 {granges.map(g => (
                   <option key={g.id} value={g.id}>
@@ -195,7 +195,7 @@ export default function Lots() {
               </div>
               <div>
                 <label className={labelCls}>Estirp</label>
-                <select value={estirp} onChange={e => setEstirp(e.target.value)} className={`${inputCls} appearance-none`}>
+                <select value={estirp} onChange={e => setEstirp(e.target.value)} className={inputCls}>
                   <option value="">Cap</option>
                   <option value="Ross">Ross</option>
                   <option value="Cobb">Cobb</option>

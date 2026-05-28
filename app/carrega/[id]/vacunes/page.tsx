@@ -157,7 +157,7 @@ const [dosi2, setDosi2] = useState('1')
     .reduce((s, a) => s + Math.round(a.carros_estoc.quantitat_ous * (a.previsio_naixement || 0)), 0)
 
   const inputStyle = {
-    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
+    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
     padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
     outline: 'none', fontFamily: 'IBM Plex Sans', width: '100%',
   }
@@ -280,7 +280,7 @@ const [dosi2, setDosi2] = useState('1')
 
                 <div>
                   <label style={labelStyle}>Vacuna</label>
-                  <select value={vacunaId} onChange={e => setVacunaId(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                  <select value={vacunaId} onChange={e => setVacunaId(e.target.value)} style={inputStyle}>
                     <option value="">Selecciona...</option>
                     {vacunesDisponibles.map(v => (
                       <option key={v.id} value={v.id}>{v.nom}</option>
@@ -290,7 +290,7 @@ const [dosi2, setDosi2] = useState('1')
 
                <div>
                   <label style={labelStyle}>Dosi</label>
-                  <select value={dosi} onChange={e => setDosi(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                  <select value={dosi} onChange={e => setDosi(e.target.value)} style={inputStyle}>
                     <option value="1">1 dosi</option>
                     <option value="0.5">½ dosi</option>
                   </select>
@@ -298,7 +298,7 @@ const [dosi2, setDosi2] = useState('1')
 
                 <div>
                   <label style={labelStyle}>Vacuna 2 (opcional)</label>
-                  <select value={vacunaId2} onChange={e => setVacunaId2(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                  <select value={vacunaId2} onChange={e => setVacunaId2(e.target.value)} style={inputStyle}>
                     <option value="">Cap</option>
                     {vacunesDisponibles.map(v => (
                       <option key={v.id} value={v.id}>{v.nom}</option>
@@ -309,7 +309,7 @@ const [dosi2, setDosi2] = useState('1')
                 {vacunaId2 && (
                   <div>
                     <label style={labelStyle}>Dosi vacuna 2</label>
-                    <select value={dosi2} onChange={e => setDosi2(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                    <select value={dosi2} onChange={e => setDosi2(e.target.value)} style={inputStyle}>
                       <option value="1">1 dosi</option>
                       <option value="0.5">½ dosi</option>
                     </select>

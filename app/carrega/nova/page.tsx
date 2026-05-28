@@ -431,7 +431,7 @@ export default function NovaCarrega() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div>
                 <label style={labelStyle}>Client</label>
-                <select value={clientId} onChange={e => setClientId(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
+                <select value={clientId} onChange={e => setClientId(e.target.value)} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: 'var(--text)', fontSize: '0.95rem', outline: 'none', fontFamily: 'IBM Plex Sans' }}>
                   <option value="">Selecciona un client...</option>
                   {clientsDisponibles.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                 </select>

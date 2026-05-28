@@ -286,7 +286,7 @@ export default function PrevisioComercial() {
               <select
                 value={novaClientId}
                 onChange={e => setNovaClientId(e.target.value)}
-                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
               >
                 <option value="">— Client —</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
@@ -300,7 +300,7 @@ export default function PrevisioComercial() {
               <select
                 value={novaTipus}
                 onChange={e => setNovaTipus(e.target.value as any)}
-                style={{ padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
+                style={{ padding: '0.5rem 0.6rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem' }}
               >
                 <option value="Pollets">Pollets</option>
                 <option value="Maquila">Maquila</option>
@@ -347,7 +347,7 @@ export default function PrevisioComercial() {
             />
             <button onClick={() => navegar(1)} style={btnNav}>1 set »</button>
             <button onClick={() => navegar(4)} style={btnNav}>4 set »</button>
-            <select value={setmanes} onChange={e => setSetmanes(parseInt(e.target.value))} style={{ marginLeft: '0.5rem', padding: '0.4rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem' }}>
+            <select value={setmanes} onChange={e => setSetmanes(parseInt(e.target.value))} style={{ marginLeft: '0.5rem', padding: '0.4rem 0.6rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Mono', fontSize: '0.8rem' }}>
               <option value="4">4 setmanes</option>
               <option value="8">8 setmanes</option>
               <option value="12">12 setmanes</option>

@@ -496,7 +496,7 @@ export default function Expedicions() {
     return nc !== 0 ? nc : a.num_viatge - b.num_viatge
   })
 
-  const inputClasses = "bg-bg border border-border rounded-lg p-2.5 text-text text-sm outline-none font-sans w-full focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+  const inputClasses = "bg-surface border border-border rounded-lg p-2.5 text-text text-sm outline-none font-sans w-full focus:border-accent focus:ring-1 focus:ring-accent transition-all"
   const labelClasses = "block text-[11px] mono text-text-dim uppercase tracking-wider mb-1.5"
 
   return (
@@ -672,7 +672,7 @@ export default function Expedicions() {
                 )}
 
                 <input type="text" placeholder="Cerca granja..." value={cercaDestinacio} onChange={e => setCercaDestinacio(e.target.value)} className={`${inputClasses} mb-1.5`} />
-                <select value={destinacioId} onChange={e => setDestinacioId(e.target.value)} className={`${inputClasses} appearance-none`} size={5}>
+                <select value={destinacioId} onChange={e => setDestinacioId(e.target.value)} className={inputClasses} size={5}>
                   <option value="">Selecciona destinació...</option>
                   {destinacionsFiltrades.map(d => (
                     <option key={d.id} value={d.id}>{nomDestinacio(d)}{d.poblacio ? ` — ${d.poblacio}` : ''}</option>
@@ -731,7 +731,7 @@ export default function Expedicions() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
                 <label className={labelClasses}>Transportista</label>
-                <select value={transportistaId} onChange={e => setTransportistaId(e.target.value)} className={`${inputClasses} appearance-none`}>
+                <select value={transportistaId} onChange={e => setTransportistaId(e.target.value)} className={inputClasses}>
                   <option value="">Cap / per definir</option>
                   {transportistes.map(t => <option key={t.id} value={t.id}>{t.nom}</option>)}
                 </select>
@@ -808,7 +808,7 @@ export default function Expedicions() {
                     <select
                       value={e.num_viatge ?? ''}
                       onChange={ev => actualitzarNumViatge(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
-                      className={`bg-bg border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.num_viatge ? 'text-accent font-bold' : 'text-text-dim font-normal'}`}
+                      className={`bg-surface border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.num_viatge ? 'text-accent font-bold' : 'text-text-dim font-normal'}`}
                     >
                       <option value="">—</option>
                       {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}

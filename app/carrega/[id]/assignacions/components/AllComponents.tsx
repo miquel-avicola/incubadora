@@ -34,7 +34,7 @@ export function HeaderPlan({ full, dia, setDia, pendents, total, colocats, onTor
       <div className="flex gap-3 items-center">
         <label className="text-sm text-text-dim flex items-center">
           Patró del dia:&nbsp;
-          <select value={dia} onChange={e => setDia(e.target.value as Dia)} className="px-2 py-1 text-sm bg-bg border border-border rounded text-text outline-none focus:border-accent">
+          <select value={dia} onChange={e => setDia(e.target.value as Dia)} className="px-2 py-1 text-sm bg-surface border border-border rounded text-text outline-none focus:border-accent">
             <option value="dijous">Dijous (SS · Inc 1-2 · MSP)</option>
             <option value="dilluns">Dilluns (Inc 3-6 · MSP)</option>
           </select>

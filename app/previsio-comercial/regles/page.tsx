@@ -89,7 +89,7 @@ export default function ReglesRecurrents() {
   }
 
   const inputBase: React.CSSProperties = {
-    padding: '0.5rem 0.6rem', background: 'var(--bg)', border: '1px solid var(--border)',
+    padding: '0.5rem 0.6rem', background: 'var(--surface)', border: '1px solid var(--border)',
     borderRadius: '6px', color: 'var(--text)', fontFamily: 'IBM Plex Sans', fontSize: '0.85rem', outline: 'none',
   }
 

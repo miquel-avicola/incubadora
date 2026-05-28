@@ -68,7 +68,7 @@ export default function ImpressionsHub() {
             <select 
               value={selectedId || ''} 
               onChange={e => setSelectedId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-4 py-3 text-base font-sans bg-bg border border-accent rounded-lg text-text outline-none cursor-pointer appearance-none"
+              className="w-full px-4 py-3 text-base font-sans bg-surface border border-accent rounded-lg text-text outline-none cursor-pointer"
             >
               <option value="" className="bg-slate-900 text-slate-50">— Selecciona una càrrega —</option>
               {carregues.map(c => (
