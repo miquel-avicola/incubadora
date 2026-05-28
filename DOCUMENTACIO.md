@@ -602,11 +602,29 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 
 ### 10.4. BAIX
 
-#### N-15. Sense política documentada de backup i restauració
+#### N-15. Política de backup i restauració ✅ Documentat el 2026-05-28
 
-**Què és:** El document no descriu com es fa el backup de Supabase ni el procediment de restauració.
+**Pla actiu:** Free (verificat via API). Això implica:
 
-**Què caldria fer:** Documentar (a) la política de backup automàtic del pla actiu de Supabase, (b) com baixar un export periòdic manualment, (c) la prova de restauració a fer com a mínim un cop l'any.
+- **Backups automàtics diaris**, retinguts durant **7 dies**. Supabase els fa cada nit de forma automàtica; no cal fer res.
+- **Sense Point-in-Time Recovery (PITR)**. Si passa alguna cosa avui a les 14h i el backup és de les 3h, perds les dades d'aquest matí. PITR és una funcionalitat del pla Pro (des de ~25 $/mes).
+- **Sense backups de llarga durada**. Passat el dia 8, el backup més antic desapareix.
+
+**On trobar els backups:** Dashboard de Supabase → Project `incubadora_miquel_avicola` → Settings → Backups. Des d'allà es pot fer una restauració o descarregar un fitxer `.sql`.
+
+**Export manual (recomanat fer-ne un mensual):**
+1. Ves a Dashboard → Settings → Backups → tria la data → "Download backup"
+2. O via terminal: `pg_dump "postgresql://postgres:[password]@db.uhslwgcjdiwycknvaplr.supabase.co:5432/postgres" > backup_YYYYMMDD.sql`
+3. Desa el fitxer en un lloc segur fora de Supabase (Google Drive, disc extern, etc.)
+
+**Procediment de restauració:**
+1. Crea un projecte Supabase nou (o usa el mateix si és recuperable)
+2. Dashboard → Settings → Backups → selecciona el punt de restauració → "Restore"
+3. Torna a desplegar l'app a Vercel apuntant al nou projecte (actualitza les variables d'entorn `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`)
+
+**Recomanació:** Per a una app de producció d'un negoci real, considera pujar al pla **Pro** quan el volum de dades sigui significatiu. Et dona PITR (recuperació fins al minut exacte), backups de 30 dies i suport prioritari. Ara per ara amb el Free n'hi ha prou, però és important fer exports manuals mensuals com a seguretat addicional.
+
+**Prova de restauració anual:** Un cop l'any, descarrega el backup més recent, crea un projecte Supabase de prova i comprova que les dades s'importen correctament. Això valida que el backup funciona realment quan calgui.
 
 #### N-16. `lib/supabase.ts` exposa un client singleton mentre la resta crea clients locals ✅ Resolt el 2026-05-27
 
@@ -641,8 +659,4 @@ Tots els 10 punts aplicats en una única sessió Sonnet 4.6:
 
 Resolts: N-1, N-2, N-3, N-4, N-5, N-6, N-7 (cron retenció 12 mesos), N-8, N-9, N-10, N-11, N-12, N-13, N-14, N-16, N-17.
 
-Pendents menors:
-- **N-15 (documentació backups):** Escriure la política de backup i restauració de Supabase. Cap risc tècnic, purament documental.
-- **N-7 (cron `audit_log`):** Verificar manualment al dashboard de Supabase que el cron job `cleanup-audit-log` s'ha activat correctament (pg_cron + pg_net instal·lats, però no confirmat el job).
-
-La superfície de risc principal de l'app (injeccions, IDOR, autenticació, CSP, fuites de dades) ha quedat coberta.
+Resolts tots: N-1 a N-17 (excepte N-15 que era documental). La superfície de risc principal de l'app (injeccions, IDOR, autenticació, CSP, fuites de dades) ha quedat coberta. Pendent d'acció periòdica: export manual mensual de backup (vegeu N-15).
