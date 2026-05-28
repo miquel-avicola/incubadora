@@ -49,9 +49,10 @@ interface Full {
 interface Props {
   initialFull: Full
   clients: { id: number; nom: string }[]
+  role?: string
 }
 
-export default function DetallCarregaClient({ initialFull, clients }: Props) {
+export default function DetallCarregaClient({ initialFull, clients, role }: Props) {
   const [full, setFull] = useState<Full>(initialFull)
   const [menuObert, setMenuObert] = useState(false)
   const [canviantEstat, setCanviantEstat] = useState(false)
@@ -328,9 +329,14 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                     { href: `/carrega/${full.id}/vacunes`, label: 'Pla vacunal' },
                     { href: `/carrega/${full.id}/transferencia`, label: 'Transferència' },
                     { href: `/carrega/${full.id}/naixement`, label: 'Naixement' },
-                    { href: `/carrega/${full.id}/expedicions`, label: 'Expedicions' },
+                    { href: role === 'responsable' ? `/carrega/${full.id}/expedicions/naixement` : `/carrega/${full.id}/expedicions`, label: 'Expedicions' },
                     { href: `/carrega/${full.id}/estadistiques`, label: '📊 Estadístiques' },
-                  ].map((item, i) => (
+                  ]
+                  .filter(item => {
+                    if (role !== 'responsable') return true
+                    return ['Transferència', 'Naixement', 'Expedicions'].includes(item.label)
+                  })
+                  .map((item, i) => (
                     <Link
                       key={i}
                       href={item.href}
@@ -352,38 +358,40 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                     </Link>
                   ))}
                   {/* Acció destacada: Finalitzar / Reobrir */}
-                  {full.estat === 'Finalitzat' ? (
-                    <div
-                      onClick={canviantEstat ? undefined : reobrirFull}
-                      style={{
-                        padding: '0.85rem 1rem',
-                        color: 'var(--accent)',
-                        fontSize: '0.9rem',
-                        fontWeight: 600,
-                        fontFamily: 'IBM Plex Sans',
-                        cursor: canviantEstat ? 'wait' : 'pointer',
-                        background: 'transparent',
-                        opacity: canviantEstat ? 0.5 : 1,
-                      }}
-                    >
-                      ↺ Reobrir full
-                    </div>
-                  ) : (
-                    <div
-                      onClick={canviantEstat ? undefined : finalitzarFull}
-                      style={{
-                        padding: '0.85rem 1rem',
-                        color: 'var(--success)',
-                        fontSize: '0.9rem',
-                        fontWeight: 600,
-                        fontFamily: 'IBM Plex Sans',
-                        cursor: canviantEstat ? 'wait' : 'pointer',
-                        background: 'transparent',
-                        opacity: canviantEstat ? 0.5 : 1,
-                      }}
-                    >
-                      ✓ Finalitzar full
-                    </div>
+                  {role !== 'responsable' && (
+                    full.estat === 'Finalitzat' ? (
+                      <div
+                        onClick={canviantEstat ? undefined : reobrirFull}
+                        style={{
+                          padding: '0.85rem 1rem',
+                          color: 'var(--accent)',
+                          fontSize: '0.9rem',
+                          fontWeight: 600,
+                          fontFamily: 'IBM Plex Sans',
+                          cursor: canviantEstat ? 'wait' : 'pointer',
+                          background: 'transparent',
+                          opacity: canviantEstat ? 0.5 : 1,
+                        }}
+                      >
+                        ↺ Reobrir full
+                      </div>
+                    ) : (
+                      <div
+                        onClick={canviantEstat ? undefined : finalitzarFull}
+                        style={{
+                          padding: '0.85rem 1rem',
+                          color: 'var(--success)',
+                          fontSize: '0.9rem',
+                          fontWeight: 600,
+                          fontFamily: 'IBM Plex Sans',
+                          cursor: canviantEstat ? 'wait' : 'pointer',
+                          background: 'transparent',
+                          opacity: canviantEstat ? 0.5 : 1,
+                        }}
+                      >
+                        ✓ Finalitzar full
+                      </div>
+                    )
                   )}
                 </div>
               </>
@@ -446,12 +454,14 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
         <div className="bg-surface border border-border rounded-xl p-5 mb-4 shadow-sm">
           <div className="flex justify-between items-center mb-3">
             <div className="text-xs font-mono text-text-dim uppercase tracking-widest">Comandes</div>
-            <button
-              onClick={() => { setMostrarFormComanda(v => !v); setErrorComanda('') }}
-              style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--accent)', background: mostrarFormComanda ? 'var(--accent)' : 'transparent', color: mostrarFormComanda ? '#fff' : 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
-            >
-              {mostrarFormComanda ? '× Cancel·la' : '+ Afegir comanda'}
-            </button>
+            {role !== 'responsable' && (
+              <button
+                onClick={() => { setMostrarFormComanda(v => !v); setErrorComanda('') }}
+                style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--accent)', background: mostrarFormComanda ? 'var(--accent)' : 'transparent', color: mostrarFormComanda ? '#fff' : 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+              >
+                {mostrarFormComanda ? '× Cancel·la' : '+ Afegir comanda'}
+              </button>
+            )}
           </div>
 
           {full.comandes.length === 0 && !mostrarFormComanda && (
@@ -469,11 +479,13 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>
                       {c.tipus === 'Pollets' ? `${(c.quantitat_pollets || 0).toLocaleString()} pollets` : `${(c.quantitat_ous_maquila || 0).toLocaleString()} ous maq.`}
                     </span>
-                    <button
-                      onClick={() => eliminarComanda(c.id)}
-                      title="Eliminar comanda"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '1rem', lineHeight: 1, padding: '2px 4px', borderRadius: 4 }}
-                    >×</button>
+                    {role !== 'responsable' && (
+                      <button
+                        onClick={() => eliminarComanda(c.id)}
+                        title="Eliminar comanda"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '1rem', lineHeight: 1, padding: '2px 4px', borderRadius: 4 }}
+                      >×</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -581,24 +593,26 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                             <div className="flex justify-between items-center mb-1.5 text-sm">
                               <span className="font-semibold">{granja} {lot.estirp || ''} · {carrosLot.length} carro{carrosLot.length > 1 ? 's' : ''}</span>
                               <span className="flex items-center gap-2.5">
-                                <button
-                                  onClick={() => toggleMaquilaGrup(lot.id, incubadoraId, carrosLot.every(c => c.es_maquila))}
-                                  disabled={desantMaquila}
-                                  title={carrosLot.every(c => c.es_maquila) ? 'Tots marcats MAQUILA — clica per treure' : carrosLot.some(c => c.es_maquila) ? 'Alguns MAQUILA — clica per marcar tots' : 'Clica per marcar tots com a MAQUILA'}
-                                  style={{
-                                    padding: '0.1rem 0.4rem',
-                                    fontSize: '0.65rem',
-                                    fontFamily: 'IBM Plex Mono',
-                                    fontWeight: 700,
-                                    letterSpacing: '0.05em',
-                                    border: '1px solid',
-                                    borderRadius: '4px',
-                                    cursor: desantMaquila ? 'wait' : 'pointer',
-                                    background: carrosLot.every(c => c.es_maquila) ? '#f59e0b' : carrosLot.some(c => c.es_maquila) ? 'rgba(245,158,11,0.3)' : 'transparent',
-                                    color: carrosLot.every(c => c.es_maquila) ? '#ffffff' : carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--text-dim)',
-                                    borderColor: carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--border)',
-                                  }}
-                                >MAQ</button>
+                                {role !== 'responsable' && (
+                                  <button
+                                    onClick={() => toggleMaquilaGrup(lot.id, incubadoraId, carrosLot.every(c => c.es_maquila))}
+                                    disabled={desantMaquila}
+                                    title={carrosLot.every(c => c.es_maquila) ? 'Tots marcats MAQUILA — clica per treure' : carrosLot.some(c => c.es_maquila) ? 'Alguns MAQUILA — clica per marcar tots' : 'Clica per marcar tots com a MAQUILA'}
+                                    style={{
+                                      padding: '0.1rem 0.4rem',
+                                      fontSize: '0.65rem',
+                                      fontFamily: 'IBM Plex Mono',
+                                      fontWeight: 700,
+                                      letterSpacing: '0.05em',
+                                      border: '1px solid',
+                                      borderRadius: '4px',
+                                      cursor: desantMaquila ? 'wait' : 'pointer',
+                                      background: carrosLot.every(c => c.es_maquila) ? '#f59e0b' : carrosLot.some(c => c.es_maquila) ? 'rgba(245,158,11,0.3)' : 'transparent',
+                                      color: carrosLot.every(c => c.es_maquila) ? '#ffffff' : carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--text-dim)',
+                                      borderColor: carrosLot.some(c => c.es_maquila) ? '#f59e0b' : 'var(--border)',
+                                    }}
+                                  >MAQ</button>
+                                )}
                                 <span className="text-text-dim font-mono text-xs">tot el grup:</span>
                                 {editantGrupKey === grupKey ? (
                                   <input
@@ -621,6 +635,7 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                                 ) : (
                                   <span
                                     onClick={() => {
+                                      if (role === 'responsable') return
                                       setEditantGrupKey(grupKey)
                                       setValorEditGrup(valorUniform != null ? String(Math.round(valorUniform * 1000) / 10) : '')
                                     }}
@@ -629,9 +644,9 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                                       color: totsIguals ? (totsManuals ? '#f59e0b' : 'var(--accent)') : 'var(--text-dim)',
                                       fontFamily: 'IBM Plex Mono',
                                       fontSize: '0.78rem',
-                                      cursor: 'pointer',
+                                      cursor: role === 'responsable' ? 'default' : 'pointer',
                                       userSelect: 'none',
-                                      borderBottom: totsIguals && totsManuals ? '1px dashed currentColor' : (totsIguals ? '1px dotted var(--text-dim)' : '1px dashed var(--text-dim)'),
+                                      borderBottom: role === 'responsable' ? 'none' : (totsIguals && totsManuals ? '1px dashed currentColor' : (totsIguals ? '1px dotted var(--text-dim)' : '1px dashed var(--text-dim)')),
                                     }}
                                   >
                                     {totsIguals
@@ -645,25 +660,27 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                               {carrosLot.sort((c1, c2) => c1.num_carro_full - c2.num_carro_full).map(a => (
                                 <div key={a.id} className="flex justify-between items-center px-2 py-1.5 text-sm">
                                   <span className="font-mono text-text-dim min-w-[2rem]">C{a.num_carro_full}</span>
-                                  <button
-                                    onClick={() => toggleMaquilaCarro(a.id, a.es_maquila)}
-                                    disabled={desantMaquila}
-                                    title={a.es_maquila ? 'MAQUILA — clica per treure' : 'Clica per marcar com a maquila'}
-                                    style={{
-                                      marginLeft: '0.3rem',
-                                      padding: '0.05rem 0.3rem',
-                                      fontSize: '0.6rem',
-                                      fontFamily: 'IBM Plex Mono',
-                                      fontWeight: 700,
-                                      border: '1px solid',
-                                      borderRadius: '3px',
-                                      cursor: desantMaquila ? 'wait' : 'pointer',
-                                      background: a.es_maquila ? '#f59e0b' : 'transparent',
-                                      color: a.es_maquila ? '#ffffff' : 'var(--border)',
-                                      borderColor: a.es_maquila ? '#f59e0b' : 'var(--border)',
-                                      lineHeight: 1.2,
-                                    }}
-                                  >M</button>
+                                  {role !== 'responsable' && (
+                                    <button
+                                      onClick={() => toggleMaquilaCarro(a.id, a.es_maquila)}
+                                      disabled={desantMaquila}
+                                      title={a.es_maquila ? 'MAQUILA — clica per treure' : 'Clica per marcar com a maquila'}
+                                      style={{
+                                        marginLeft: '0.3rem',
+                                        padding: '0.05rem 0.3rem',
+                                        fontSize: '0.6rem',
+                                        fontFamily: 'IBM Plex Mono',
+                                        fontWeight: 700,
+                                        border: '1px solid',
+                                        borderRadius: '3px',
+                                        cursor: desantMaquila ? 'wait' : 'pointer',
+                                        background: a.es_maquila ? '#f59e0b' : 'transparent',
+                                        color: a.es_maquila ? '#ffffff' : 'var(--border)',
+                                        borderColor: a.es_maquila ? '#f59e0b' : 'var(--border)',
+                                        lineHeight: 1.2,
+                                      }}
+                                    >M</button>
+                                  )}
                                   <span className="flex-1 ml-2 text-text-dim">{a.carros_estoc.posta}</span>
                                   {editantPrevisioId === a.id ? (
                                     <input
@@ -686,6 +703,7 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                                   ) : (
                                     <span
                                       onClick={() => {
+                                        if (role === 'responsable') return
                                         setEditantPrevisioId(a.id)
                                         setValorEditPrevisio(a.previsio_naixement != null ? String(Math.round(a.previsio_naixement * 1000) / 10) : '')
                                       }}
@@ -695,9 +713,9 @@ export default function DetallCarregaClient({ initialFull, clients }: Props) {
                                         color: a.previsio_manual ? '#f59e0b' : 'var(--text-dim)',
                                         fontFamily: 'IBM Plex Mono',
                                         fontSize: '0.72rem',
-                                        cursor: 'pointer',
+                                        cursor: role === 'responsable' ? 'default' : 'pointer',
                                         userSelect: 'none',
-                                        borderBottom: a.previsio_manual ? '1px dashed currentColor' : 'none',
+                                        borderBottom: role === 'responsable' ? 'none' : (a.previsio_manual ? '1px dashed currentColor' : 'none'),
                                       }}
                                     >
                                       {a.previsio_naixement != null ? `${Math.round(a.previsio_naixement * 1000) / 10}%` : '—'}

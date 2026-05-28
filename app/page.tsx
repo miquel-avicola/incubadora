@@ -10,6 +10,7 @@ export default async function Home() {
 
   const showLots = role === 'admin'
   const showCarrega = role === 'carregues' || role === 'admin'
+  const showCarregaList = showCarrega || role === 'responsable'
 
   return (
     <main className="bg-bg min-h-screen py-8 px-6">
@@ -44,7 +45,7 @@ export default async function Home() {
             </Link>
           )}
 
-          {showCarrega && (
+          {showCarregaList && (
             <Link href="/carrega" className="no-underline">
               <div className="bg-surface border border-border rounded-xl p-6 cursor-pointer">
                 <div className="text-[1.5rem] mb-2">🗓️</div>
