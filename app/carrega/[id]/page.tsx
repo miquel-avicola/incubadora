@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import DetallCarregaClient from './DetallCarregaClient'
+import MenuResponsable from './MenuResponsable'
 import { cookies } from 'next/headers'
 import { verifySession } from '@/lib/auth'
 
@@ -61,6 +62,10 @@ export default async function DetallCarregaPage({ params }: { params: { id: stri
   ])
 
   if (fullResult.error || !fullResult.data) notFound()
+
+  if (role === 'responsable') {
+    return <MenuResponsable full={fullResult.data as any} />
+  }
 
   return (
     <DetallCarregaClient
