@@ -10,8 +10,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const params = useParams()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  if (pathname === '/login') return <>{children}</>
-
   const carregaId = params?.id as string | undefined
 
   const [numCarrega, setNumCarrega] = useState<string | null>(null)
@@ -28,6 +26,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       setNumCarrega(null)
     }
   }, [carregaId])
+
+  if (pathname === '/login') return <>{children}</>
 
   // Enllaços contextuals: si estem dins d'una càrrega, mostrem els menús de la càrrega.
   // Si no, mostrem el menú global.
