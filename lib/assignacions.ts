@@ -544,9 +544,16 @@ export function suggerirAssignacioCompleta(
     .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
     .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
 
-  // Ordenar: primer agrupar per lot (per garantir lots consecutius a les MS),
-  // lots ordenats per la seva posta més antiga ASC (dies d'estoc DESC).
-  // Dins de cada lot, carros ordenats per posta ASC. Només carros de pollets.
+  // Ordenar el pool de pollets. Agrupar per lot (lots consecutius a les MS) i
+  // ordenar els lots per QUALITAT, PITJOR PRIMER (§2.5, §7 #12):
+  //   · Lots FORA de l'òptim 30-55 setm (dolents, tant vells >55 com joves <30)
+  //     van primer → matiners (Inc 3 / cua del patró).
+  //   · Lots dins l'òptim 30-55 van al final → Avinatur (premium).
+  //   · Dins la mateixa qualitat, per dies d'estoc (posta més antiga primer).
+  // Dins de cada lot, carros ordenats per posta ASC.
+  // NOTA: quan els lots dolents superen la capacitat de matiners, l'excés
+  // desborda cap a Avinatur — el repartiment fi per client (anticipació §2.5)
+  // encara no està implementat (vegeu §7 #12).
   const carrosOrd = (() => {
     const byLot = new Map<number, CarroEstoc[]>()
     for (const c of carrosPollets) {
@@ -557,9 +564,17 @@ export function suggerirAssignacioCompleta(
     byLot.forEach(cs => cs.sort((a, b) =>
       new Date(a.posta + 'T00:00:00').getTime() - new Date(b.posta + 'T00:00:00').getTime()
     ))
-    const lotsOrds = Array.from(byLot.values()).sort((a, b) =>
-      new Date(a[0].posta + 'T00:00:00').getTime() - new Date(b[0].posta + 'T00:00:00').getTime()
-    )
+    const esOptim = (cs: CarroEstoc[]): boolean => {
+      const setm = setmanesLot(cs[0].lots_reproductores.data_naixement)
+      return setm >= 30 && setm <= 55
+    }
+    const lotsOrds = Array.from(byLot.values()).sort((a, b) => {
+      const oa = esOptim(a), ob = esOptim(b)
+      // Dolents (no òptims) primer; òptims al final.
+      if (oa !== ob) return oa ? 1 : -1
+      // Dins la mateixa qualitat: posta més antiga primer (més dies d'estoc).
+      return new Date(a[0].posta + 'T00:00:00').getTime() - new Date(b[0].posta + 'T00:00:00').getTime()
+    })
     return lotsOrds.flat()
   })()
 
@@ -666,12 +681,35 @@ export function suggerirAssignacioCompleta(
     ordreIncs = [3, 4, 5, 6, 9, 10, 8]
   }
 
+  // ── 4b. Reserva de places per a la maquila (§2.1, §7 #13) ───────────────
+  // La maquila entra automàticament; se li han de garantir places encara que
+  // els pollets desbordin. Calculem les places noves disponibles a les MS del
+  // patró i limitem el pool de pollets a (total − maquila), deixant la cua per
+  // a la maquila.
+  const passaFiltre = (n: number): boolean => {
+    if (incsFiltrades.size === 0) return true
+    const inc = incByNumero.get(n)
+    return !!inc && incsFiltrades.has(inc.id)
+  }
+  let totalMSSlots = 0
+  for (const num of ordreIncs) {
+    if (!passaFiltre(num)) continue
+    const inc = incByNumero.get(num); if (!inc) continue
+    const sub = subtipus(inc.tipus, inc.capacitat_carros)
+    if (sub === 'SS') continue
+    const incInst = instById.get(inc.id); if (!incInst) continue
+    const nSlots = slotsDisponibles(incInst).length
+    totalMSSlots += sub === 'MSP' ? Math.min(4, nSlots) : nSlots
+  }
+  const maxPolletsMS = Math.max(0, totalMSSlots - maquilaOrd.length)
+
   // ── 5. Separar carros per SS i MS (dijous) ──────────────────────────────
   // La maquila va sempre a MS, al final (mai a la SS). En afegir-la al final
   // de poolMS, l'ompliment consecutiu la deixa a la cua del patró (dilluns
-  // últim; dijous després de la SS, a Inc 1/2/8).
+  // últim; dijous després de la SS, a Inc 1/2/8). Els pollets es limiten a
+  // maxPolletsMS perquè la maquila no quedi fora sota capacitat justa.
   let poolSS: CarroEstoc[] = []
-  let poolMS: CarroEstoc[] = [...pool, ...maquilaOrd]
+  let poolMS: CarroEstoc[] = [...pool.slice(0, maxPolletsMS), ...maquilaOrd]
 
   if (diaCarrega === 'dijous') {
     // Trobar SS disponible i quants slots té
@@ -691,8 +729,8 @@ export function suggerirAssignacioCompleta(
       )
       poolSS = poolOrdenatPerSetm.slice(0, nSlotsSS)
       const idsSS = new Set(poolSS.map(c => c.id))
-      // Maquila sempre a MS (al final), mai a la SS.
-      poolMS = [...pool.filter(c => !idsSS.has(c.id)), ...maquilaOrd]
+      // Maquila sempre a MS (al final), mai a la SS; pollets limitats per deixar-li lloc.
+      poolMS = [...pool.filter(c => !idsSS.has(c.id)).slice(0, maxPolletsMS), ...maquilaOrd]
     }
   }
 
