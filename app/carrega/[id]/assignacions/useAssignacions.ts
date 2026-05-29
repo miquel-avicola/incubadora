@@ -439,7 +439,8 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
       const polletsSug = Array.from(sug.keys()).reduce((acc, cid) => {
         const c = carrosPendents.find(x => x.id === cid)
         if (!c) return acc
-        const setm = setmanesLot(c.lots_reproductores.data_naixement)
+        // La maquila no compta per a la comanda de pollets.
+        if (c.client_maquila_id != null) return acc
         return acc + polletsCarro(c)
       }, 0)
       if (polletsSug < comandaPollets - 500) {

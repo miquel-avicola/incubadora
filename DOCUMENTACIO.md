@@ -109,7 +109,7 @@ La base de dades és el cor de l'app: tota la informació viu aquí. Està a Sup
 
 Les **taules principals** (amb una explicació planera del que guarden):
 
-**`carros_estoc`** — Cada fila és un carro físic que ha arribat de granja. Camps clau: `lot_id` (de quina posta i granja ve), `posta` (número de posta), `quantitat_ous` (normalment 4800 o 2400), `estat` (a estoc, dins màquina...), `recepcio` (data d'arribada), `entrada_incubadora` (quan ha entrat a màquina).
+**`carros_estoc`** — Cada fila és un carro físic que ha arribat de granja. Camps clau: `lot_id` (de quina posta i granja ve), `posta` (número de posta), `quantitat_ous` (normalment 4800 o 2400), `estat` (a estoc, dins màquina...), `recepcio` (data d'arribada), `entrada_incubadora` (quan ha entrat a màquina), `client_maquila_id` (NULL = carro de pollets; si té valor, és maquila d'aquell client — afegit 2026-05-29, vegeu REGLES_ASSIGNACIO.md §2.1).
 
 **`lots_reproductores`** — Cada fila és un "lot" de reproductores: una posta concreta d'una granja concreta amb una edat concreta. Camps: `estirp` (Ross, Cobb, etc.), `data_naixement` de les reproductores.
 

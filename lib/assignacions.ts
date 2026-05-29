@@ -14,6 +14,7 @@ export interface CarroEstoc {
   posta: string
   quantitat_ous: number
   estat: string
+  client_maquila_id?: number | null
   lots_reproductores: {
     id: number
     data_naixement: string
@@ -515,6 +516,28 @@ export function suggerirAssignacioCompleta(
   const instById = new Map(estatInstParam.incubadores.map(ii => [ii.id, ii]))
   const incByNumero = new Map(incs.map(i => [i.numero, i]))
 
+  // ── 0. Separar maquila de pollets ───────────────────────────────────────
+  // Els carros amb client_maquila_id són maquila: NO compten per a la comanda
+  // de pollets i es reserven places al final del patró (dilluns últim, dijous
+  // després de la SS, mai a la SS). Vegeu REGLES_ASSIGNACIO.md §2.1 i §2.8.
+  const carrosPollets = carrosPendents.filter(c => c.client_maquila_id == null)
+  const maquilaCarros = carrosPendents.filter(c => c.client_maquila_id != null)
+  // Maquila ordenada per lot (consecutiu) i posta ASC.
+  const maquilaOrd = (() => {
+    const byLot = new Map<number, CarroEstoc[]>()
+    for (const c of maquilaCarros) {
+      const lid = c.lots_reproductores.id
+      if (!byLot.has(lid)) byLot.set(lid, [])
+      byLot.get(lid)!.push(c)
+    }
+    byLot.forEach(cs => cs.sort((a, b) =>
+      new Date(a.posta + 'T00:00:00').getTime() - new Date(b.posta + 'T00:00:00').getTime()
+    ))
+    return Array.from(byLot.values())
+      .sort((a, b) => new Date(a[0].posta + 'T00:00:00').getTime() - new Date(b[0].posta + 'T00:00:00').getTime())
+      .flat()
+  })()
+
   // ── 1. Construir pool ───────────────────────────────────────────────────
   // Comanda pollets propis
   const comandaPollets = full.comandes
@@ -523,10 +546,10 @@ export function suggerirAssignacioCompleta(
 
   // Ordenar: primer agrupar per lot (per garantir lots consecutius a les MS),
   // lots ordenats per la seva posta més antiga ASC (dies d'estoc DESC).
-  // Dins de cada lot, carros ordenats per posta ASC.
+  // Dins de cada lot, carros ordenats per posta ASC. Només carros de pollets.
   const carrosOrd = (() => {
     const byLot = new Map<number, CarroEstoc[]>()
-    for (const c of carrosPendents) {
+    for (const c of carrosPollets) {
       const lid = c.lots_reproductores.id
       if (!byLot.has(lid)) byLot.set(lid, [])
       byLot.get(lid)!.push(c)
@@ -644,8 +667,11 @@ export function suggerirAssignacioCompleta(
   }
 
   // ── 5. Separar carros per SS i MS (dijous) ──────────────────────────────
+  // La maquila va sempre a MS, al final (mai a la SS). En afegir-la al final
+  // de poolMS, l'ompliment consecutiu la deixa a la cua del patró (dilluns
+  // últim; dijous després de la SS, a Inc 1/2/8).
   let poolSS: CarroEstoc[] = []
-  let poolMS: CarroEstoc[] = [...pool]
+  let poolMS: CarroEstoc[] = [...pool, ...maquilaOrd]
 
   if (diaCarrega === 'dijous') {
     // Trobar SS disponible i quants slots té
@@ -665,7 +691,8 @@ export function suggerirAssignacioCompleta(
       )
       poolSS = poolOrdenatPerSetm.slice(0, nSlotsSS)
       const idsSS = new Set(poolSS.map(c => c.id))
-      poolMS = pool.filter(c => !idsSS.has(c.id))
+      // Maquila sempre a MS (al final), mai a la SS.
+      poolMS = [...pool.filter(c => !idsSS.has(c.id)), ...maquilaOrd]
     }
   }
 

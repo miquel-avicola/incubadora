@@ -78,6 +78,7 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
         quantitat_ous,
         estat,
         recepcio,
+        client_maquila_id,
         lots_reproductores (
           id,
           data_naixement,

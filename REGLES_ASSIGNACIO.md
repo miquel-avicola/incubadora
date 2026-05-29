@@ -40,6 +40,8 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 **Implicació per al Pre-suggerit:** ha de **reservar N places** (N = ous a maquilar / capacitat, §2.6) a la zona corresponent sense necessitar carro_id ni lot; qualitat i calor són indiferents (§2.5).
 
+**Implementació (2026-05-29):** afegit el camp `carros_estoc.client_maquila_id` (bigint NULL, FK `clients`). NULL = pollets; amb valor = maquila d'aquell client. La v2 (`suggerirAssignacioCompleta`) ara separa els carros de maquila del pool de pollets (no compten per a la comanda de pollets) i els col·loca al final del patró (dilluns últim, dijous després de la SS, mai a la SS) via `poolMS = [...pollets, ...maquilaOrd]`. Pendents: (a) pantalla de **recepció** per marcar `client_maquila_id` (ara cal fer-ho per dada); (b) auto-derivar `assignacions.es_maquila` en desar a partir de `client_maquila_id` (ara encara és el pas manual `maquila-grup`).
+
 ### 2.2 Antiguitat d'estoc — límit dur 14 dies ✅
 
 ✅ **Un carro no pot superar 14 dies entre posta i entrada a incubadora.** Aquest és un límit dur per qualitat de l'ou.
