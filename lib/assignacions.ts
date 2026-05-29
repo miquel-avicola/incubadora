@@ -752,73 +752,36 @@ export function suggerirAssignacioCompleta(
       }
 
     } else {
-      // MS: un sol lot per costat, equilibri ESQ/DRE
+      // MS: ompliment CONSECUTIU sense forats (§3.4). El lot-junt es manté
+      // perquè el pool ja ve agrupat per lot i pot creuar costats i incubadores
+      // (§4.2). L'equilibri tèrmic esq/dre és preferència suau i NO reordena
+      // aquí (§4.5): mana l'ordre de camió. Substitueix la lògica antiga
+      // "un sol lot per costat", que deixava forats quan un lot omplia un
+      // costat i part de l'altre.
       const carrosAquiMS = poolMS.filter(c => !assignats.has(c.id))
       if (carrosAquiMS.length === 0) continue
 
-      // Ordre dels slots dins de cada costat: per zona (central > paret > pulsator) i,
-      // dins de la mateixa zona, per pos ASC. Així omplim primer tot el central abans
-      // de tocar el paret, i el paret abans del pulsator (només rellevant a MSP, on
-      // poden haver-hi slots a totes tres zones).
+      // Seqüència de slots: central primer, esquerra abans que dreta, pos ASC.
       const ordreZona = (z: ZonaMS | null): number => z === 'central' ? 0 : z === 'paret' ? 1 : z === 'pulsator' ? 2 : 3
-      const cmpSlots = (a: { pos: number; zona: ZonaMS | null }, b: { pos: number; zona: ZonaMS | null }) => {
+      const ordreCostat = (c: 'esq' | 'dre' | 'cap'): number => c === 'esq' ? 0 : c === 'dre' ? 1 : 2
+      const slotSeqAll = [...slots].sort((a, b) => {
         const dz = ordreZona(a.zona) - ordreZona(b.zona)
         if (dz !== 0) return dz
+        const dc = ordreCostat(a.costat) - ordreCostat(b.costat)
+        if (dc !== 0) return dc
         return a.pos - b.pos
-      }
-      const slotsEsq = slots.filter(s => s.costat === 'esq').sort(cmpSlots)
-      const slotsDre = slots.filter(s => s.costat === 'dre').sort(cmpSlots)
-      if (slotsEsq.length === 0 && slotsDre.length === 0) continue
+      })
+      if (slotSeqAll.length === 0) continue
+      // MSP: màxim 4 carros nous per càrrega (central; queda 2-2 de forma natural).
+      const slotSeq = sub === 'MSP' ? slotSeqAll.slice(0, 4) : slotSeqAll
 
-      // Opció A: primer lot → esq (fins a omplir o acabar lot), continuació → dre
-      const esqA = nextLotSlice(carrosAquiMS, 0, slotsEsq.length)
-      const dreA = nextLotSlice(carrosAquiMS, esqA.length, slotsDre.length)
-      // Opció B: primer lot → dre, continuació → esq
-      const dreB = nextLotSlice(carrosAquiMS, 0, slotsDre.length)
-      const esqB = nextLotSlice(carrosAquiMS, dreB.length, slotsEsq.length)
-
-      let esqFinal: typeof esqA, dreFinal: typeof dreA
-      
-      if (sub === 'MSP') {
-        // En MSP només volem assignar un màxim de 4 carros per càrrega.
-        // Ho farem equilibrant entre dreta i esquerra (ex: 2 i 2) fins a 4 carros.
-        const maxMsp = 4
-        // Per simplicitat, limitem la longitud total combinada a 4 en les dues opcions.
-        // Tallem els arrays mantenint l'ordre:
-        const limitA = esqA.slice(0, maxMsp)
-        const limitAdre = dreA.slice(0, maxMsp - limitA.length)
-        
-        const limitBdre = dreB.slice(0, maxMsp)
-        const limitBesq = esqB.slice(0, maxMsp - limitBdre.length)
-        
-        const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
-        const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(limitA)) - calorCostatMS(incInst, sub, 'dre', toNovs(limitAdre)))
-        const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(limitBesq)) - calorCostatMS(incInst, sub, 'dre', toNovs(limitBdre)))
-  
-        if (deseqA <= deseqB) {
-          esqFinal = limitA; dreFinal = limitAdre;
-        } else {
-          esqFinal = limitBesq; dreFinal = limitBdre;
-        }
-      } else {
-        const toNovs = (cs: CarroEstoc[]) => cs.map(c => ({ ous: c.quantitat_ous, setm: setmanesLot(c.lots_reproductores.data_naixement) }))
-        const deseqA = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqA)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreA)))
-        const deseqB = Math.abs(calorCostatMS(incInst, sub, 'esq', toNovs(esqB)) - calorCostatMS(incInst, sub, 'dre', toNovs(dreB)))
-  
-        if (deseqA <= deseqB) {
-          esqFinal = esqA; dreFinal = dreA;
-        } else {
-          esqFinal = esqB; dreFinal = dreB;
-        }
-      }
-
-      for (let i = 0; i < esqFinal.length && i < slotsEsq.length; i++) {
-        resultat.set(esqFinal[i].id, { incId: incInst.id, pos: slotsEsq[i].pos, zona: slotsEsq[i].zona })
-        assignats.add(esqFinal[i].id)
-      }
-      for (let i = 0; i < dreFinal.length && i < slotsDre.length; i++) {
-        resultat.set(dreFinal[i].id, { incId: incInst.id, pos: slotsDre[i].pos, zona: slotsDre[i].zona })
-        assignats.add(dreFinal[i].id)
+      let k = 0
+      for (const slot of slotSeq) {
+        if (k >= carrosAquiMS.length) break
+        const carro = carrosAquiMS[k]
+        resultat.set(carro.id, { incId: incInst.id, pos: slot.pos, zona: slot.zona })
+        assignats.add(carro.id)
+        k++
       }
     }
   }
