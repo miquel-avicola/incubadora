@@ -13,14 +13,15 @@ L'objectiu d'aquest document és arribar a un conjunt de regles prou complet com
 
 ## 1. Marc general
 
-El procés d'assignació té TRES decisions encadenades, i només DUES són pròpiament humanes:
+El procés d'assignació té TRES decisions encadenades humanes:
 
-1. **Selecció:** quins carros (de l'estoc) entren al full. (humà)
-2. **Mapeig a incubadora:** a quina incubadora va cada carro. (humà, derivable d'ordre temporal de naixement)
-3. **Posició dins la incubadora:** a quina posició concreta dins la incubadora va el carro. (humà a MSG/MSP, regla específica a SS)
-4. **Zona:** NO és una decisió, és estat post-rotació (vegeu §6).
+1. **Selecció:** quins carros (de l'estoc) entren al full.
+2. **Mapeig a incubadora:** a quina incubadora va cada carro (derivable d'ordre temporal de naixement).
+3. **Posició dins la incubadora:** a quina posició concreta (regla esq/dre a MS; regla de calor a SS).
 
-El Pre-suggerit ha de cobrir les passes 1, 2 i 3.
+I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
+
+**Important:** l'ordre intern absolut d'una incubadora (qui va a pos 1 vs pos 2 dins el mateix lot) NO és una regla humana — és un artefacte de l'app actual. Per a l'algorisme, n'hi ha prou amb decidir incubadora + costat (esq/dre) + lot, sense fixar posició exacta.
 
 ---
 
@@ -28,23 +29,15 @@ El Pre-suggerit ha de cobrir les passes 1, 2 i 3.
 
 ### 2.1 Maquila ✅
 
-🟡 La maquila (Nutrex i altres) **entra automàticament al full** quan hi ha comanda d'ous maquila. No se'n discuteix qualitat de lot. La quantitat de carros maquila es deriva directament dels ous a maquilar (vegeu §2.6).
+🟡 La maquila (Nutrex i altres) **entra automàticament al full** quan hi ha comanda d'ous maquila. No se'n discuteix qualitat de lot. La quantitat es deriva directament dels ous a maquilar (vegeu §2.6).
 
-**Detall operatiu:** els carros físics de maquila poden no haver arribat encara quan es planifica el full. Es reserva l'espai a la incubadora i s'omplen quan arribin. _(Pendent confirmar workflow exacte.)_
+**Detall operatiu:** els carros físics poden no haver arribat encara quan es planifica el full. Es reserva l'espai a la incubadora i s'omplen quan arribin. _(Pendent confirmar workflow exacte.)_
 
 ### 2.2 Antiguitat d'estoc — límit dur 14 dies ✅
 
-🟡 **Un carro no pot superar 14 dies entre posta i entrada a incubadora.** Aquest és un límit dur per qualitat de l'ou.
+✅ **Un carro no pot superar 14 dies entre posta i entrada a incubadora.** Aquest és un límit dur per qualitat de l'ou.
 
-**Operativament:** com que la pròxima càrrega habitualment és **3 o 4 dies més tard**, en el moment de planificar un full, **tots els carros amb posta de 10-11 dies o més han d'entrar obligatòriament** (perquè si esperen a la propera càrrega arribarien o passarien dels 14 dies).
-
-**Aplicació al full 2964 (01/06/2026, pròxima càrrega prevista +3/+4):**
-
-| Posta | Dies al 01/06 | Carros obligats d'entrar |
-|---|---|---|
-| 20/05 | 12 | 667 (La Justa) |
-| 21/05 | 11 | 692, 699 (Font Navata) |
-| 22/05 | 10 | 688 (Botarell), 673, 676 (Maxim Cobb), 669 (La Justa) |
+**Operativament:** com que la pròxima càrrega habitualment és **3 o 4 dies més tard**, **tots els carros amb posta de 10-11 dies o més han d'entrar obligatòriament** (perquè si esperen a la propera càrrega arribarien o passarien dels 14 dies).
 
 ### 2.3 Qualitat del lot — capa estructural per edat ✅
 
@@ -54,24 +47,15 @@ El Pre-suggerit ha de cobrir les passes 1, 2 i 3.
 - **30-55 setm:** zona òptima.
 - **>55 setm:** generalment problemes sanitaris.
 
-**Aplicació al full 2964:**
+### 2.4 Qualitat del lot — capa empírica observada ✅
 
-| Lot | Granja (informal) | Setm. | Categoria a priori |
-|---|---|---|---|
-| 8 | Barberà | 55 | **Bo** (al límit superior, encara dins l'òptim) |
-| 9 | Maxim Ross | 53-54 | **Bo** |
-| 10 | Font Navata | 53-54 | **Bo** |
-| 2 | Botarell | 62-63 | Dolent (passa de 55) |
-| 3 | Maxim Cobb | 59 | Dolent (passa de 55) |
-| 4 | La Justa | 59-60 | Dolent (passa de 55) |
-
-### 2.4 Qualitat del lot — capa empírica observada 🟡
-
-🟡 La classificació estructural per edat es **reajusta a posteriori** segons els resultats observats:
+✅ La classificació estructural per edat es **reajusta a posteriori** segons els resultats observats:
 
 - Si veig que els **pollets que neixen avui d'un lot són dolents**, baixa la categoria del lot.
 - Si un lot està generant **molts ous explosius**, baixa la categoria.
 - Si un lot dins el rang d'edat òptima té igualment mals resultats, també baixa.
+
+**Dada observada (2026-05-28):** els últims carros de **Maxim Cobb i Botarell van donar prop d'un 73% d'eclosió** (vs ~85% esperat). Aquesta dada activa la capa empírica i justifica el +1 carro de marge per als pollets d'Avinatur a la càrrega 2964 (vegeu §2.7).
 
 **Implicació tècnica:** podríem automatitzar aquesta capa amb mètriques calculables des de la BD:
 
@@ -79,36 +63,39 @@ El Pre-suggerit ha de cobrir les passes 1, 2 i 3.
 - `% eclosió` = `resultats_naix.pollets_nascuts` / ous fèrtils vacunats
 - `% pollets descartats` per qualitat
 
-❓ Pendent: definir mètrica i llindar exacte per a la "rebaixa empírica" (ex.: si el % d'eclosió mitjana dels darrers 2-3 fulls està >X punts per sota de la previsió, llavors el lot baixa una categoria).
+❓ Pendent: definir mètrica i llindar exacte per a la "rebaixa empírica" (per exemple: si % d'eclosió mitjana dels darrers 2-3 fulls està >5 punts per sota de la previsió, llavors el lot baixa una categoria).
 
-### 2.5 Qualitat-client ✅
+### 2.5 Qualitat-client (SOFT, modulable) ✅
 
-✅ **Els clients premium reben lots bons; els clients matiners reben lots dolents; la maquila és independent.**
+✅ **Hi ha una preferència de quins lots reben quins clients, però NO és una regla estricta.**
 
-| Categoria | Clients (dilluns) | Clients (dijous) | Qualitat lot |
+| Categoria | Clients (dilluns) | Clients (dijous) | Qualitat lot preferent |
 |---|---|---|---|
 | Premium | Avinatur | — | Bons |
 | Matiners | Pinsos del Segre, Aves Gil, Florida, GUCO | Pondex (SS) | Dolents (o el que toqui per antiguitat) |
 | Maquila | Nutrex | Nutrex, Sanco | Indiferent / el que sobri |
 
-❓ Pendent: confirmar la classificació de Sanco al dijous (sembla repartit entre lots disponibles).
+✅ **Excepció per anticipació d'estoc:** quan a l'estoc hi ha massa carros que s'acumulen i podrien arribar al límit de 14 dies a la propera càrrega, **s'evacua una part al client premium** per evitar problemes futurs. L'estratègia mira la càrrega actual + la càrrega següent, no només la d'ara.
+
+**Exemple real (càrrega 2964):** Avinatur reb ~15.000 pollets de Botarell (4 carros) tot i ser un client premium. Decisió presa perquè el dijous 04/06 hi haurà massa carros Botarell vells si no se n'entren ara.
+
+❓ Pendent: confirmar classificació de Sanco al dijous (sembla repartit entre lots disponibles).
 
 ### 2.6 Càlcul de quantitat — "places" i previsió d'eclosió ✅
 
 ✅ **1 carro = 1 plaça** a la incubadora, independentment de si el carro va mig ple o sencer. Un carro mig (≈2.400 ous) ocupa el mateix que un sencer (4.800 ous).
 
-🟡 **La quantitat de carros per cobrir una comanda de pollets depèn de la previsió d'eclosió esperada per als lots assignats.** No és aritmètica fixa.
+✅ **La quantitat de carros per cobrir una comanda de pollets depèn de la previsió d'eclosió esperada per als lots assignats.** No és aritmètica fixa.
 
-Exemple full 2964 — Avinatur 92.000 pollets amb lots bons (Maxim Ross, Font Navata, Barberà):
-
-- A 85% eclosió efectiva → 4.080 pollets útils/carro → 22,5 → **23 carros**
-- A 90% → 4.320 pollets/carro → 21,3 → **22 carros**
-
-L'Enric va decidir 23 carros "depenent de la previsió". 🔍 Probablement consulta mentalment el rendiment històric d'aquests lots a `previsio_referencia`.
+🟡 **Marge de seguretat:** si els lots assignats tenen indicis empírics de qualitat baixa (vegeu §2.4), s'afegeix **+1 carro** per cobrir possibles sorpreses (no arribar al volum compromès).
 
 ### 2.7 Lots a treure preferent (saturació d'estoc) ✅
 
 ✅ **Dins els lots "dolents", es prioritza posar els carros més vells** per buidar estoc i evitar arribar al límit dels 14 dies en futures càrregues.
+
+✅ **Si un lot dolent es pot reduir més enllà del estrictament necessari per evitar problemes futurs, es redueix** (regla d'anticipació, vegeu §2.5).
+
+🟡 **Selecció dins un grup de mateixa antiguitat:** quan dins un mateix lot dolent hi ha carros amb la mateixa data de posta i no calen tots, l'elecció entre ells és arbitrària. L'algorisme pot triar per ordre de carro_id o el primer disponible.
 
 ---
 
@@ -157,20 +144,15 @@ No és obligatori posar maquila a Inc 8 dilluns. Si Avinatur omple fins a Inc 6 
 
 ✅ Quan un full és **només MS** (cas dilluns), la relació incubadora ↔ naixedora és **fixa**, en l'ordre temporal del patró: carros 1-8 (Inc 3) → naixedora 1, carros 9-16 (Inc 4) → naixedora 2, etc.
 
-🔍 La capacitat de cada naixedora varia (Xstreamer 8 = 8 carros, Xstreamer 4 / Vision 4 = 4 carros), de manera que el mapeig real és:
-
-- 1-8 (Inc 3) → N1 (capacitat 8)
-- 9-12 (Inc 4 parcial) → N2 (capacitat 4)
-- 13-16 (Inc 4 parcial) → N3 (capacitat 4)
-- ... etc.
+🔍 La capacitat de cada naixedora varia (Xstreamer 8 = 8 carros, Xstreamer 4 / Vision 4 = 4 carros).
 
 ❓ Pendent: confirmar mapeig exacte incubadora MS → naixedores i validar contra `transferencies` històriques.
 
 ### 3.6 Camions compartits ✅
 
-✅ **Una mateixa expedició (camió, viatge) pot agrupar comandes de clients diferents.** Exemple full 2964: Aves Gil i Pinsos del Segre comparteixen camió, per tant l'ordre intern dins Inc 3 entre aquestes dues comandes és **irrellevant**.
+✅ **Una mateixa expedició (camió, viatge) pot agrupar comandes de clients diferents.** Exemple càrrega 2964: Aves Gil i Pinsos del Segre comparteixen camió.
 
-La unitat operativa no és "client" sinó "camió/viatge". Caldria veure si el motor d'expedicions ja contempla això (`expedicions.num_viatge`?).
+La unitat operativa real és "camió/viatge", no "client". L'app actual ja contempla això amb `expedicions.num_viatge`.
 
 ---
 
@@ -178,29 +160,41 @@ La unitat operativa no és "client" sinó "camió/viatge". Caldria veure si el m
 
 ### 4.1 Esq/dre estricta per posició ✅
 
-✅ **MSG** — pos 1-4 = costat **esquerra**, pos 5-8 = costat **dreta**. Sempre. La posició concreta dins un costat és indiferent.
+✅ **MSG** — pos 1-4 = costat **esquerra**, pos 5-8 = costat **dreta**. Sempre.
 
 ✅ **MSP** — pos 1-2 = esquerra, pos 3-4 = dreta.
 
-### 4.2 Lot-junt + creuament de límit ✅
+**Important:** la posició concreta dins un mateix costat (per exemple, pos 1 vs pos 2 vs pos 3 vs pos 4) **no és una regla humana** — és arbitrària / decidida per l'app.
 
-✅ **Els carros del mateix lot reproductor han d'anar consecutius físicament dins la incubadora.** No es pot alternar (no Botarell, Palau, Botarell).
+### 4.2 Lot-junt — pot creuar incubadores i clients ✅
 
-✅ **Un lot SÍ pot creuar el límit esq/dre** sense problema. Exemple: 5 carros Botarell + 3 Palau a Inc 5 → Botarell pos 1-5 (esq sencera + primer dre), Palau pos 6-8.
+✅ **Els carros del mateix lot reproductor han d'anar consecutius físicament.** No es pot alternar.
 
-❓ Pendent: què passa si un lot té més de 8 carros (no cap a una sola MSG). Exemple del propi 2964: Maxim Ross té 11 carros disponibles → se'n posen 8 a Inc 4 + 3 a Inc 5. Es parteix per ordre temporal d'incubadora; els 3 restants van junts al següent contenidor.
+✅ **El lot pot creuar el límit esq/dre** d'una mateixa incubadora.
+
+✅ **El lot pot creuar entre INCUBADORES consecutives.** Exemple càrrega 2964: el lot 9 Maxim Ross ocupa 4 carros a Inc 5 + 4 carros a Inc 6 (continuat).
+
+✅ **El lot pot creuar entre CLIENTS.** Exemple càrrega 2964: el lot 2 Botarell ocupa pos 6-8 d'Inc 3 (matiners: Pinsos/Aves Gil) + pos 9-12 d'Inc 4 (Avinatur). El lot mai es trenca, encara que el costo sigui repartir el lot entre clients amb diferent qualitat-preferent.
+
+**Jerarquia de regles d'agrupació (de més a menys forta):**
+
+1. **Lot-junt:** estricta. Mai es trenca.
+2. **Qualitat-client (§2.5):** preferència, modulable per anticipació d'estoc.
+3. **Client-junt (§4.4):** preferència suau, només quan no entra en conflicte amb la lot-junt ni amb ompliment de places sense forats grans.
 
 ### 4.3 Equilibri de costats a MSP ✅
 
 ✅ **MSP no s'omple sempre del tot.** Quan no es té els 4 carros, l'objectiu és **equilibrar costats**: no 3-0, sinó 2-1; no 2-0, sinó 1-1.
 
-✅ **Per N<4 carros, 2-1 i 1-2 són indiferents** (sense preferència esq/dre).
+✅ **Per N<4 carros, esq/dre és indiferent** (sense preferència).
 
-### 4.4 Client-junt ✅
+### 4.4 Client-junt (preferència suau) ✅
 
-✅ **Una comanda d'un mateix client no s'esquitlla entre incubadores si es pot evitar.** És preferible deixar alguna posició buida per mantenir el client agrupat.
+✅ **Una comanda d'un mateix client no s'esquitlla entre incubadores si es pot evitar i no hi entra en conflicte amb lot-junt.**
 
-Exemple full 2964: en lloc de posar 1 carro Nutrex a pos 32 (Inc 6) + 3 a Inc 9, es deixa pos 32 buida i s'agrupen els 4 Nutrex sencers a Inc 9 (2-2).
+Aquesta regla és **dèbil** comparada amb lot-junt. Si un lot llarg encaixa entre dos clients, el lot-junt guanya i el client-junt es trenca.
+
+Exemple càrrega 2964: 4 Nutrex tots a Inc 9 (2-2) i Inc 6 pos 32 buida, perquè és una comanda petita que cap sencera en una sola incubadora.
 
 ---
 
@@ -210,8 +204,8 @@ Exemple full 2964: en lloc de posar 1 carro Nutrex a pos 32 (Inc 6) + 3 a Inc 9,
 
 ✅ A la **Singlestage** la posició física dins la incubadora es decideix per la **calor metabòlica que produeix cada lot** durant la incubació, **no** per quin client la rebrà.
 
-- **Pulsator i paret** (posicions extremes, pos 1-8 i 17-24): lots que produeixen **més calor** (joves, vigorosos, bons).
-- **Central** (posicions del mig, pos 9-16): lots que produeixen **menys calor** (vells, menys vigorosos, dolents).
+- **Pulsator i paret** (pos extremes, 1-8 i 17-24): lots que produeixen **més calor** (joves, vigorosos, bons).
+- **Central** (pos del mig, 9-16): lots que produeixen **menys calor** (vells, menys vigorosos, dolents).
 
 ### 5.2 El carro 2 = ovoscan ✅
 
@@ -219,19 +213,9 @@ Exemple full 2964: en lloc de posar 1 carro Nutrex a pos 32 (Inc 6) + 3 a Inc 9,
 
 Sempre s'hi posa **el lot que produeix més calor**, perquè així el sensor detecta temperatura alta → el sistema no escalfa → la incubadora es manté el més freda possible, evitant sobreescalfar els lots calorosos d'altres posicions.
 
-🔍 _Hipòtesi tècnica:_ si el carro 2 fos un lot fred, el sensor donaria temperatura baixa, el sistema escalfaria, i els lots calorosos d'altres posicions es sobreescalfarien.
-
 ### 5.3 Assignació a naixedora — desconnectada de la posició física ✅
 
 ✅ A la SS, **els carros es distribueixen a les naixedores per LOT**, no per posició física. Tots els carros d'un mateix lot van junts a les seves naixedores corresponents, encara que físicament a la SS estiguin dispersos.
-
-**Exemple articulat per l'Enric:** SS amb 12 carros lot bo (pos 1-8 i 17-24) + 8 carros lot dolent (pos 9-16):
-
-- Naixedores N1 (carros 1-8) + N2 (carros 17-20) + N3 (carros 21-24) → 12 carros del lot bo.
-- Nutrex (maquila) entremig.
-- N4 (carros 9-12) + N5 (carros 13-16) → 8 carros del lot dolent.
-
-Ordre temporal de naixement: lot bo primer, maquila al mig, lot dolent al final. **Cada lot agrupat a la sortida.**
 
 ❓ Pendent: detallar com es classifiquen els lots per calor (criteri exacte; suposem joves=calorosos, vells=freds, però pot tenir matisos).
 
@@ -244,9 +228,9 @@ Ordre temporal de naixement: lot bo primer, maquila al mig, lot dolent al final.
 Implicacions per a l'algorisme:
 
 - El Pre-suggerit **no ha de triar zona**.
-- El que sí decideix l'usuari (i per tant l'algorisme) és **incubadora** i **posició dins la incubadora**.
+- El que sí decideix l'usuari (i per tant l'algorisme) és **incubadora** i **costat (esq/dre)** dins la incubadora.
 
-**Evidència:** als fulls amb zona desada, totes les MSG d'un mateix full tenen la mateixa zona; varia amb l'antiguitat del full (recents → central; antics → pulsator). Compatible amb rotació d'unes ~10 dies per zona.
+**Evidència:** al full real 2964 acabat d'entrar (01/06), totes les MSG estan a zona `central`. Coherent amb la teoria de rotació: el full més fresc va a central.
 
 ❓ Pendent: confirmar (a) durada exacta de cada fase, (b) si la rotació és automàtica/física o algú la registra manualment, (c) què passa si un carro entra "tard" en un cicle ja començat.
 
@@ -254,14 +238,15 @@ Implicacions per a l'algorisme:
 
 ## 7. Preguntes obertes
 
-1. ❓ Sanco al dijous: criteri de qualitat de lot (premium, matiner o "el que queda"?). Sembla que ocupa la cua del full (després de Pondex i Nutrex).
-2. ❓ Workflow de maquila quan els carros físics no han arribat encara: com es reserva l'espai operativament? Com es liguen els carros físics al full quan arriben?
-3. ❓ Capa empírica de qualitat: definir mètrica concreta i llindar (% eclosió desviada de previsió, % explosius).
-4. ❓ Lot >8 carros: com es decideix per quina incubadora es comença i en quina ordre es parteix.
-5. ❓ Mapeig exacte incubadora MS → naixedores (capacitats variables N1=8, N2-N5=4...).
-6. ❓ Criteri exacte de classificació "calorós/fred" per a la SS. La sospita actual és edat (joves=calorosos), però pot haver-hi més factors.
-7. ❓ Pondex al dijous (SS): com es decideix la qualitat dels lots que ocupen la SS si l'únic client és Pondex (no hi ha "premium vs matiner" intern).
-8. ❓ Si tots els lots disponibles són >55 setm (escenari de pic), com es prioritza per als clients premium? Es donen els "menys dolents"?
+1. ❓ Sanco al dijous: criteri de qualitat de lot. Sembla que ocupa la cua del full.
+2. ❓ Workflow de maquila quan els carros físics no han arribat encara.
+3. ❓ Capa empírica: mètrica i llindar concret per a la rebaixa.
+4. ❓ Lot >8 carros: criteri exacte de com es parteix entre incubadores (en quina ordre i per quin costat es comença).
+5. ❓ Mapeig exacte incubadora MS → naixedores amb capacitats variables.
+6. ❓ Criteri exacte de classificació "calorós/fred" per a la SS.
+7. ❓ Pondex al dijous (SS): com es decideix qualitat dels lots si l'únic client és Pondex.
+8. ❓ Si tots els lots disponibles són >55 setm (escenari pic), com es prioritza.
+9. ❓ Algorisme de pre-càlcul d'estoc-anticipat (regla d'anticipació §2.5): com saber automàticament quan toca evacuar dolents al premium per evitar saturació futura.
 
 ---
 
@@ -271,35 +256,72 @@ No utilitzable per a regles de zona/posició perquè les assignacions tenen aque
 
 ## Annex B — Cas analitzat: Full 2956 (4/mai/2026, dilluns)
 
-40 assignacions: 32 MSG + 8 MSP. Tots els carros MSG estan a zona `pulsator` (compatible amb rotació de ~28 dies). Distribució:
+40 assignacions: 32 MSG + 8 MSP. Tots els carros MSG estan a zona `pulsator`. Inc 5 mostra el cas del lot que creua esq/dre (5 Botarell pos 1-5, 3 Maxim Cobb pos 6-8). Inc 9 i 10 amb ompliment desigual (1 i 7-8 carros) → exemple d'ompliment consecutiu §3.4.
 
-- Inc 3 (#1–8): 8 carros Botarell Ross, posta 26-27/abr (lot 59 setm). Costat esq (pos 1–4) i dre (pos 5–8). ✅ Coherent amb regla 4.1.
-- Inc 4 (#9–16): 8 carros Botarell Ross, posta 28-29/abr (lot 59 setm). ✅
-- Inc 5 (#17–24): 5 Botarell Ross + 3 Maxim Cobb. Els 5 Botarell ocupen pos 1–5 (esq sencera + primer del costat dre); els 3 Maxim Cobb ocupen pos 6–8. ✅ Confirma la regla esq/dre estricta i la regla lot-creua-límit (§4.1 i §4.2).
-- Inc 6 (#25–32): 8 carros Maxim Ross (lot 51 setm). ✅
-- Inc 9 (#37): 1 carro Botarell Ross. ⚠ Esperat 4, només 1. Coherent amb regla 3.4 (ompliment consecutiu).
-- Inc 10 (#33–36, #38–40): 7 carros Maxim Ross + 1 Botarell Ross. ⚠ Esperat 4, n'hi ha 7-8.
+## Annex C — Cas validat: Full 2964 (01/06/2026, dilluns)
 
-## Annex C — Cas prospectiu: Full 2964 (01/06/2026, dilluns)
+**Sessió articulada amb l'Enric el 2026-05-28. Carros entrats reals (sense maquila Nutrex, que arriba després):**
 
-Sessió articulada amb l'Enric el 2026-05-28. Col·locació proposada:
+| Pos | Inc | Carro | Lot | Posta | Setm. |
+|---|---|---|---|---|---|
+| 1 | 3 | 667 | La Justa Ross | 20/05 | 59 |
+| 2 | 3 | 669 | La Justa Ross | 22/05 | 59 |
+| 3 | 3 | 676 | Maxim Cobb | 22/05 | 59 |
+| 4 | 3 | 673 | Maxim Cobb | 22/05 | 59 |
+| 5 | 3 | 674 | Maxim Cobb | 23/05 | 59 |
+| 6 | 3 | 688 | Botarell Ross | 22/05 | 62 |
+| 7 | 3 | 683 | Botarell Ross | 23/05 | 62 |
+| 8 | 3 | 686 | Botarell Ross | 24/05 | 62 |
+| 9 | 4 | 685 | Botarell Ross | 23/05 | 62 |
+| 10 | 4 | 684 | Botarell Ross | 23/05 | 62 |
+| 11 | 4 | 687 | Botarell Ross | 24/05 | 62 |
+| 12 | 4 | 691 | Botarell Ross | 25/05 | 62 |
+| 13 | 4 | 699 | Font Navata | 21/05 | 53 |
+| 14 | 4 | 692 | Font Navata | 21/05 | 53 |
+| 15 | 4 | 697 | Font Navata | 23/05 | 53 |
+| 16 | 4 | 695 | Font Navata | 23/05 | 53 |
+| 17 | 5 | 698 | Font Navata | 24/05 | 53 |
+| 18 | 5 | 693 | Font Navata | 26/05 | 54 |
+| 19 | 5 | 694 | Font Navata | 26/05 | 54 |
+| 20 | 5 | 696 | Font Navata | 25/05 | 54 |
+| 21 | 5 | 682 | Maxim Ross | 24/05 | 53 |
+| 22 | 5 | 681 | Maxim Ross | 25/05 | 54 |
+| 23 | 5 | 679 | Maxim Ross | 26/05 | 54 |
+| 24 | 5 | 680 | Maxim Ross | 26/05 | 54 |
+| 25 | 6 | 678 | Maxim Ross | 26/05 | 54 |
+| 26 | 6 | 677 | Maxim Ross | 26/05 | 54 |
+| 27 | 6 | 701 | Maxim Ross | 26/05 | 54 |
+| 28 | 6 | 700 | Maxim Ross | 26/05 | 54 |
+| 29 | 6 | 661 | Barberà | 24/05 | 55 |
+| 30 | 6 | 646 | Barberà | 23/05 | 55 |
+| 31 | 6 | 663 | Barberà | 23/05 | 55 |
+| 32 | 6 | 662 | Barberà | 23/05 | 55 |
+| 33-36 | 9 | (pend) | Nutrex maquila (4 places, 2-2) | — | — |
 
-| Pos | Inc | Client | Lot | Carros |
-|---|---|---|---|---|
-| 1-2 | 3 | Aves Gil + Pinsos del Segre (camió compartit) | Maxim Cobb | 673, 676 (postes 22/05, obligats) |
-| 3-4 | 3 | Aves Gil + Pinsos | La Justa | 667 (posta 20/05, obligat), 669 (22/05, obligat) |
-| 5-7 | 3 | Aves Gil + Pinsos | Botarell | 688 (22/05, obligat), 684, 683 (23/05) |
-| 8 | 3 | Aves Gil + Pinsos | Botarell | 685 (23/05) |
-| 9-16 | 4 | Avinatur | Maxim Ross (lot 9) | 8 carros, prioritzant postes velles |
-| 17-19 | 5 | Avinatur | Maxim Ross | 3 més (lot 9 → 11 carros en total) |
-| 20-24 | 5 | Avinatur | Font Navata (lot 10) | 5 carros (inclou 692, 699 obligats) |
-| 25-27 | 6 | Avinatur | Font Navata | 3 més (lot 10 → 8 carros en total) |
-| 28-31 | 6 | Avinatur | Barberà (lot 8) | 4 sencers |
-| 32 | 6 | — | — | **buida** (preserva client-junt Nutrex) |
-| 33-34 | 9 | Nutrex (maquila) | (lot per definir quan arribi) | 2 esq |
-| 35-36 | 9 | Nutrex | | 2 dre |
-| 37-44 | 10, 8 | — | — | totes buides |
+Total: **32 carros pollets + 4 places maquila** = 36 places (vs 30 proposats inicialment per IA, 23 Avinatur + 7 matiners). Recompte real Avinatur: 4 Botarell + 8 Font Navata + 8 Maxim Ross + 4 Barberà = **24 carros**.
 
-Total: **34 carros** (7 matiners + 23 Avinatur + 4 maquila).
+**Composició per client (real):**
 
-**Carros disponibles a estoc que NO entren aquest full:** 2 Maxim Cobb del 23-24/05 (674, 675), 1 La Justa del 24/05 (668), 2 La Justa del 25-26/05 (671, 670), 6 Botarell del 24-26/05 (687, 686, 690, 691, 689), 3 Maxim Ross del 24-25/05 (682, 681, alguns del 26-27/05 si en sobren), alguns Font Navata del 24-26/05. Es revisaran a la propera càrrega.
+- **Aves Gil + Pinsos del Segre** (matiners, Inc 3): 2 La Justa + 3 Maxim Cobb + 3 Botarell = 8 carros.
+- **Avinatur** (premium, Inc 4-6): **4 Botarell** (regla anticipació §2.5) + 8 Font Navata + 8 Maxim Ross + 4 Barberà = 24 carros.
+- **Nutrex** (maquila, Inc 9): 4 carros, pendents d'arribada.
+
+**Validacions de regles capturades:**
+
+- ✅ Antiguitat 14 dies (§2.2): tots els carros obligats han entrat (20/05, 21/05, 22/05).
+- ✅ Edat òptima 30-55 setm (§2.3): Maxim Ross / Font Navata / Barberà = bons; Cobb / La Justa / Botarell = dolents.
+- ✅ Anticipació d'estoc (§2.5): 4 Botarell van a Avinatur per evitar saturació dijous 04/06.
+- ✅ Patró dilluns Inc 3→4→5→6 (§3.2): respectat.
+- ✅ Ompliment consecutiu (§3.4): Inc 10 i Inc 8 buides.
+- ✅ Esq/dre estricta (§4.1): respectada (no es pot validar 100% sense saber posicions exactes, però l'app ho gestiona).
+- ✅ Lot-junt creua incubadores i clients (§4.2): Botarell ocupa pos 6-12 (Inc 3 matiner → Inc 4 Avinatur). Font Navata pos 13-20 (Inc 4 → Inc 5). Maxim Ross pos 21-28 (Inc 5 → Inc 6).
+- ✅ Marge de seguretat +1 carro (§2.6): l'Enric afegeix 1 carro extra per cobrir possible eclosió baixa (Cobb/Botarell darrers 73%).
+
+**Carros que NO entren aquest full (queden a estoc per a la propera càrrega):**
+
+- Maxim Cobb del 24/05 (675).
+- La Justa del 24-26/05 (668, 671, 670).
+- Botarell del 25-26/05 (690, 689).
+- Maxim Ross del 27/05 (702, 703, 704).
+
+Total: ~10 carros que pugen a la cua de la propera càrrega (dijous 04/06).
