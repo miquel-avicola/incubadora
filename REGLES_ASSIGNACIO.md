@@ -31,7 +31,14 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 🟡 La maquila (Nutrex i altres) **entra automàticament al full** quan hi ha comanda d'ous maquila. No se'n discuteix qualitat de lot. La quantitat es deriva directament dels ous a maquilar (vegeu §2.6).
 
-**Detall operatiu:** els carros físics poden no haver arribat encara quan es planifica el full. Es reserva l'espai a la incubadora i s'omplen quan arribin. _(Pendent confirmar workflow exacte.)_
+**Detall operatiu (confirmat 2026-05-29, resol §7 #2):** quan es planifica el full, els carros de maquila poden no haver arribat encara. **No es crea cap registre fins que el carro és físicament a la planta** — no hi ha placeholder. El full només els deixa el lloc; es creen i s'assignen a la posició quan arriben.
+
+**Posició (predictible sense dades del lot):**
+
+- **Dilluns:** la maquila va **sempre l'última** (cua del full). És conseqüència natural de l'ompliment consecutiu (§3.4): els pollets omplen del davant i la maquila cau al final.
+- **Dijous:** la maquila va **després de la SS**, dins el bloc MS (posicions 25+), **mai dins la SS**. La posició exacta entre 25-44 segueix l'ordre de sortida del camió, intercalada amb Sanco (§3.3).
+
+**Implicació per al Pre-suggerit:** ha de **reservar N places** (N = ous a maquilar / capacitat, §2.6) a la zona corresponent sense necessitar carro_id ni lot; qualitat i calor són indiferents (§2.5).
 
 ### 2.2 Antiguitat d'estoc — límit dur 14 dies ✅
 
@@ -63,7 +70,9 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 - `% eclosió` = `resultats_naix.pollets_nascuts` / ous fèrtils vacunats
 - `% pollets descartats` per qualitat
 
-❓ Pendent: definir mètrica i llindar exacte per a la "rebaixa empírica" (per exemple: si % d'eclosió mitjana dels darrers 2-3 fulls està >5 punts per sota de la previsió, llavors el lot baixa una categoria).
+⚠️ **Els dos senyals empírics NO són equivalents a l'hora d'assignar (vegeu §2.8):** un % alt d'**explosius** indica risc sanitari → el lot va a **Sanco** (no recuperable). Un **baix % de naixement** sense explosius és recuperable → el lot va a la **SS** (XStreamer). Per tant la "rebaixa de categoria" s'ha de desglossar per tipus de senyal, no agregar-se en un sol número.
+
+❓ Pendent: definir mètrica i llindar exacte per a la "rebaixa empírica" (per exemple: si % d'eclosió mitjana dels darrers 2-3 fulls està >5 punts per sota de la previsió, llavors el lot baixa una categoria). Definir per separat el llindar d'explosius (→Sanco) i el de naixement baix (→SS).
 
 ### 2.5 Qualitat-client (SOFT, modulable) ✅
 
@@ -77,9 +86,16 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 ✅ **Excepció per anticipació d'estoc:** quan a l'estoc hi ha massa carros que s'acumulen i podrien arribar al límit de 14 dies a la propera càrrega, **s'evacua una part al client premium** per evitar problemes futurs. L'estratègia mira la càrrega actual + la càrrega següent, no només la d'ara.
 
+✅ **Algorisme d'anticipació — metrica concreta (resol §7 #9, articulat 2026-05-29):**
+
+- **Horitzó:** només la **propera càrrega** (un pas; la cadència és 3-4 dies, §2.2).
+- **Senyal primari (dur):** projectar l'edat de cada carro (estoc que no entra ara + postes previstes) a la **data de la propera càrrega**; si arribaria a >14 dies, **ha d'entrar ja ara** (§2.2).
+- **Senyal secundari (tou, anticipació):** comptar quants carros tindran **>11 dies** a la data de la propera càrrega. Si en surten **més de 4 (≥5)**, és massa → **evacuar el sobrant al premium (Avinatur) en aquesta càrrega**. Amb **3-4 no es fa res**.
+- 🟡 El llindar **4** és un valor de treball de l'Enric ("p. ex. 5 ja és massa"), a validar amb dades històriques.
+
 **Exemple real (càrrega 2964):** Avinatur reb ~15.000 pollets de Botarell (4 carros) tot i ser un client premium. Decisió presa perquè el dijous 04/06 hi haurà massa carros Botarell vells si no se n'entren ara.
 
-❓ Pendent: confirmar classificació de Sanco al dijous (sembla repartit entre lots disponibles).
+✅ Classificació de Sanco al dijous: rep els lots **explosius** (pitjors per risc sanitari), a la cua del full (§2.8).
 
 ### 2.6 Càlcul de quantitat — "places" i previsió d'eclosió ✅
 
@@ -96,6 +112,24 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 ✅ **Si un lot dolent es pot reduir més enllà del estrictament necessari per evitar problemes futurs, es redueix** (regla d'anticipació, vegeu §2.5).
 
 🟡 **Selecció dins un grup de mateixa antiguitat:** quan dins un mateix lot dolent hi ha carros amb la mateixa data de posta i no calen tots, l'elecció entre ells és arbitrària. L'algorisme pot triar per ordre de carro_id o el primer disponible.
+
+✅ **Escenari pic — tots els lots >55 setm (resol §7 #8, confirmat 2026-05-29):** amb tot vell, l'ordre passa a ser **per antiguitat pura** (els més vells primer, per buidar estoc i no petar el límit de 14 dies). La palanca de rendiment és la **SS/XStreamer** (§2.8): s'hi posen els que més recuperen. Les preferències de qualitat-client (§2.5) es **relaxen** perquè no hi ha lots bons per repartir: el premium (Avinatur) rep "el menys dolent" disponible. No hi ha cap regla especial addicional.
+
+### 2.8 Assignació màquina × qualitat de lot (XStreamer/SS) ✅
+
+✅ **Articulada per l'Enric (2026-05-29).** Les màquines **XStreamer (les SS) són molt millors** que les MS. Per maximitzar el naixement total s'assigna la **millor màquina al lot més feble per edat**: a la SS s'hi posen **lots vells a propòsit**, perquè en una màquina millor un lot vell recupera molt rendiment (**~+6% de naixement en lots de ~58 setm**), més guany que el que aportaria posar-hi un lot ja bo.
+
+**Criteri de routing — la qualitat dolenta NO és un sol calaix, es divideix per sub-tipus amb destins oposats:**
+
+- **Edat (vell) → SS.** Recuperació via XStreamer. Aplica dijous (la SS només funciona dijous, §3.3).
+- **Naixement dolent però lot sa → SS.** És exactament la baixada de rendiment que la XStreamer pot recuperar; per això va a la màquina bona, no es descarta.
+- **Explosius → Sanco.** Risc de contaminació: NO es posen a la màquina bona (embrutarien la XStreamer) i no es "recuperen". Van a Sanco, que carrega l'última hora del dijous → cua del full (Inc 1/2/8 després de la SS, §3.3).
+
+**Resum:** "recuperable" (vell o de baix naixement però sa) → SS; "no recuperable / risc sanitari" (explosius) → Sanco. El filtre Sanco mana **només per als explosius**, no per a tot el que rendeix malament.
+
+⚠️ **Restricció:** dins la SS cal trobar un **equilibri tèrmic** igualment (§5): no es poden amuntegar tots els lots freds sense respectar el rànquing de calor (el carro pos 2 = ovoscan vol el més calorós dels presents, §5.2).
+
+🔍 **Interacció amb §2.3:** un lot >55 setm és "dolent" per edat, però la SS **mitiga** aquesta penalització; per tant "vell" no s'ha de descartar, s'ha de col·locar a la màquina bona.
 
 ---
 
@@ -176,6 +210,8 @@ La unitat operativa real és "camió/viatge", no "client". L'app actual ja conte
 
 ✅ **El lot pot creuar entre CLIENTS.** Exemple càrrega 2964: el lot 2 Botarell ocupa pos 6-8 d'Inc 3 (matiners: Pinsos/Aves Gil) + pos 9-12 d'Inc 4 (Avinatur). El lot mai es trenca, encara que el costo sigui repartir el lot entre clients amb diferent qualitat-preferent.
 
+✅ **Partició d'un lot que supera la capacitat d'una incubadora (resol §7 #4).** Quan un lot té més carros que les places lliures d'una incubadora, els carros del lot s'**ordenen per dies d'estoc (els més vells primer)**; s'omple la Inc X fins a capacitat amb els més vells i la resta continua a la Inc Y als **números de carro següents** (en passar de la Inc 3 a la Inc 4, els carros de la Inc 4 són el 9 i el 10, etc.). El punt de tall entre incubadores **no és una decisió humana conscient**: surt sol de combinar l'ordre per antiguitat amb l'ompliment seqüencial de posicions (§3.4, §4.1). Coherent amb la prioritat de buidar estoc vell (§2.7).
+
 **Jerarquia de regles d'agrupació (de més a menys forta):**
 
 1. **Lot-junt:** estricta. Mai es trenca.
@@ -196,6 +232,22 @@ Aquesta regla és **dèbil** comparada amb lot-junt. Si un lot llarg encaixa ent
 
 Exemple càrrega 2964: 4 Nutrex tots a Inc 9 (2-2) i Inc 6 pos 32 buida, perquè és una comanda petita que cap sencera en una sola incubadora.
 
+### 4.5 Homogeneïtat tèrmica dins la MS (sensors) ✅
+
+✅ **Articulada i prioritzada per l'Enric (2026-05-29).** El problema a evitar és el **gradient tèrmic dins d'una mateixa MS**: si un costat acumula lots de poca calor (p. ex. molt joves <30 setm, ous petits) i l'altre lots calorosos, es genera molta escalfor a un costat i poca a l'altre, **enganyant el sensor de temperatura de la màquina**, que regula malament tota la incubadora. (Una MS uniformement freda **no** és problema: el sensor la regula bé; el problema és el gradient intern.)
+
+**Estratègia real de l'Enric:** quan hi ha llibertat, **agrupa els lots joves (poca calor) dins una mateixa incubadora** perquè cada MS quedi tèrmicament homogènia, en comptes de barrejar joves i calorosos en una mateixa MS.
+
+**Prioritat (resol §7 #11):**
+
+1. **L'ordre de camió quasi sempre mana** (§3.1) — i el lot-junt mai es trenca (§4.2).
+2. L'homogeneïtat tèrmica és una **preferència suau** que actua només en els graus de llibertat que sobren (a quina MS encaixa un lot flexible, agrupació de joves). Excepcionalment l'Enric pot reordenar, però és rar.
+3. **El sistema HAURIA D'AVISAR** quan una MS quedi tèrmicament desequilibrada (gradient esq/dre alt) i no es pugui evitar. L'avís és desitjat explícitament; no cal que el Pre-suggerit forci res trencant l'ordre de camió.
+
+**Càlcul de l'avís:** sumar `indexCalorCarro` (§5.4) dels carros pos 1-4 (esq) vs 5-8 (dre); a MS tots entren el mateix dia, així la diferència ve només de la composició de lots. Si la desviació relativa supera un llindar (per definir), avisar.
+
+❓ Sub-pendent menor: llindar concret de desviació esq/dre per disparar l'avís.
+
 ---
 
 ## 5. Posició dins la incubadora SS
@@ -204,8 +256,10 @@ Exemple càrrega 2964: 4 Nutrex tots a Inc 9 (2-2) i Inc 6 pos 32 buida, perquè
 
 ✅ A la **Singlestage** la posició física dins la incubadora es decideix per la **calor metabòlica que produeix cada lot** durant la incubació, **no** per quin client la rebrà.
 
-- **Pulsator i paret** (pos extremes, 1-8 i 17-24): lots que produeixen **més calor** (joves, vigorosos, bons).
-- **Central** (pos del mig, 9-16): lots que produeixen **menys calor** (vells, menys vigorosos, dolents).
+- **Pulsator i paret** (pos extremes, 1-8 i 17-24): lots que produeixen **més calor**.
+- **Central** (pos del mig, 9-16): lots que produeixen **menys calor**.
+
+⚠️ **Correcció (2026-05-29):** "més calor" **NO** vol dir "més joves". Segons la fórmula (§5.4), la calor per ou fa pic a mitja edat (**~40 setm**) i decau cap als dos extrems: els lots **molt joves (<30 setm)** tenen ous petits i produeixen **poca** calor, igual que els molt vells. La font de veritat és `indexCalorCarro`, no l'edat. La caracterització original "joves=calorosos" era imprecisa i només val dins el rang operatiu 30-55, on els de 30-45 escalfen més que els de 50-55.
 
 ### 5.2 El carro 2 = ovoscan ✅
 
@@ -217,7 +271,18 @@ Sempre s'hi posa **el lot que produeix més calor**, perquè així el sensor det
 
 ✅ A la SS, **els carros es distribueixen a les naixedores per LOT**, no per posició física. Tots els carros d'un mateix lot van junts a les seves naixedores corresponents, encara que físicament a la SS estiguin dispersos.
 
-❓ Pendent: detallar com es classifiquen els lots per calor (criteri exacte; suposem joves=calorosos, vells=freds, però pot tenir matisos).
+✅ **La calor es calcula amb una fórmula a `lib/termico.ts` (resol §7 #6).** No és funció només de l'edat:
+
+`calor_carro = quantitat_ous × fertilitat(setmanes) × corba_metab(dia_incubació) × factor_pes_ou(setmanes)`
+
+- **quantitat_ous:** factor lineal i dominant (carro sencer ≈ 2× carro mig).
+- **fertilitat:** pic 28-35 setm (0.93), baixa a 0.55 a >60 setm.
+- **corba_metab:** funció del dia d'incubació, pic al dia 19. A la SS tots els carros entren el mateix dia → aquest factor és comú i **no altera el rànquing relatiu** entre carros del full.
+- **factor_pes_ou:** ous grans escalfen més; el pes fa pic ~40-45 setm.
+
+**Conseqüència per al rànquing SS:** com que la corba pel dia és comuna, l'ordre calorós→fred d'un full ve donat per `quantitat_ous × fertilitat × factor_pes_ou`. El "per ou" (fertilitat × pes) fa màxim cap a **~40 setm** i decau cap als lots vells. La regla simplificada de §5.1 (jove=calorós, vell=fred) és **correcta en direcció**, però el nombre d'ous pesa molt: un carro vell sencer pot superar un de jove a mitges. L'algorisme de SS ha d'ordenar per `indexCalorCarro` (o `calorFuturaCarro`), no per edat sola.
+
+✅ **Resolt #10 (confirmat per l'Enric, 2026-05-29):** el suggeriment de calor a MS **no s'usa**. La fórmula de `termico.ts` es manté **només per a SS**. La funció `suggerirZonaMS` (equilibri per zona central/paret/pulsator) **s'ha de treure** —a més, equilibrava per l'eix equivocat (zona), no pel que importa a MS (esq/dre, vegeu §4.5)—. A MS la zona segueix sent rotació mecànica (§6).
 
 ---
 
@@ -238,15 +303,17 @@ Implicacions per a l'algorisme:
 
 ## 7. Preguntes obertes
 
-1. ❓ Sanco al dijous: criteri de qualitat de lot. Sembla que ocupa la cua del full.
-2. ❓ Workflow de maquila quan els carros físics no han arribat encara.
+1. ✅ ~~Sanco al dijous: criteri de qualitat de lot.~~ **Resolt (§2.8):** els pitjors lots (qualitat empírica) van sempre a Sanco, que carrega l'última hora → cua del full.
+2. ✅ ~~Workflow de maquila quan els carros físics no han arribat encara.~~ **Resolt (§2.1):** no es crea registre fins a l'arribada física (sense placeholder); dilluns va l'última, dijous després de la SS al bloc MS.
 3. ❓ Capa empírica: mètrica i llindar concret per a la rebaixa.
-4. ❓ Lot >8 carros: criteri exacte de com es parteix entre incubadores (en quina ordre i per quin costat es comença).
+4. ✅ ~~Lot >8 carros: criteri exacte de com es parteix entre incubadores.~~ **Resolt (§4.2):** ordre per dies d'estoc (vells primer), ompliment seqüencial; el tall cau on s'acaba la capacitat.
 5. ❓ Mapeig exacte incubadora MS → naixedores amb capacitats variables.
-6. ❓ Criteri exacte de classificació "calorós/fred" per a la SS.
-7. ❓ Pondex al dijous (SS): com es decideix qualitat dels lots si l'únic client és Pondex.
-8. ❓ Si tots els lots disponibles són >55 setm (escenari pic), com es prioritza.
-9. ❓ Algorisme de pre-càlcul d'estoc-anticipat (regla d'anticipació §2.5): com saber automàticament quan toca evacuar dolents al premium per evitar saturació futura.
+6. ✅ ~~Criteri exacte de classificació "calorós/fred" per a la SS.~~ **Resolt (§5.4 i `lib/termico.ts`):** fórmula composta `quantitat_ous × fertilitat × corba_metab(dia) × pes_ou`; rànquing SS per `indexCalorCarro`, no per edat sola. *(Obre tensió MS: vegeu nou punt #10.)*
+7. ✅ ~~Pondex al dijous (SS): com es decideix qualitat dels lots.~~ **Resolt (§2.8):** la SS rep lots vells a propòsit (recuperació XStreamer); no es "tria qualitat" per al client sinó per a la màquina. Equilibri tèrmic intern §5.
+8. ✅ ~~Si tots els lots disponibles són >55 setm (escenari pic), com es prioritza.~~ **Resolt (§2.7):** ordre per antiguitat pura, SS com a palanca de recuperació, qualitat-client relaxada (premium rep el menys dolent).
+9. ✅ ~~Algorisme de pre-càlcul d'estoc-anticipat.~~ **Resolt (§2.5):** horitzó = propera càrrega; evacuar al premium si >4 carros quedarien a >11 dies a la propera càrrega; límit dur 14 dies sempre força entrada. Llindar 4 a validar.
+10. ✅ ~~Tensió MS zona vs calor.~~ **Resolt (§5.4, §6):** el suggeriment de calor a MS no s'usa; `suggerirZonaMS` es treu; la fórmula queda només per a SS.
+11. ✅ ~~Prioritat de l'equilibri tèrmic esq/dre a MS.~~ **Resolt (§4.5):** ordre de camió i lot-junt manen; homogeneïtat tèrmica és preferència suau (agrupar joves junts) + avís quan el gradient és inevitable. Queda només definir el llindar de l'avís.
 
 ---
 
