@@ -76,6 +76,8 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 ❓ Pendent: definir mètrica i llindar exacte per a la "rebaixa empírica" (per exemple: si % d'eclosió mitjana dels darrers 2-3 fulls està >5 punts per sota de la previsió, llavors el lot baixa una categoria). Definir per separat el llindar d'explosius (→Sanco) i el de naixement baix (→SS).
 
+**Actualització 2026-05-31 (vegeu §8.2):** la "rebaixa empírica" **NO s'ha d'usar com a predictor del naixement %**. Amb les dades actuals (10 lots) l'historial propi del lot no prediu el naixement un cop saps estirp + edat + màquina. Es reconverteix en: (a) senyal **sanitari/routing** —explosius → Sanco (§2.8)—, i (b) **override manual** de l'Enric. El llindar d'explosius→Sanco segueix obert; el "naixement baix → SS" es manté com a **routing de màquina**, no com a rebaixa del número previst. Reobrir quan hi hagi força més lots d'històric.
+
 ### 2.5 Qualitat-client (SOFT, modulable) ✅
 
 ✅ **Hi ha una preferència de quins lots reben quins clients, però NO és una regla estricta.**
@@ -107,6 +109,8 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 🟡 **Marge de seguretat:** si els lots assignats tenen indicis empírics de qualitat baixa (vegeu §2.4), s'afegeix **+1 carro** per cobrir possibles sorpreses (no arribar al volum compromès).
 
+**Actualització 2026-05-31 (vegeu §8.4):** el "+1 carro" lligat a indicis d'un lot concret **se substitueix** per un **marge moderat sistemàtic** (planificar amb una previsió lleugerament conservadora, igual per a tots els lots), amb el valor **calibrat amb backtest** i un **override manual** sempre disponible. Ja no depèn de l'ull sobre un lot concret.
+
 ### 2.7 Lots a treure preferent (saturació d'estoc) ✅
 
 ✅ **Dins els lots "dolents", es prioritza posar els carros més vells** per buidar estoc i evitar arribar al límit dels 14 dies en futures càrregues.
@@ -132,6 +136,8 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 ### 2.9 Repartiment per client — assignació automàtica (DISSENY, 2026-05-29) 🟡
 
 🟡 **Dissenyat i validat en harness contra el 2964; PENDENT de portar a la v2** (bloquejat per la previsió, vegeu §7 #14).
+
+**Actualització 2026-05-31:** la previsió ja està definida a nivell de **disseny** (§8: estirp + edat + màquina, sortida en pollets/carro). El §2.9 queda **desbloquejat de disseny**; falta implementar la previsió i el repartiment per client.
 
 **Dada nova:** camp `clients.ordre_carrega` (smallint, més baix = carrega abans = primeres incubadores). Valors per defecte: Aves Gil 10, Pinsos del Segre 11, Florida 12, Guco 13 (matiners) · Avinatur 20 (premium) · Pondex 30 · Nutrex 80 · Sanco 90 (maquila/cua). Per-càrrega es podrà **sobreescriure** a la pantalla de planificació (UI pendent).
 
@@ -335,12 +341,69 @@ Implicacions per a l'algorisme:
 8. ✅ ~~Si tots els lots disponibles són >55 setm (escenari pic), com es prioritza.~~ **Resolt (§2.7):** ordre per antiguitat pura, SS com a palanca de recuperació, qualitat-client relaxada (premium rep el menys dolent).
 9. ✅ ~~Algorisme de pre-càlcul d'estoc-anticipat.~~ **Resolt (§2.5):** horitzó = propera càrrega; evacuar al premium si >4 carros quedarien a >11 dies a la propera càrrega; límit dur 14 dies sempre força entrada. Llindar 4 a validar.
 12. ✅ **Ordre de col·locació per QUALITAT (pitjor primer), no per dies d'estoc (feedback 2026-05-29, full 2964 manual; confirmat per l'Enric).** La v2 ordenava el pool per posta (dies d'estoc) i posava Font Navata (55 setm, bo) a matiners abans que Botarell (64 setm, dolent). Regla correcta: **el pitjor lot va primer → matiners (Inc 3); els del rang òptim 30-55 setm queden per a Avinatur.** Qualitat **U-shaped** (§2.3): "pitjor" = més lluny de la banda 30-55, tant els vells (>55) com els joves (<30). Dins la mateixa qualitat, per dies d'estoc. **Parcialment implementat 2026-05-29:** el `sort` del pool ja és qualitat-pitjor-primer (dolents fora de 30-55 primer; òptims al final; dins la mateixa qualitat per posta). Validat: Botarell va abans que Font Navata, matiners reben dolents. **PENDENT (peça gran):** quan els dolents superen la capacitat de matiners, l'excés cau a Avinatur barrejat amb els bons; cal el **repartiment per client real** (assignar bons→premium, excés dolent→premium per anticipació §2.5 o a estoc), no només un ordre. També: tiebreak fi vell-vs-jove i modulació empírica (§2.4).
-14. ⛔ **BLOQUEJANT — Previsió de pollets per carro (pilar de l'assignació automàtica).** La previsió actual funciona malament i l'Enric **no la fa servir**. És un pilar: el repartiment per client (§2.9) depèn de quants carros calen per cobrir cada comanda, i això surt de la previsió. **No s'ha de calcular amb corbes de fertilitat genèriques** (com va fer l'IA al harness, que donava ~2.300-3.100 pollets/carro, absurdament baix), sinó amb **històrics ben fets**. Referència de l'Enric (sobre carro sencer ~4.800 ous): **lot bo ≈ 85% de naixement ≈ ≥4.080 pollets**; **lot molt dolent ≈ 70% ≈ 3.360 pollets**; **menys del 70% és extremadament estrany**. ⚠️ Cal **definir bé el vocabulari** (naixement, eclosió, fertilitat, % sobre ous totals vs ous fèrtils…), que ara és font de confusió. → **Es tractarà en una conversa nova dedicada.**
+14. ✅ **Resolt disseny + vocabulari el 2026-05-31 (vegeu §8); implementació pendent — Previsió de pollets per carro (pilar de l'assignació automàtica).** La previsió actual funciona malament i l'Enric **no la fa servir**. És un pilar: el repartiment per client (§2.9) depèn de quants carros calen per cobrir cada comanda, i això surt de la previsió. **No s'ha de calcular amb corbes de fertilitat genèriques** (com va fer l'IA al harness, que donava ~2.300-3.100 pollets/carro, absurdament baix), sinó amb **històrics ben fets**. Referència de l'Enric (sobre carro sencer ~4.800 ous): **lot bo ≈ 85% de naixement ≈ ≥4.080 pollets**; **lot molt dolent ≈ 70% ≈ 3.360 pollets**; **menys del 70% és extremadament estrany**. ⚠️ Cal **definir bé el vocabulari** (naixement, eclosió, fertilitat, % sobre ous totals vs ous fèrtils…), que ara és font de confusió. → **Es tractarà en una conversa nova dedicada.** ✅ **Fet el 2026-05-31: vocabulari fixat (§8.1) i mètode acordat (§8.3). Conclusió clau: l'historial del lot NO prediu el naixement amb les dades actuals; la previsió va per estirp + edat + màquina. Implementació + backtest pendents.**
 
 13. ✅ **Maquila garantida sota capacitat justa — implementat 2026-05-29.** La v2 ara calcula les places noves de MS del patró i limita el pool de pollets a `maxPolletsMS = totalMSSlots − maquila`, deixant la cua per a la maquila (`poolMS = [...pollets.slice(0,maxPolletsMS), ...maquilaOrd]`). Validat amb 2964.
 
 10. ✅ ~~Tensió MS zona vs calor.~~ **Resolt (§5.4, §6):** el suggeriment de calor a MS no s'usa; `suggerirZonaMS` es treu; la fórmula queda només per a SS.
 11. ✅ ~~Prioritat de l'equilibri tèrmic esq/dre a MS.~~ **Resolt (§4.5):** ordre de camió i lot-junt manen; homogeneïtat tèrmica és preferència suau (agrupar joves junts) + avís quan el gradient és inevitable. Queda només definir el llindar de l'avís.
+
+---
+
+## 8. Previsió de pollets per carro i vocabulari (resol §7 #14)
+
+**Sessió dedicada 2026-05-31 (Opus).** Tanca el punt bloquejant §7 #14 a nivell de **disseny i vocabulari**. La implementació (construir la nova previsió + backtest) queda per a una sessió posterior, probablement amb Sonnet.
+
+### 8.1 Vocabulari — que quedi claríssim ✅
+
+Pel camí, l'app apunta quatre números reals (cada un en un moment del cicle):
+
+| Què s'apunta | Quan | Camp |
+|---|---|---|
+| Ous totals carregats al carro (4.800 sencer / 2.400 mig) | Entrada a màquina | `carros_estoc.quantitat_ous` |
+| Ous explosius (podrits) | A la transferència (~dia 18) | `transferencies.ous_explosius` |
+| Ous fèrtils que es vacunen | A la transferència | `transferencies.ous_fertils_vacunats` |
+| Pollets nascuts (**ja viables**) | Al naixement | `resultats_naix.pollets_nascuts` |
+| Pollets descartats | Al naixement | `resultats_naix.pollets_descartats` |
+
+Punts importants per no confondre'ns:
+
+- **`pollets_nascuts` ja són pollets viables.** `pollets_descartats` és un calaix a part i només serveix per calcular el **% de descartats** = descartats / (nascuts + descartats). El total nascuts+descartats **no es mira mai**. Quan diem "pollets nascuts" o "naixement", sempre parlem de pollets viables.
+- Els **ous fèrtils vacunats** i els **explosius** es mesuren a la transferència, **després** de planificar la càrrega. Per tant **no són input** de la previsió que fem servir per repartir carros (en el moment de planificar encara no els tenim).
+
+A partir d'aquí l'app calcula **dues ràtios diferents** que cal no barrejar:
+
+- **Naixement** = pollets nascuts / **ous totals del carro**. ✅ **És LA xifra que mana per a l'assignació** (quants pollets dona de veritat un carro). Referència de l'Enric sobre carro sencer (~4.800): lot bo ≈ **85%** (~4.080 pollets), lot molt dolent ≈ **70%** (~3.360); per sota del 70% és raríssim.
+- **Eclosió** = pollets nascuts / **ous fèrtils vacunats**. És una mètrica de **diagnòstic** (dels ous bons, quants han eclosionat). **No** governa l'assignació.
+
+(Al codi ja estan ben separades: `naixement` a `lib/previsio.ts`, `eclosió` a `lib/eclosio.ts`.)
+
+### 8.2 Què mou el naixement, segons les dades ✅
+
+Anàlisi del 2026-05-31 sobre **245 naixements reals post-tall** (mitjana 82,5%, rang 62-91%, desviació ~5 punts). El "~2.300-3.100 pollets/carro absurd" que es cita al §7 #14 **era cosa del harness** (corbes de fertilitat genèriques), no de l'app.
+
+- **Edat del lot:** pic cap a **35-44 setmanes** (~88% a MS) i caiguda cap als **55+** (~77% a MS). Unes 11 punts d'oscil·lació.
+- **Tipus de màquina:** la **SS (XStreamer) dona ~+5 punts** de naixement sobre la MS a igual edat. Confirma el §2.8 (allà s'estimava ~+6%).
+- **L'historial propi del lot NO aporta res** un cop ja saps estirp + edat + màquina. Provat sense trampa (referència leave-one-out): afegir l'ajust per lot deixa l'error igual o pitjor (1,27% → 1,29%) i la correlació entre "com va anar abans aquest lot" i "com va ara" és ~0. Per això el `delta` per lot del codi (desactivat) feia bé d'estar-ho: **el senyal no hi és**.
+  - ⚠️ **Caveat honest:** això surt de només **10 lots** d'històric. És "no es detecta", no "és impossible per sempre". **Cal reobrir-ho** quan tinguem força més lots: si llavors es detecta que l'historial del lot sí que prediu, es reincorpora.
+
+### 8.3 Mètode de previsió acordat ✅
+
+- La previsió és **funció només de estirp + edat (setmanes) + tipus de màquina**. Dos lots iguals en aquests tres eixos reben la **mateixa** previsió, encara que un hagi semblat pitjor últimament (decisió Enric 2026-05-31: "si les dades ho avalen, ha de ser així").
+- Es construeix com una **corba contínua** del naixement segons l'edat, separada per estirp i per màquina, recolzada en les dades reals i fent servir l'històric d'Excel com a base on les dades reals són primes. Objectiu: que **sempre** apareguin la caiguda per edat i el bonus de la SS, en comptes de desinflar-se al 0,82 pla com fa ara la cascada quan li falten dades exactes d'aquella setmana.
+- **Sortida en pollets/carro** = naixement%(estirp, edat, màquina) × ous del carro. És exactament el que necessita el repartiment per client (§2.9) per saber quants carros calen per comanda.
+- 🟡 **Pendents tècnics (implementació, cosa de Claude):** com es suavitza la corba, el cas **Cobb-Singlestage** (no té dades directes; ara s'estima indirectament via Ross), i els estirps sense cap històric.
+
+### 8.4 Marge de seguretat — substitueix el "+1 carro" del §2.6 ✅
+
+- En comptes de la previsió central, es planifica amb una previsió **lleugerament conservadora** (marge **moderat**, opció triada per l'Enric: no li agrada quedar curt amb un client, però dins d'un límit, i ara que la previsió és més precisa s'ho pot permetre).
+- El valor exacte del marge **NO es fixa a ull**: serà un **paràmetre calibrat amb el backtest**, mirant sobre l'històric real quantes comandes haurien quedat curtes amb cada valor, fins a tocar el punt "gairebé mai curt, excedent petit". L'Enric el podrà tocar.
+- **Motiu pel qual un marge moderat n'hi ha prou:** una comanda es cobreix amb diversos carros (4-8); en promitjar-los, les sorpreses individuals es compensen, així que el risc de quedar curt a nivell de comanda és més petit del que sembla mirant un sol carro.
+- Es manté sempre l'**override manual**: l'Enric pot afegir o treure carros quan vegi alguna cosa que el número no veu (p. ex. un senyal sanitari).
+
+### 8.5 Validació (abans de fiar-se'n) 🟡
+
+- **Backtest leave-one-lot-out**: predir cada lot com si fos nou (referència construïda amb els altres lots) i mesurar l'encert real, abans de posar res en producció. Calibrar-hi el marge del §8.4.
 
 ---
 

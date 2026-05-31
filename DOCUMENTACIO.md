@@ -88,9 +88,9 @@ La carpeta del projecte és `C:\Users\Usuari\Documents\miquel-avicola`. Dins hi 
 **`/lib`** — Codi compartit per tota l'app. Aquí viu la lògica important:
 - `auth.ts` — Validació d'usuaris, signatura i verificació de sessions, regles de permisos per rol.
 - `supabase.ts` — Crea la connexió amb la base de dades (només UNA línia: instancia el client de Supabase amb les credencials).
-- `eclosio.ts` — Càlcul de previsió d'eclosió (cascada de 5 nivells: dades post-tall, dades exactes per setmanes de vida, finestra mòbil, etc.).
+- `eclosio.ts` — Càlcul de l'**eclosió** (= pollets nascuts / ous fèrtils vacunats; mètrica de diagnòstic). Cascada de 5 nivells: dades post-tall, dades exactes per setmanes de vida, finestra mòbil, etc.
 - `termico.ts` — Càlcul de la calor embrionària per carro, per suggerir on col·locar-los dins les màquines multistage.
-- `previsio.ts` — Càlculs per a la previsió comercial.
+- `previsio.ts` — Càlcul del **naixement** (= pollets nascuts / ous totals del carro; aquesta és la xifra que mana per a l'assignació). ⚠️ **Redisseny acordat 2026-05-31 (vegeu `REGLES_ASSIGNACIO.md` §8), pendent d'implementar:** la previsió ha d'anar només per estirp + edat + tipus de màquina (sense l'ajust/`delta` per lot, que les dades no avalen) i donar la sortida en pollets/carro. Mentre no s'implementi, el codi actual manté la cascada + el `delta` desactivat.
 - `dates.ts` — Utilitats per a treballar amb dates.
 
 **`/middleware.ts`** — El "guardia a l'entrada". S'executa abans de cada petició i fa el control d'accés.
