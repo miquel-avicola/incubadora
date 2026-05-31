@@ -84,8 +84,10 @@ export async function GET(request: Request) {
       setmanes,
       estirp: lot.estirp,
       n_registres: result.n_registres_referencia,
-      interpolat: result.font !== 'supabase_setmana_exacta' && result.font !== 'excel_setmana_exacta',
+      interpolat: result.font === 'corba_extrapolada' || result.font === 'corba_estirp_via_ross' || result.font === 'fallback_constant',
       singlestage: tipus_incubadora === 'Singlestage',
+      previsio_conservadora: result.previsio_conservadora,
+      marge_seguretat: result.marge_seguretat,
       // Camps nous informatius
       font: result.font,
       referencia_pura: result.referencia_pura,

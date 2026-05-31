@@ -392,7 +392,7 @@ Anàlisi del 2026-05-31 sobre **245 naixements reals post-tall** (mitjana 82,5%,
 - La previsió és **funció només de estirp + edat (setmanes) + tipus de màquina**. Dos lots iguals en aquests tres eixos reben la **mateixa** previsió, encara que un hagi semblat pitjor últimament (decisió Enric 2026-05-31: "si les dades ho avalen, ha de ser així").
 - Es construeix com una **corba contínua** del naixement segons l'edat, separada per estirp i per màquina, recolzada en les dades reals i fent servir l'històric d'Excel com a base on les dades reals són primes. Objectiu: que **sempre** apareguin la caiguda per edat i el bonus de la SS, en comptes de desinflar-se al 0,82 pla com fa ara la cascada quan li falten dades exactes d'aquella setmana.
 - **Sortida en pollets/carro** = naixement%(estirp, edat, màquina) × ous del carro. És exactament el que necessita el repartiment per client (§2.9) per saber quants carros calen per comanda.
-- 🟡 **Pendents tècnics (implementació, cosa de Claude):** com es suavitza la corba, el cas **Cobb-Singlestage** (no té dades directes; ara s'estima indirectament via Ross), i els estirps sense cap històric.
+- ✅ **Pendents tècnics resolts (2026-05-31, §8.6):** suavitzat = finestra ±2 setm + decreixement monòton ≥40; **Cobb-Singlestage** = Cobb MS + bonus SS (estimat, materialitzat a la taula); **estirps sense històric** = s'usa la corba de Ross (millor coberta), marcat `corba_estirp_via_ross`.
 
 ### 8.4 Marge de seguretat — substitueix el "+1 carro" del §2.6 ✅
 
@@ -401,9 +401,26 @@ Anàlisi del 2026-05-31 sobre **245 naixements reals post-tall** (mitjana 82,5%,
 - **Motiu pel qual un marge moderat n'hi ha prou:** una comanda es cobreix amb diversos carros (4-8); en promitjar-los, les sorpreses individuals es compensen, així que el risc de quedar curt a nivell de comanda és més petit del que sembla mirant un sol carro.
 - Es manté sempre l'**override manual**: l'Enric pot afegir o treure carros quan vegi alguna cosa que el número no veu (p. ex. un senyal sanitari).
 
-### 8.5 Validació (abans de fiar-se'n) 🟡
+### 8.5 Validació (feta 2026-05-31, Opus) ✅
 
-- **Backtest leave-one-lot-out**: predir cada lot com si fos nou (referència construïda amb els altres lots) i mesurar l'encert real, abans de posar res en producció. Calibrar-hi el marge del §8.4.
+**Backtest leave-one-lot-out** sobre els 7 lots reals post-tall (245 naixements). Predint cada lot com si fos nou (forma Excel + offset calibrat amb els altres 6 lots):
+
+- **MAE a nivell de lot = 3,5 pp**, contra **4,9 pp** del fallback pla 0,82. Millora real però modesta.
+- Els lots ben poblats (2, 3, 9, 25) cauen dins ~0,7-2,5 pp. Els errors grossos es concentren en lots impredictibles per disseny: lot 14 (Cobb 39 setm, n=5, va fer 90,7% quan l'Excel diu ~81%) i lot 4 (n=1). Cap mètode els endevinaria amb les dades d'avui (confusió lot/edat).
+- **Offset de nivell = −0,39 pp**: l'Excel ja està pràcticament calibrat al present; la correcció amb dades reals quasi no mou res (l'històric és fiable).
+- **Bonus SS = +4,75 pp** (overlap Ross 45-55), coherent amb el +5 pp observat dins els lots reals que van córrer a les dues màquines.
+
+**Calibratge del marge (§8.4):** sense marge, 3 lots quedarien sobreestimats ("curts"); per eliminar-los del tot calen ~5 pp (excedent mitjà ~5,8 pp). Triat **marge moderat de 3 pp** (param `previsio_marge_seguretat`), que treu els curts que importen amb excedent ~5 pp. ⚠️ **Reposa en 7 lots: indicatiu, no robust.** Recalibrar quan entrin més lots.
+
+⚠️ **Caveat global honest:** amb 7 lots, estirp i edat estan gairebé confosos amb el lot (~1 ramat per estirp×màquina×banda d'edat). La FORMA de la corba ve de l'Excel (Ross MS: 1.548 reg.; Cobb MS: 126; Ross SS: 201; Cobb SS: 0), no dels reals. El valor principal d'ara és que la previsió **sempre** mostra la caiguda per edat i el bonus SS, en comptes de desinflar-se al 0,82 pla.
+
+### 8.6 Implementació (feta 2026-05-31) ✅
+
+- **Taula `previsio_corba`** (estirp, tipus_incubadora, setmanes 24-66, naixement_pct, font): forma Excel suavitzada (finestra ±2 setm, decreixement monòton ≥40 setm), Singlestage = Multistage + bonus SS, Cobb Singlestage = Cobb MS + bonus (estimat, sense dades directes). 172 files. Inspeccionable i editable.
+- **Paràmetres** a `parametres`: `previsio_offset_nivell` (−0.0039), `previsio_marge_seguretat` (0.03).
+- **`lib/previsio.ts` reescrit**: eliminades la cascada de fonts i tota la maquinària del delta del lot (§8.2: sense senyal). Ara: lookup a la corba (cau a memòria) + offset → previsió central; `calcularPrevisioFinal` afegeix `previsio_conservadora` = central − marge (per a la planificació de carros per comanda, §2.9). Signatures públiques i camps de l'API preservats. Tsc net.
+- **Script del backtest**: `scripts/backtest_previsio.py` (reexecutable per recalibrar quan hi hagi més dades).
+- ⏳ **Pendent de DESPLEGAR**: el codi nou no actua a prod fins al push → Vercel. La taula i els paràmetres ja són a prod.
 
 ---
 
