@@ -129,7 +129,7 @@ Les **taules principals** (amb una explicació planera del que guarden):
 
 **`comandes`** — Encàrrecs dels clients. Camps: `client_id`, `tipus`, `quantitat_pollets`, `quantitat_ous_maquila`, `sexat` (booleà), `data_prevista_naixement`. Una comanda pot estar enganxada a una càrrega o no (`full_carrega_id` pot ser null = comanda anticipada sense càrrega assignada).
 
-**`clients`** — Els clients comercials.
+**`clients`** — Els clients comercials. Camp `ordre_carrega` (smallint NULL, afegit 2026-05-29): ordre de càrrega del camió (més baix = carrega abans = primeres incubadores); s'usa per al repartiment automàtic per client. Vegeu REGLES_ASSIGNACIO.md §2.9.
 
 **`destinacions`** — Granges de destinació (on van els polls). Camps: `nom_granja`, `nau`, `poblacio`, `client_id`, `codi_rega`, `adreca`, `telefon`, `observacions`, `sexe`.
 

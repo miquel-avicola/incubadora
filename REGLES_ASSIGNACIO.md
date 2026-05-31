@@ -129,6 +129,26 @@ I una decisió que NO és humana: la **zona** (post-rotació, vegeu §6).
 
 **Resum:** "recuperable" (vell o de baix naixement però sa) → SS; "no recuperable / risc sanitari" (explosius) → Sanco. El filtre Sanco mana **només per als explosius**, no per a tot el que rendeix malament.
 
+### 2.9 Repartiment per client — assignació automàtica (DISSENY, 2026-05-29) 🟡
+
+🟡 **Dissenyat i validat en harness contra el 2964; PENDENT de portar a la v2** (bloquejat per la previsió, vegeu §7 #14).
+
+**Dada nova:** camp `clients.ordre_carrega` (smallint, més baix = carrega abans = primeres incubadores). Valors per defecte: Aves Gil 10, Pinsos del Segre 11, Florida 12, Guco 13 (matiners) · Avinatur 20 (premium) · Pondex 30 · Nutrex 80 · Sanco 90 (maquila/cua). Per-càrrega es podrà **sobreescriure** a la pantalla de planificació (UI pendent).
+
+**Algorisme (dilluns):**
+
+1. Clients amb comanda de pollets ordenats per `ordre_carrega`. El de **`ordre_carrega` més alt entre els pollets** = premium (Avinatur) → rep els **millors** lots; els anteriors = matiners → reben els **pitjors**.
+2. Lots ordenats per qualitat (pitjor→millor, U-shaped §2.3, §7 #12).
+3. **Matiners:** s'omplen amb els lots **pitjors** fins cobrir la seva comanda de pollets. Si la comanda demana més carros que Inc 3 (8), **desborden a Inc 4** (decisió Enric 2026-05-29), reduint l'espai d'Avinatur.
+4. **Avinatur (premium):** s'omple amb els **millors** lots fins cobrir la seva comanda.
+5. **Excés de lots dolents** (més enllà de matiners): va a Avinatur **només el necessari perquè no quedin >4 carros de >11 dies per a la propera càrrega** (anticipació §2.5/#9); la resta queda a estoc.
+6. **Maquila** reservada al final (§2.1).
+7. Lot-junt es manté (un lot pot creuar la frontera matiners/Avinatur).
+
+**Validació harness 2964:** matiners = La Justa + Botarell (pitjors) ✓; Avinatur = Maxim Ross + Font Navata (millors, òptims) + farciment menys-dolent ✓. Corregeix el defecte reportat (abans Font Navata bo anava a matiners i Botarell a Avinatur).
+
+❓ **Dijous / Sanco:** repartiment fi obert. Sanco = cua que queda després d'omplir la SS amb els 24 vells; l'Enric mateix no té clar el millor model. No s'ha dissenyat.
+
 ⚠️ **Restricció:** dins la SS cal trobar un **equilibri tèrmic** igualment (§5): no es poden amuntegar tots els lots freds sense respectar el rànquing de calor (el carro pos 2 = ovoscan vol el més calorós dels presents, §5.2).
 
 🔍 **Interacció amb §2.3:** un lot >55 setm és "dolent" per edat, però la SS **mitiga** aquesta penalització; per tant "vell" no s'ha de descartar, s'ha de col·locar a la màquina bona.
@@ -315,6 +335,8 @@ Implicacions per a l'algorisme:
 8. ✅ ~~Si tots els lots disponibles són >55 setm (escenari pic), com es prioritza.~~ **Resolt (§2.7):** ordre per antiguitat pura, SS com a palanca de recuperació, qualitat-client relaxada (premium rep el menys dolent).
 9. ✅ ~~Algorisme de pre-càlcul d'estoc-anticipat.~~ **Resolt (§2.5):** horitzó = propera càrrega; evacuar al premium si >4 carros quedarien a >11 dies a la propera càrrega; límit dur 14 dies sempre força entrada. Llindar 4 a validar.
 12. ✅ **Ordre de col·locació per QUALITAT (pitjor primer), no per dies d'estoc (feedback 2026-05-29, full 2964 manual; confirmat per l'Enric).** La v2 ordenava el pool per posta (dies d'estoc) i posava Font Navata (55 setm, bo) a matiners abans que Botarell (64 setm, dolent). Regla correcta: **el pitjor lot va primer → matiners (Inc 3); els del rang òptim 30-55 setm queden per a Avinatur.** Qualitat **U-shaped** (§2.3): "pitjor" = més lluny de la banda 30-55, tant els vells (>55) com els joves (<30). Dins la mateixa qualitat, per dies d'estoc. **Parcialment implementat 2026-05-29:** el `sort` del pool ja és qualitat-pitjor-primer (dolents fora de 30-55 primer; òptims al final; dins la mateixa qualitat per posta). Validat: Botarell va abans que Font Navata, matiners reben dolents. **PENDENT (peça gran):** quan els dolents superen la capacitat de matiners, l'excés cau a Avinatur barrejat amb els bons; cal el **repartiment per client real** (assignar bons→premium, excés dolent→premium per anticipació §2.5 o a estoc), no només un ordre. També: tiebreak fi vell-vs-jove i modulació empírica (§2.4).
+14. ⛔ **BLOQUEJANT — Previsió de pollets per carro (pilar de l'assignació automàtica).** La previsió actual funciona malament i l'Enric **no la fa servir**. És un pilar: el repartiment per client (§2.9) depèn de quants carros calen per cobrir cada comanda, i això surt de la previsió. **No s'ha de calcular amb corbes de fertilitat genèriques** (com va fer l'IA al harness, que donava ~2.300-3.100 pollets/carro, absurdament baix), sinó amb **històrics ben fets**. Referència de l'Enric (sobre carro sencer ~4.800 ous): **lot bo ≈ 85% de naixement ≈ ≥4.080 pollets**; **lot molt dolent ≈ 70% ≈ 3.360 pollets**; **menys del 70% és extremadament estrany**. ⚠️ Cal **definir bé el vocabulari** (naixement, eclosió, fertilitat, % sobre ous totals vs ous fèrtils…), que ara és font de confusió. → **Es tractarà en una conversa nova dedicada.**
+
 13. ✅ **Maquila garantida sota capacitat justa — implementat 2026-05-29.** La v2 ara calcula les places noves de MS del patró i limita el pool de pollets a `maxPolletsMS = totalMSSlots − maquila`, deixant la cua per a la maquila (`poolMS = [...pollets.slice(0,maxPolletsMS), ...maquilaOrd]`). Validat amb 2964.
 
 10. ✅ ~~Tensió MS zona vs calor.~~ **Resolt (§5.4, §6):** el suggeriment de calor a MS no s'usa; `suggerirZonaMS` es treu; la fórmula queda només per a SS.
