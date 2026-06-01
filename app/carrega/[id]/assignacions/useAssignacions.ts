@@ -413,7 +413,7 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     // rotacions ja s'han aplicat, així que no cal el mapa lliureAviat.
     const estatPerSuggerir = estatInstProjectat ?? estatInst
     const lliureAviatBuit = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
-    const sug = suggerirAssignacioCompleta(
+    const res = suggerirAssignacioCompleta(
       carrosPendents,
       full,
       incs,
@@ -423,34 +423,35 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
       carroPerCella,
       incsFiltrades
     )
-    if (sug.size === 0) return
+    if (res.assignacions.size === 0) return
     setColocats(prev => {
       const m = new Map(prev)
-      sug.forEach((p, cid) => m.set(cid, p))
+      res.assignacions.forEach((p, cid) => m.set(cid, p))
       return m
     })
     setSeleccionades(new Set())
 
-    // Avís si pollets previstos per sota de la comanda
+    // Avisos del motor (regles toves + comprovació global de pollets)
+    const missatgesAvisos: string[] = [...res.avisos]
     const comandaPollets = full.comandes
       .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
       .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
     if (comandaPollets > 0) {
-      const polletsSug = Array.from(sug.keys()).reduce((acc, cid) => {
+      const polletsSug = Array.from(res.assignacions.keys()).reduce((acc, cid) => {
         const c = carrosPendents.find(x => x.id === cid)
         if (!c) return acc
-        // La maquila no compta per a la comanda de pollets.
         if (c.client_maquila_id != null) return acc
         return acc + polletsCarro(c)
       }, 0)
       if (polletsSug < comandaPollets - 500) {
-        setErrorMsg(
-          `⚠️ Atenció: els ${sug.size} carros assignats preveuen ~${Math.round(polletsSug).toLocaleString('ca')} pollets, ` +
+        missatgesAvisos.push(
+          `⚠️ Atenció: els ${res.assignacions.size} carros assignats preveuen ~${Math.round(polletsSug).toLocaleString('ca')} pollets, ` +
           `per sota de la comanda (${comandaPollets.toLocaleString('ca')}). ` +
           `Necessites seleccionar més incubadores o afegir carros.`
         )
       }
     }
+    if (missatgesAvisos.length > 0) setErrorMsg(missatgesAvisos.join('\n'))
   }
 
   // ── Optimització tèrmica de zones MS

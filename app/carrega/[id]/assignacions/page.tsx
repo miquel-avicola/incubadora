@@ -20,13 +20,15 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
         observacions,
         comandes (
           id,
+          client_id,
           tipus,
           quantitat_pollets,
           quantitat_ous_maquila,
           previsio_naixement,
           sexat,
+          override_ordre_carrega,
           observacions,
-          clients (id, nom)
+          clients (id, nom, categoria, ordre_carrega)
         ),
         assignacions (
           id,
@@ -85,7 +87,8 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
           estirp,
           granges_reproductores (
             granja,
-            nom_informal
+            nom_informal,
+            qualitat
           )
         )
       `)
@@ -109,7 +112,20 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
     supabase.rpc('estat_instalacions')
   ])
 
-  const initialFull = fullRes.data ?? null
+  // Propera càrrega (per a l'anticipació d'estoc §2.5 del motor d'assignació)
+  let carregaSeguent: string | null = null
+  if (fullRes.data?.carrega) {
+    const propereRes = await supabase
+      .from('fulls_carrega')
+      .select('carrega')
+      .gt('carrega', fullRes.data.carrega)
+      .order('carrega', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    carregaSeguent = propereRes.data?.carrega ?? null
+  }
+
+  const initialFull = fullRes.data ? { ...fullRes.data, carrega_seguent: carregaSeguent } : null
   const initialDisponibles = carrosRes.data ?? []
   const initialIncs = incRes.data ?? []
   const initialEstatInst = instRes.data ?? { incubadores: [], naixedores: [], generat_a: new Date().toISOString() }
