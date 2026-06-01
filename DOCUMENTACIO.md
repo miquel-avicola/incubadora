@@ -1,7 +1,7 @@
 # Documentació de l'aplicació Miquel Avícola Incubadora
 
 > Document escrit per a l'Enric (veterinari, no informàtic).
-> Última actualització: 31 de maig de 2026.
+> Última actualització: 1 de juny de 2026.
 > Font de veritat: aquest fitxer viu al repositori del projecte i s'actualitza a mesura que l'app canvia.
 
 ---
@@ -110,7 +110,7 @@ La base de dades és el cor de l'app: tota la informació viu aquí. Està a Sup
 
 Les **taules principals** (amb una explicació planera del que guarden):
 
-**`carros_estoc`** — Cada fila és un carro físic que ha arribat de granja. Camps clau: `lot_id` (de quina posta i granja ve), `posta` (número de posta), `quantitat_ous` (normalment 4800 o 2400), `estat` (a estoc, dins màquina...), `recepcio` (data d'arribada), `entrada_incubadora` (quan ha entrat a màquina), `client_maquila_id` (NULL = carro de pollets; si té valor, és maquila d'aquell client — afegit 2026-05-29, vegeu REGLES_ASSIGNACIO.md §2.1).
+**`carros_estoc`** — Cada fila és un carro físic que ha arribat de granja. Camps clau: `lot_id` (de quina posta i granja ve), `posta` (número de posta), `quantitat_ous` (normalment 4800 o 2400), `estat` (a estoc, dins màquina...), `recepcio` (data d'arribada), `entrada_incubadora` (quan ha entrat a màquina), `client_maquila_id` (NULL = carro de pollets; si té valor, és maquila d'aquell client — afegit 2026-05-29, vegeu REGLES_ASSIGNACIO.md §2.1). ⚠️ **Atenció dades (detectat 2026-06-01):** els camps `recepcio` i `entrada_incubadora` de `carros_estoc` (i també la data de `transferencies.transferencia`) estan mal omplerts a les càrregues actuals — apareixen tots col·lapsats a la mateixa data del naixement, cosa impossible (entre entrar a incubar i néixer hi ha ~21 dies). Mentre no es revisi d'on surten aquestes dates, la data fiable d'entrada a incubadora és la del full de càrrega (`fulls_carrega.carrega`).
 
 **`lots_reproductores`** — Cada fila és un "lot" de reproductores: una posta concreta d'una granja concreta amb una edat concreta. Camps: `estirp` (Ross, Cobb, etc.), `data_naixement` de les reproductores.
 
@@ -160,7 +160,7 @@ Les **taules principals** (amb una explicació planera del que guarden):
 
 **`audit_log`** *(afegida 2026-05-25)* — Registre d'accions mutatives de cada usuari. Camps: `id` (uuid), `ts`, `user_id` (FK → users, set null si s'esborra l'usuari), `username` (desnormalitzat), `role`, `ip`, `method`, `path`, `payload` (jsonb redactat i truncat a 5KB), `status_code`. RLS deny-all. Consultable a `/admin/auditoria`.
 
-Les **funcions** de la base de dades (codi SQL guardat dins de la pròpia base que fa càlculs) inclouen: `avg_naixement_supabase`, `avg_eclosio_supabase`, `rotar_zones_ms_gran`, `fulls_candidats_finalitzar`, `estat_instalacions`, `offset_per_dia`, `guarda_planificacio_full`.
+Les **funcions** de la base de dades (codi SQL guardat dins de la pròpia base que fa càlculs) inclouen: `avg_naixement_supabase`, `avg_eclosio_supabase`, `rotar_zones_ms_gran`, `fulls_candidats_finalitzar`, `estat_instalacions`, `offset_per_dia`, `guarda_planificacio_full`, i **`estadistiques_mensuals`** (afegida 2026-06-01: agrega per mes els ous entrats —pel mes d'entrada a incubadora—, els pollets nascuts i els pollets servits amb el repartiment Catalunya/fora —pel mes de naixement—; alimenta la pàgina `/estadistiques`).
 
 ---
 
@@ -181,6 +181,8 @@ A grans trets, l'app permet:
 **Expedicions** — Generar les expedicions: triar les destinacions (granges), distribuir els carros entre els viatges, escollir transportista, registrar vacunes aplicades. Permet expedicions sexades (mascles i femelles separats).
 
 **Etiquetes i PDFs** — Generar etiquetes de càrrega (90×90 mm) i de pollets (50×50 mm), i fulls d'estadístiques per càrrega.
+
+**Estadístiques mensuals** — La pàgina `/estadistiques` mostra, per mes: els ous entrats a incubadora (pel mes en què entren), els pollets nascuts i el repartiment dels servits entre Catalunya i fora (pel mes de naixement). Important: els ous entrats i els pollets nascuts d'un mateix mes són càrregues diferents, perquè entre que un ou entra a incubar i neix passen unes 3 setmanes. *(Refet 2026-06-01: abans tenia una targeta de "Sobrants" que donava xifres falses —p. ex. −34.805— barrejant previsions de comandes de fulls encara no nascuts amb naixements inexistents.)*
 
 **Vista comercial** — Una pantalla amb la previsió comercial per veure el flux esperat de polls per dates.
 
