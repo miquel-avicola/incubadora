@@ -185,7 +185,8 @@ export default function ImprimirFull() {
           .print-page { height: 100vh; padding: 0; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         }
-        body { font-family: Arial, sans-serif; font-size: 9px; color: #000; background: white; margin: 0; }
+        body, .print-page, table, td, th { color: #000 !important; background-color: white !important; }
+        body { font-family: Arial, sans-serif; font-size: 9px; margin: 0; }
         table { border-collapse: collapse; width: 100%; }
         .print-page { display: flex; flex-direction: column; height: 190mm; padding: 8px 12px; box-sizing: border-box; }
         .print-tables { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
