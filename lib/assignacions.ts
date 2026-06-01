@@ -767,13 +767,26 @@ export function suggerirAssignacioCompleta(
       const ssInst = instById.get(ssInc.id)!
       const nSlotsSS = slotsDisponibles(ssInst).length
       // Candidats SS: Ross sexats (§2.9.2 DURA) + B (Pondex) + C sans (Sanco)
-      // Ordenats per setmanes DESC: vells = més calor = §5.1
-      const candidatsSS = [...carrosRossReservats, ...calaixB, ...calaixC]
-        .sort((a, b) =>
-          setmanesLot(b.lots_reproductores.data_naixement) -
-          setmanesLot(a.lots_reproductores.data_naixement)
-        )
+      // Si hi ha comandes sexades de clients de SS (categoria B), la SS ha de ser
+      // 100% Ross — cap Cobb o altra estirp no sexable pot entrar (§2.9.2 DURA).
+      const sexadesALaSS = comandesSexades.some(c => c.client?.categoria === 'B')
+      const baseCandidatsSS = [...carrosRossReservats, ...calaixB, ...calaixC]
+      const candidatsSS = sexadesALaSS
+        ? baseCandidatsSS.filter(c =>
+            c.lots_reproductores.estirp?.toLowerCase().includes('ross')
+          )
+        : baseCandidatsSS
+      candidatsSS.sort((a, b) =>
+        setmanesLot(b.lots_reproductores.data_naixement) -
+        setmanesLot(a.lots_reproductores.data_naixement)
+      )
       poolSS = candidatsSS.slice(0, nSlotsSS)
+      if (sexadesALaSS && poolSS.length < nSlotsSS) {
+        avisos.push(
+          `⚠️ Sexat SS: només ${poolSS.length} carros Ross disponibles per als ${nSlotsSS} slots de la SS. ` +
+          `La SS quedarà incompleta per garantir que cap Cobb hi entri.`
+        )
+      }
     }
     const idsSS = new Set(poolSS.map(c => c.id))
     // Pool MS: Ross que no han cabut a SS + A + B no-SS + C no-SS + explosius + maquila
