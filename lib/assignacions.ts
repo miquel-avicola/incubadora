@@ -766,9 +766,9 @@ export function suggerirAssignacioCompleta(
       const ssInc = incByNumero.get(ssNum)!
       const ssInst = instById.get(ssInc.id)!
       const nSlotsSS = slotsDisponibles(ssInst).length
-      // Candidats SS: B (Pondex) + C sans (Sanco sense explosius)
+      // Candidats SS: Ross sexats (§2.9.2 DURA) + B (Pondex) + C sans (Sanco)
       // Ordenats per setmanes DESC: vells = més calor = §5.1
-      const candidatsSS = [...calaixB, ...calaixC]
+      const candidatsSS = [...carrosRossReservats, ...calaixB, ...calaixC]
         .sort((a, b) =>
           setmanesLot(b.lots_reproductores.data_naixement) -
           setmanesLot(a.lots_reproductores.data_naixement)
@@ -776,9 +776,9 @@ export function suggerirAssignacioCompleta(
       poolSS = candidatsSS.slice(0, nSlotsSS)
     }
     const idsSS = new Set(poolSS.map(c => c.id))
-    // Pool MS: Ross sexat + A + B no-SS + C no-SS + explosius (cua) + maquila
+    // Pool MS: Ross que no han cabut a SS + A + B no-SS + C no-SS + explosius + maquila
     const msNormals = [
-      ...carrosRossReservats,
+      ...carrosRossReservats.filter(c => !idsSS.has(c.id)),
       ...calaixA,
       ...calaixB.filter(c => !idsSS.has(c.id)),
       ...calaixC.filter(c => !idsSS.has(c.id))
