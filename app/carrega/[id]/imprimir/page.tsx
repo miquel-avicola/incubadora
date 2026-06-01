@@ -183,8 +183,9 @@ export default function ImprimirFull() {
           @page { size: A4 landscape; margin: 10mm; }
           .no-print { display: none !important; }
           .print-page { height: 100vh; padding: 0; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         }
-        body { font-family: Arial, sans-serif; font-size: 9px; color: #111; background: white; margin: 0; }
+        body { font-family: Arial, sans-serif; font-size: 9px; color: #000; background: white; margin: 0; }
         table { border-collapse: collapse; width: 100%; }
         .print-page { display: flex; flex-direction: column; height: 190mm; padding: 8px 12px; box-sizing: border-box; }
         .print-tables { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -198,7 +199,7 @@ export default function ImprimirFull() {
         <button onClick={() => window.history.back()} style={{ padding: '0.4rem 0.9rem', background: 'transparent', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
           ← Tornar
         </button>
-        <span style={{ fontSize: '0.8rem', color: '#666' }}>Full #{full.num_carrega} — A4 horitzontal</span>
+        <span style={{ fontSize: '0.8rem', color: '#333' }}>Full #{full.num_carrega} — A4 horitzontal</span>
       </div>
 
       <div className="print-page">
@@ -206,7 +207,7 @@ export default function ImprimirFull() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3px', borderBottom: '2px solid #111', paddingBottom: '3px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 700 }}>Càrrega #{full.num_carrega}</div>
-            <div style={{ fontSize: '7px', color: '#666', marginTop: '1px' }}>Miquel Avícola — Sala d'incubació</div>
+            <div style={{ fontSize: '7px', color: '#333', marginTop: '1px' }}>Miquel Avícola — Sala d'incubació</div>
           </div>
           <div style={{ display: 'flex', gap: '14px', fontSize: '9px', textAlign: 'center', alignItems: 'center' }}>
             {[
@@ -215,13 +216,13 @@ export default function ImprimirFull() {
               { label: 'Naixement', data: naixement },
             ].map(({ label, data }) => (
               <div key={label}>
-                <div style={{ fontSize: '7px', textTransform: 'uppercase', color: '#888', fontWeight: 700 }}>{label}</div>
+                <div style={{ fontSize: '7px', textTransform: 'uppercase', color: '#444', fontWeight: 700 }}>{label}</div>
                 <div style={{ fontWeight: 700 }}>{data ? formatData(data) : '—'}</div>
-                <div style={{ color: '#666' }}>{data ? diaSemana(data) : ''}</div>
+                <div style={{ color: '#333' }}>{data ? diaSemana(data) : ''}</div>
               </div>
             ))}
             <div>
-              <div style={{ fontSize: '7px', textTransform: 'uppercase', color: '#888', fontWeight: 700 }}>Carros</div>
+              <div style={{ fontSize: '7px', textTransform: 'uppercase', color: '#444', fontWeight: 700 }}>Carros</div>
               <div style={{ fontWeight: 700, fontSize: '12px' }}>{full.assignacions.length}</div>
             </div>
           </div>
@@ -241,7 +242,7 @@ export default function ImprimirFull() {
 
         {signaturesUniques.length > 0 && (
           <div style={{ marginTop: '4px', fontSize: '7.5px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #ddd', paddingTop: '3px' }}>
-            <span style={{ color: '#666', fontWeight: 700 }}>PLA VACUNAL:</span>
+            <span style={{ color: '#333', fontWeight: 700 }}>PLA VACUNAL:</span>
             {signaturesUniques.map(s => (
               <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ display: 'inline-block', width: '10px', height: '10px', background: sigToColor[s], border: '1px solid #aaa' }} />
@@ -251,9 +252,9 @@ export default function ImprimirFull() {
           </div>
         )}
 
-        <div style={{ marginTop: '3px', fontSize: '7px', color: '#999', borderTop: '1px solid #ddd', paddingTop: '3px', display: 'flex', justifyContent: 'space-between' }}>
-          <span>Exp. = ous explosius · Fèrtils = ous fèrtils vacunats · Naix. = naixedora destí</span>
-          <span>Imprès: {new Date().toLocaleDateString('ca-ES')}</span>
+        <div style={{ marginTop: '3px', fontSize: '7px', color: '#444', borderTop: '1px solid #ddd', paddingTop: '3px', display: 'flex', justifyContent: 'space-between' }}>
+          <span>Exp. = ous explosius Â· FÃ¨rtils = ous fÃ¨rtils vacunats Â· Naix. = naixedora destÃ­</span>
+          <span>ImprÃ¨s: {new Date().toLocaleDateString('ca-ES')}</span>
         </div>
 
       </div>

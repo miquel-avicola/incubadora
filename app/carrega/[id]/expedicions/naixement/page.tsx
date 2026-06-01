@@ -293,7 +293,8 @@ export default function ExpedicionsNaixement() {
         @media print {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
-          body { background: white !important; color: black !important; }
+          body { background: white !important; color: black !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
           .print-table { width: 100%; border-collapse: collapse; font-size: 10px; font-family: Arial, sans-serif; }
           .print-table th, .print-table td { border: 1px solid #999; padding: 4px 6px; text-align: center; }
           .print-table th { background: #f0f0f0; font-weight: bold; }
