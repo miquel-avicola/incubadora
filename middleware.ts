@@ -15,11 +15,14 @@ function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === 'development'
   return [
     "default-src 'self'",
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+    // 'wasm-unsafe-eval': permet compilar WebAssembly (el necessita @react-pdf/renderer
+    //   per generar els PDF d'etiquetes). És específic per a WASM i no obre l'eval general.
+    `script-src 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' data: blob:",
-    "connect-src 'self' https://uhslwgcjdiwycknvaplr.supabase.co wss://uhslwgcjdiwycknvaplr.supabase.co",
+    // data:: el WASM de @react-pdf es carrega des d'una URL data:
+    "connect-src 'self' data: https://uhslwgcjdiwycknvaplr.supabase.co wss://uhslwgcjdiwycknvaplr.supabase.co",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
     "base-uri 'self'",
