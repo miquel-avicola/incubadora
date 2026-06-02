@@ -13,6 +13,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       transferencia,
       estat,
       observacions,
+      distribucio_carros,
       comandes (
         id,
         tipus,
@@ -73,12 +74,13 @@ export const PATCH = withAudit(async (request: Request, { params }: { params: { 
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarregaPatchBody, raw)
   if (!parsed.ok) return parsed.response
-  const { estat, observacions, transferencia } = parsed.data
+  const { estat, observacions, transferencia, distribucio_carros } = parsed.data
 
   const updates: Record<string, unknown> = {}
   if (estat !== undefined) updates.estat = estat
   if (observacions !== undefined) updates.observacions = observacions
   if (transferencia !== undefined) updates.transferencia = transferencia
+  if (distribucio_carros !== undefined) updates.distribucio_carros = distribucio_carros
 
   const { data, error } = await supabase
     .from('fulls_carrega')

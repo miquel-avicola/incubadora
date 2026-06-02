@@ -48,6 +48,7 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
+  distribucio_carros: DistribucioSaved | null
   assignacions: Assignacio[]
 }
 
@@ -126,18 +127,11 @@ export default function ExpedicionsNaixement() {
     ])
     setFull(fullRes)
     setExpedicions(expRes)
+    setDistribucio(fullRes?.distribucio_carros || {})
     setLoading(false)
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
-
-  useEffect(() => {
-    if (!params.id) return
-    try {
-      const raw = localStorage.getItem(`mav_dist_${params.id}`)
-      if (raw) setDistribucio(JSON.parse(raw))
-    } catch { /* ignore */ }
-  }, [params.id])
 
   useEffect(() => {
     if (!loading && searchParams.get('print') === 'true') {

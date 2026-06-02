@@ -73,6 +73,7 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
+  distribucio_carros: DistribucioSaved | null
   comandes: Comanda[]
   assignacions: {
     es_maquila: boolean
@@ -253,6 +254,7 @@ export default function Expedicions() {
   const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
   const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
   const [filtresGrup, setFiltresGrup] = useState<Record<string, { alcada: string, pc: string }>>({})
+  const [aplicantDist, setAplicantDist] = useState<string | null>(null)
 
   const carregarDades = useCallback(async () => {
     if (!params.id) return
@@ -413,6 +415,17 @@ export default function Expedicions() {
     })
   }
 
+  async function actualitzarPolletsComanda(expId: number, valor: string) {
+    const num = valor.trim() === '' ? null : parseInt(valor)
+    if (num !== null && (isNaN(num) || num < 0)) return
+    setExpedicions(prev => prev.map(e => e.id === expId ? { ...e, pollets_comanda: num } : e))
+    await fetch(`/api/expedicions/${expId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pollets_comanda: num }),
+    })
+  }
+
   function calcularGrup(grupKey: string, exps: Expedicio[], transportista: Transportista) {
     const f = filtresGrup[grupKey] || {}
     const forcaAlcada = f.alcada ? parseInt(f.alcada) : undefined
@@ -421,8 +434,9 @@ export default function Expedicions() {
     setOpcionsPerViatge(prev => ({ ...prev, [grupKey]: opcions }))
   }
 
-  function triarOpcio(grupKey: string, idx: number, opcio: Opcio, transportista: Transportista, numViatge: number) {
+  async function triarOpcio(grupKey: string, idx: number, opcio: Opcio, transportista: Transportista, numViatge: number) {
     setOpcioSeleccionada(prev => ({ ...prev, [grupKey]: idx }))
+    setAplicantDist(grupKey)
 
     const expIdsEnCompartit = new Set<number>()
     opcio.carros_compartits.filter(cc => cc.items.length > 1).forEach(cc => {
@@ -440,14 +454,9 @@ export default function Expedicions() {
       }
     })
 
-    const lsKey = `mav_dist_${params.id}`
-    let saved: DistribucioSaved = {}
-    try {
-      const raw = localStorage.getItem(lsKey)
-      if (raw) saved = JSON.parse(raw)
-    } catch { /* ignore */ }
-
-    saved[grupKey] = {
+    // Fusionar amb la distribució ja desada (altres viatges) i persistir-ho a la BD
+    const novaDist: DistribucioSaved = { ...(full?.distribucio_carros || {}) }
+    novaDist[grupKey] = {
       alcada: opcio.alcada,
       pollets_caixa: opcio.pollets_caixa,
       nom_transportista: transportista.nom,
@@ -456,7 +465,24 @@ export default function Expedicions() {
       per_expedicio,
       carros_compartits: opcio.carros_compartits,
     }
-    localStorage.setItem(lsKey, JSON.stringify(saved))
+
+    await fetch(`/api/carrega/${params.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ distribucio_carros: novaDist }),
+    })
+
+    // Sobreescriure la quantitat de cada expedició amb el seu pollets_reals (arrodonit a caixes/carros)
+    await Promise.all(opcio.resultats.map(r =>
+      fetch(`/api/expedicions/${r.expedicio_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pollets_comanda: r.pollets_reals }),
+      })
+    ))
+
+    await carregarDades()
+    setAplicantDist(null)
   }
 
   if (loading || !full) return (
@@ -853,11 +879,22 @@ export default function Expedicions() {
                       </span>
                     )}
                   </div>
-                  <div className="text-[12px] text-text-dim mono">
-                    {e.pollets_comanda ? `${e.pollets_comanda.toLocaleString()} pollets previstos` : 'sense quantitat'}
-                    {e.hora_prevista_naixement && ` · ${e.hora_prevista_naixement}`}
-                    {e.transportistes && ` · ${e.transportistes.nom}`}
-                    {e.matricula && ` · ${e.matricula}`}
+                  <div className="text-[12px] text-text-dim mono flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={e.pollets_comanda ?? ''}
+                        onChange={ev => setExpedicions(prev => prev.map(x => x.id === e.id ? { ...x, pollets_comanda: ev.target.value === '' ? null : parseInt(ev.target.value) } : x))}
+                        onBlur={ev => actualitzarPolletsComanda(e.id, ev.target.value)}
+                        placeholder="0"
+                        className="bg-bg border border-border rounded px-1.5 py-0.5 w-20 text-text mono text-[12px] outline-none focus:border-accent transition-colors"
+                      />
+                      pollets previstos
+                    </span>
+                    {e.hora_prevista_naixement && <span>· {e.hora_prevista_naixement}</span>}
+                    {e.transportistes && <span>· {e.transportistes.nom}</span>}
+                    {e.matricula && <span>· {e.matricula}</span>}
                   </div>
                   {e.expedicio_lots.length > 0 && (
                     <div className="mt-1.5 text-[12px] mono text-success">
@@ -933,6 +970,9 @@ export default function Expedicions() {
                         {g.transportista.max_carros && (
                           <span className="ml-2 mono text-[11px] text-text-dim">(màx. {g.transportista.max_carros} carros)</span>
                         )}
+                        {full.distribucio_carros?.[g.key] && (
+                          <span className="ml-2 mono text-[11px] text-success">✓ aplicada: {full.distribucio_carros[g.key].alcada} cx · {full.distribucio_carros[g.key].pollets_caixa} p/cx</span>
+                        )}
                       </div>
                       <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
                         <div className="flex gap-1 items-center flex-1 md:flex-none">
@@ -997,12 +1037,13 @@ export default function Expedicions() {
                                   </span>
                                 </div>
                                 <button onClick={() => triarOpcio(g.key, idx, opcio, g.transportista, g.num_viatge)}
-                                  className={`w-full md:w-auto px-3 py-1.5 text-xs mono rounded-md border font-bold transition-colors whitespace-nowrap ${
-                                    sel 
-                                      ? 'border-success bg-success/20 text-success' 
+                                  disabled={aplicantDist !== null}
+                                  className={`w-full md:w-auto px-3 py-1.5 text-xs mono rounded-md border font-bold transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ${
+                                    sel
+                                      ? 'border-success bg-success/20 text-success'
                                       : 'border-border bg-bg text-text hover:border-text-dim'
                                   }`}>
-                                  {sel ? '✓ Triada' : 'Triar aquesta opció'}
+                                  {aplicantDist === g.key && sel ? 'Aplicant...' : sel ? '✓ Triada' : 'Triar aquesta opció'}
                                 </button>
                               </div>
                               <div className={`flex flex-col gap-1 ${opcio.carros_compartits.some(cc => cc.items.length > 1) ? 'mb-3' : ''}`}>

@@ -102,6 +102,8 @@ export const CarregaPatchBody = z.object({
   estat: z.enum(['Planificat', 'Finalitzat']).optional(),
   observacions: z.string().max(1000).nullable().optional(),
   transferencia: zDate.nullable().optional(),
+  // Distribució de carros/caixes per viatge (objecte DistribucioSaved). null per esborrar-la.
+  distribucio_carros: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 
 // ── Lots ──────────────────────────────────────────────────────────────────

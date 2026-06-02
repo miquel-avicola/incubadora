@@ -11,6 +11,7 @@ interface ExpedicioInfo {
   client: string
   sexe: string | null
   nom_granja: string
+  nau: string | null
   poblacio: string | null
   carros_sencers: number
   pico_caixes: number
@@ -25,10 +26,12 @@ export default function EtiquetesPollets() {
 
   useEffect(() => {
     if (!params.id) return
-    try {
-      const raw = localStorage.getItem(`mav_dist_${params.id}`)
-      if (raw) setDistribucio(JSON.parse(raw))
-    } catch { /* ignore */ }
+    fetch(`/api/carrega/${params.id}`)
+      .then(r => r.json())
+      .then((data: { distribucio_carros?: DistribucioSaved | null }) => {
+        setDistribucio(data?.distribucio_carros || {})
+      })
+      .catch(() => { /* ignore */ })
   }, [params.id])
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export default function EtiquetesPollets() {
           client: e.comandes?.clients?.nom ?? '',
           sexe: e.sexe ?? null,
           nom_granja: e.destinacions.nom_granja,
+          nau: e.destinacions.nau ?? null,
           poblacio: e.destinacions.poblacio ?? null,
           carros_sencers: 0,
           pico_caixes: 0,
@@ -64,15 +68,15 @@ export default function EtiquetesPollets() {
   async function descarregarPDF() {
     setDescarregant(true)
     try {
-      const labels: Array<{ client: string; sexe: string | null; nom_granja: string; poblacio: string | null; esPico: boolean }> = []
+      const labels: Array<{ client: string; sexe: string | null; nom_granja: string; nau: string | null; poblacio: string | null; esPico: boolean }> = []
       for (const e of expAmbDist) {
         // N etiquetes per als carros sencers
         for (let i = 0; i < e.carros_sencers; i++) {
-          labels.push({ client: e.client, sexe: e.sexe, nom_granja: e.nom_granja, poblacio: e.poblacio, esPico: false })
+          labels.push({ client: e.client, sexe: e.sexe, nom_granja: e.nom_granja, nau: e.nau, poblacio: e.poblacio, esPico: false })
         }
         // 1 etiqueta per al pico (si n'hi ha)
         if (e.pico_caixes > 0) {
-          labels.push({ client: e.client, sexe: e.sexe, nom_granja: e.nom_granja, poblacio: e.poblacio, esPico: true })
+          labels.push({ client: e.client, sexe: e.sexe, nom_granja: e.nom_granja, nau: e.nau, poblacio: e.poblacio, esPico: true })
         }
       }
       const { pdf } = await import('@react-pdf/renderer')
