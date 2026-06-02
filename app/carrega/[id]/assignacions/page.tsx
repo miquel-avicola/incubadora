@@ -125,7 +125,22 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
     carregaSeguent = propereRes.data?.carrega ?? null
   }
 
-  const initialFull = fullRes.data ? { ...fullRes.data, carrega_seguent: carregaSeguent } : null
+  // Supabase torna la relació del client de cada comanda sota la clau `clients`
+  // (el nom de la taula), però el motor d'assignació la llegeix com a
+  // `comanda.client`. Sense aquesta normalització, `comanda.client` és undefined
+  // i falla: (a) sexat→Ross a la SS no s'activa mai (entra Cobb tot i el sexat,
+  // §2.9.2) i (b) la demanda per categoria A/B/C surt 0 i tot cau al calaix B
+  // (§2.9.3). Gestionem objecte vs array perquè Supabase pot tornar qualsevol dels dos.
+  const initialFull = fullRes.data
+    ? {
+        ...fullRes.data,
+        carrega_seguent: carregaSeguent,
+        comandes: (fullRes.data.comandes ?? []).map((co: any) => ({
+          ...co,
+          client: Array.isArray(co.clients) ? co.clients[0] : co.clients,
+        })),
+      }
+    : null
   const initialDisponibles = carrosRes.data ?? []
   const initialIncs = incRes.data ?? []
   const initialEstatInst = instRes.data ?? { incubadores: [], naixedores: [], generat_a: new Date().toISOString() }
