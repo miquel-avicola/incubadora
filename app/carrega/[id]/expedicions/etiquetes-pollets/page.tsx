@@ -116,7 +116,7 @@ export default function EtiquetesPollets() {
               ← Expedicions
             </Link>
             <div>
-              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Etiquetes 50×50mm</p>
+              <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>Etiquetes 90×70mm</p>
               <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Etiquetes de pollets</h1>
             </div>
           </div>

@@ -49,7 +49,7 @@ Pensa en el "stack" com els ingredients amb què està construïda l'app. Aquí 
 
 **@supabase/supabase-js** — La llibreria que parla amb Supabase des de l'app.
 
-**@react-pdf/renderer** — Permet generar PDFs (per exemple, les etiquetes de càrrega 90×90 mm i les de pollets 50×50 mm, o els fulls d'estadístiques per càrrega).
+**@react-pdf/renderer** — Permet generar PDFs (per exemple, les etiquetes de càrrega i de pollets, totes dues de 90×70 mm, o els fulls d'estadístiques per càrrega).
 
 **Vercel** — Servei que hostatja l'app i la fa accessible per internet. Cada vegada que es puja codi nou a la branca `main` de GitHub, Vercel ho recull, ho compila i ho publica automàticament.
 
@@ -180,7 +180,7 @@ A grans trets, l'app permet:
 
 **Expedicions** — Generar les expedicions: triar les destinacions (granges), distribuir els carros entre els viatges, escollir transportista, registrar vacunes aplicades. Permet expedicions sexades (mascles i femelles separats).
 
-**Etiquetes i PDFs** — Generar etiquetes de càrrega (90×90 mm) i de pollets (50×50 mm), i fulls d'estadístiques per càrrega.
+**Etiquetes i PDFs** — Generar etiquetes de càrrega i de pollets (totes dues de 90×70 mm), i fulls d'estadístiques per càrrega.
 
 **Estadístiques mensuals** — La pàgina `/estadistiques` mostra, per mes: els ous entrats a incubadora (pel mes en què entren), els pollets nascuts i el repartiment dels servits entre Catalunya i fora (pel mes de naixement). Important: els ous entrats i els pollets nascuts d'un mateix mes són càrregues diferents, perquè entre que un ou entra a incubar i neix passen unes 3 setmanes. *(Refet 2026-06-01: abans tenia una targeta de "Sobrants" que donava xifres falses —p. ex. −34.805— barrejant previsions de comandes de fulls encara no nascuts amb naixements inexistents.)*
 
