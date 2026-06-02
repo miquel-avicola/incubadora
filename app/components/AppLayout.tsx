@@ -69,6 +69,7 @@ export default function AppLayout({ children, role }: { children: React.ReactNod
     { name: 'Impressions', href: '/impressions', icon: '📄' },
     { name: 'Previsió comercial', href: '/previsio-comercial', icon: '📅' },
     { name: 'Estadístiques globals', href: '/estadistiques', icon: '📊' },
+    { name: 'Estadística setmanal Jordi', href: '/estadistiques-setmanal', icon: '📈' },
   ]
 
   const NavContent = () => (

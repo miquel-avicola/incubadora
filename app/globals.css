@@ -40,6 +40,9 @@ body {
   font-family: var(--font-ibm-plex-mono), monospace;
 }
 
+/* Utilitats d'impressió (visibilitat segons mitjà) */
+.print-only { display: none; }
+
 /*
  * Impressió: el tema fosc fixa el color del text amb classes (text-text) més
  * específiques que `body`, així que en imprimir el text sortia gairebé blanc i
@@ -51,4 +54,21 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  /* Fons blanc en imprimir (el tema de pantalla és fosc) */
+  body { background: #fff !important; }
+
+  /* Estadística setmanal Jordi: full blanc i net */
+  main.estad-setmanal { padding: 0 !important; min-height: 0 !important; }
+  .estad-setmanal-card {
+    background: #fff !important;
+    border: 1px solid #999 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .estad-setmanal-card th,
+  .estad-setmanal-card td { border-bottom-color: #bbb !important; }
 }
