@@ -61,14 +61,28 @@ body {
   /* Fons blanc en imprimir (el tema de pantalla és fosc) */
   body { background: #fff !important; }
 
-  /* Estadística setmanal Jordi: full blanc i net */
+  /* Estadística setmanal Jordi: full blanc, compacte i tot en una sola pàgina A4 */
   main.estad-setmanal { padding: 0 !important; min-height: 0 !important; }
+  .estad-setmanal .estad-wrap { max-width: 100% !important; margin: 0 !important; }
+  .estad-setmanal .estad-header { margin-bottom: 7px !important; }
+  .estad-setmanal h1 { font-size: 14pt !important; }
   .estad-setmanal-card {
     background: #fff !important;
     border: 1px solid #999 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    /* No partir una taula entre dues pàgines */
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
+  /* Files i capçaleres molt més compactes per cabre en un full */
   .estad-setmanal-card th,
-  .estad-setmanal-card td { border-bottom-color: #bbb !important; }
+  .estad-setmanal-card td {
+    border-bottom-color: #bbb !important;
+    padding: 1.5px 7px !important;
+    font-size: 8.5pt !important;
+  }
+  .estad-setmanal-card td[style*="height"] { height: 3px !important; }
+  .estad-seccio { margin: 7px 0 2px !important; font-size: 7.5pt !important; }
+  .estad-nota { margin-top: 6px !important; font-size: 7pt !important; line-height: 1.25 !important; }
 }

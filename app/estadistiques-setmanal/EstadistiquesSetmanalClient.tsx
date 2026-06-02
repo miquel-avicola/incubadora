@@ -110,8 +110,8 @@ export function EstadistiquesSetmanalClient({
 
   return (
     <main className="estad-setmanal" style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1.5rem' }}>
-      <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="estad-wrap" style={{ maxWidth: 760, margin: '0 auto' }}>
+        <div className="estad-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Estadística setmanal Jordi</h1>
             <p style={{ color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>Per setmana de naixement · dilluns + dijous</p>
@@ -165,7 +165,7 @@ export function EstadistiquesSetmanalClient({
             </div>
 
             {/* ─── Ous per lot ─── */}
-            <div style={seccioStyle}>Ous entrats per lot</div>
+            <div className="estad-seccio" style={seccioStyle}>Ous entrats per lot</div>
             <div className="estad-setmanal-card" style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <Capcalera etiqueta="Lot" />
@@ -198,7 +198,7 @@ export function EstadistiquesSetmanalClient({
             </div>
 
             {/* ─── Pollets per client ─── */}
-            <div style={seccioStyle}>Pollets servits per client</div>
+            <div className="estad-seccio" style={seccioStyle}>Pollets servits per client</div>
             <div className="estad-setmanal-card" style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <Capcalera etiqueta="Client" />
@@ -229,7 +229,7 @@ export function EstadistiquesSetmanalClient({
           </>
         )}
 
-        <p style={{ ...labelStyle, marginTop: '1rem', textTransform: 'none', letterSpacing: 0, lineHeight: 1.4 }}>
+        <p className="estad-nota" style={{ ...labelStyle, marginTop: '1rem', textTransform: 'none', letterSpacing: 0, lineHeight: 1.4 }}>
           Ous separats entre producció pròpia i maquila. Pollets servits i sexats segons el real d&apos;expedició (sexats = expedicions amb sexe assignat). Una setmana mostra el dijous quan el seu full ja ha nascut.
         </p>
       </div>
