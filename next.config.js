@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 
+// Nota: Content-Security-Policy s'aplica de forma dinàmica (amb nonce) al middleware.ts
+// per poder eliminar 'unsafe-eval' en producció i suportar 'strict-dynamic'.
 const securityHeaders = [
   {
     key: 'Strict-Transport-Security',
@@ -20,22 +22,6 @@ const securityHeaders = [
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-  },
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "font-src 'self'",
-      "img-src 'self' data: blob:",
-      "connect-src 'self' https://uhslwgcjdiwycknvaplr.supabase.co wss://uhslwgcjdiwycknvaplr.supabase.co",
-      "worker-src 'self' blob:",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "object-src 'none'",
-    ].join('; '),
   },
 ]
 

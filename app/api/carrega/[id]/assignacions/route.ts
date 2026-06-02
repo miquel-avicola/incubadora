@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, CarregaAssignacionsPostBody, CarregaAssignacionsDeleteBody } from '@/lib/schemas'
 import { withAudit } from '@/lib/audit'
+import { assertOwnership } from '@/lib/ownership'
 
 type ZonaMS = 'central' | 'paret' | 'pulsator'
 const ZONES_VALIDES: ZonaMS[] = ['central', 'paret', 'pulsator']
@@ -150,12 +151,17 @@ export const POST = withAudit(async (request: Request, { params }: { params: { i
   return NextResponse.json({ created: data?.length }, { status: 201 })
 })
 
-export const DELETE = withAudit(async (request: Request, { params: _params }: { params: { id: string } }) => {
+export const DELETE = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(CarregaAssignacionsDeleteBody, raw)
   if (!parsed.ok) return parsed.response
   const { assignacio_id, carro_id } = parsed.data
+
+  // Ownership: l'assignació ha de pertànyer al full indicat a la URL
+  const fullId = parseInt(params.id, 10)
+  const ownerErr = await assertOwnership(supabase, 'assignacions', assignacio_id, 'full_carrega_id', fullId)
+  if (ownerErr) return ownerErr
 
   const { error } = await supabase
     .from('assignacions')

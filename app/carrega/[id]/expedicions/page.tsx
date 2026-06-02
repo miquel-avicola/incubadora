@@ -29,6 +29,7 @@ interface Comanda {
   id: number
   clients: { id: number; nom: string }
   quantitat_pollets: number | null
+  quantitat_ous_maquila: number | null
   tipus: string
 }
 
@@ -74,6 +75,8 @@ interface Full {
   carrega: string
   comandes: Comanda[]
   assignacions: {
+    es_maquila: boolean
+    carros_estoc: { quantitat_ous: number } | null
     transferencies: {
       resultats_naix: { pollets_nascuts: number }[]
     }[]
@@ -276,6 +279,16 @@ export default function Expedicions() {
     fetch(`/api/destinacions?client_id=${comanda.clients.id}`)
       .then(r => r.json())
       .then(setDestinacions)
+    // Maquila: prefill amb els pollets nascuts dels seus ous (el que neix va a la seva granja)
+    if (comanda.tipus === 'Maquila') {
+      const nascutsMaquila = (full.assignacions || []).reduce(
+        (s, a) => a.es_maquila
+          ? s + (a.transferencies?.reduce((tA, t) => tA + (t.resultats_naix?.reduce((rA, r) => rA + (r.pollets_nascuts || 0), 0) || 0), 0) || 0)
+          : s,
+        0
+      )
+      setPolletsComanda(nascutsMaquila > 0 ? String(nascutsMaquila) : '')
+    }
   }, [comandaId, full])
 
   async function crearNovaGranja() {
@@ -459,9 +472,35 @@ export default function Expedicions() {
     (d.poblacio || '').toLowerCase().includes(cercaDestinacio.toLowerCase())
   )
 
-  const polletsPerComanda: Record<number, { objectiu: number; assignats: number }> = {}
-  full.comandes.filter(c => c.tipus === 'Pollets').forEach(c => {
-    polletsPerComanda[c.id] = { objectiu: c.quantitat_pollets || 0, assignats: 0 }
+  // Maquila: ous entrats (del client) i pollets nascuts dels seus ous.
+  // No hi ha previsió calculada — el que neix va a la seva granja; si en falten s'hi afegeixen pollets nostres.
+  const ousMaquilaEntrats = (full.assignacions || []).reduce(
+    (s, a) => s + (a.es_maquila ? (a.carros_estoc?.quantitat_ous || 0) : 0), 0
+  )
+  const maquilaNascuts = (full.assignacions || []).reduce(
+    (s, a) => a.es_maquila
+      ? s + (a.transferencies?.reduce((tA, t) => tA + (t.resultats_naix?.reduce((rA, r) => rA + (r.pollets_nascuts || 0), 0) || 0), 0) || 0)
+      : s,
+    0
+  )
+
+  // Comandes ordenades: pollets primer, maquila sempre al final (abans de SOBRANTS)
+  const comandesMaquila = full.comandes.filter(c => c.tipus === 'Maquila')
+  const comandesOrdenades = [
+    ...full.comandes.filter(c => c.tipus === 'Pollets'),
+    ...comandesMaquila,
+  ]
+  const nMaquila = comandesMaquila.length
+
+  const polletsPerComanda: Record<number, { objectiu: number; assignats: number; maquila: boolean }> = {}
+  comandesOrdenades.forEach(c => {
+    const esMaquila = c.tipus === 'Maquila'
+    polletsPerComanda[c.id] = {
+      // Per maquila l'objectiu de referència són els pollets nascuts dels seus ous (repartits si n'hi ha més d'una)
+      objectiu: esMaquila ? (nMaquila > 0 ? Math.round(maquilaNascuts / nMaquila) : 0) : (c.quantitat_pollets || 0),
+      assignats: 0,
+      maquila: esMaquila,
+    }
   })
   expedicions.forEach(e => {
     const cid = e.comandes?.id
@@ -476,6 +515,9 @@ export default function Expedicions() {
 
   const totalAssignats = Object.values(polletsPerComanda).reduce((s, c) => s + c.assignats, 0)
   const sobrants = totalNascuts - totalAssignats
+
+  const comandaSel = comandaId ? full.comandes.find(c => c.id === parseInt(comandaId)) : undefined
+  const comandaSelMaquila = comandaSel?.tipus === 'Maquila'
 
   const grupsViatge: Array<{ key: string; transportista: Transportista; num_viatge: number; exps: Expedicio[] }> = []
   const grupMap = new Map<string, typeof grupsViatge[0]>()
@@ -532,17 +574,26 @@ export default function Expedicions() {
         {/* Resum per comanda */}
         <div className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm">
           <div className="text-[11px] mono text-text-dim uppercase tracking-wider mb-3">Resum comandes</div>
-          {full.comandes.filter(c => c.tipus === 'Pollets').map(c => {
-            const { objectiu, assignats } = polletsPerComanda[c.id] || { objectiu: 0, assignats: 0 }
+          {comandesOrdenades.map(c => {
+            const { objectiu, assignats, maquila } = polletsPerComanda[c.id] || { objectiu: 0, assignats: 0, maquila: false }
             const diff = objectiu - assignats
             return (
               <div key={c.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-border text-sm gap-1 sm:gap-0">
-                <span className="font-semibold">{c.clients.nom}</span>
+                <span className="font-semibold flex items-center gap-2">
+                  {c.clients.nom}
+                  {maquila && (
+                    <span className="text-[10px] mono font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 uppercase tracking-wider">
+                      Maquila
+                    </span>
+                  )}
+                </span>
                 <div className="text-left sm:text-right mono text-sm">
                   <span className={assignats === objectiu ? 'text-success' : 'text-accent'}>
                     {assignats.toLocaleString()} / {objectiu.toLocaleString()}
                   </span>
-                  {diff !== 0 && (
+                  {maquila ? (
+                    <span className="ml-2 text-xs text-text-dim">nascuts dels seus ous</span>
+                  ) : diff !== 0 && (
                     <span className={`ml-2 text-xs ${diff > 0 ? 'text-danger' : 'text-text-dim'}`}>
                       {diff > 0 ? `−${diff.toLocaleString()} pendent` : `+${Math.abs(diff).toLocaleString()} excés`}
                     </span>
@@ -551,6 +602,12 @@ export default function Expedicions() {
               </div>
             )
           })}
+          {ousMaquilaEntrats > 0 && (
+            <div className="flex justify-between items-center py-2 border-b border-border text-sm">
+              <span className="text-purple-600 dark:text-purple-400 mono text-xs uppercase tracking-wider">Ous de maquila entrats</span>
+              <span className="mono text-sm text-purple-600 dark:text-purple-400 font-bold">{ousMaquilaEntrats.toLocaleString()} ous</span>
+            </div>
+          )}
           {totalNascuts > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', marginTop: '0.5rem', borderTop: '2px solid var(--border)', fontSize: '0.85rem' }}>
               <span style={{ fontWeight: 700 }}>SOBRANTS</span>
@@ -570,8 +627,12 @@ export default function Expedicions() {
               <label className={labelClasses}>Comanda (client)</label>
               <select value={comandaId} onChange={e => { setComandaId(e.target.value); setDestinacioId(''); setCercaDestinacio('') }} className={inputClasses}>
                 <option value="">Selecciona client...</option>
-                {full.comandes.filter(c => c.tipus === 'Pollets').map(c => (
-                  <option key={c.id} value={c.id}>{c.clients.nom} — {(c.quantitat_pollets || 0).toLocaleString()} pollets</option>
+                {comandesOrdenades.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.tipus === 'Maquila'
+                      ? `${c.clients.nom} — MAQUILA (${(c.quantitat_ous_maquila || 0).toLocaleString()} ous)`
+                      : `${c.clients.nom} — ${(c.quantitat_pollets || 0).toLocaleString()} pollets`}
+                  </option>
                 ))}
               </select>
             </div>
@@ -705,6 +766,11 @@ export default function Expedicions() {
                 <div>
                   <label className={labelClasses}>Pollets previstos</label>
                   <input type="number" value={polletsComanda} onChange={e => setPolletsComanda(e.target.value)} placeholder="0" className={inputClasses} />
+                  {comandaSelMaquila && (
+                    <p className="text-[10px] mono text-purple-600 dark:text-purple-400 mt-1 mb-0">
+                      Maquila: {ousMaquilaEntrats.toLocaleString()} ous entrats · {maquilaNascuts.toLocaleString()} nascuts. Si en falten, afegeix-hi pollets nostres el dia del naixement.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClasses}>Hora prevista</label>

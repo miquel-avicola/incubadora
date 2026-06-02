@@ -111,6 +111,19 @@ export function canAccess(role: string, path: string): boolean {
     return false
   }
 
+  if (role === 'responsable') {
+    if (path === '/') return true
+    if (/^\/carrega($|\/)/.test(path)) return true
+    
+    // APIs necessàries per al responsable
+    if (/^\/api\/carrega($|\/)/.test(path)) return true
+    if (/^\/api\/transferencia($|\/)/.test(path)) return true
+    if (/^\/api\/naixement($|\/)/.test(path)) return true
+    if (/^\/api\/expedicions($|\/)/.test(path)) return true
+    
+    return false
+  }
+
   return false
 }
 

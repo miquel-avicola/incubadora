@@ -39,3 +39,16 @@ body {
 .mono {
   font-family: var(--font-ibm-plex-mono), monospace;
 }
+
+/*
+ * Impressió: el tema fosc fixa el color del text amb classes (text-text) més
+ * específiques que `body`, així que en imprimir el text sortia gairebé blanc i
+ * invisible. Forcem negre a tot arreu i imprimim els fons exactes (ressaltats).
+ */
+@media print {
+  * {
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

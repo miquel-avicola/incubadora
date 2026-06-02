@@ -2,15 +2,22 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseBody, NaixementPostBody, NaixementDeleteBody } from '@/lib/schemas'
 import { withAudit } from '@/lib/audit'
+import { assertTransferenciesOwnership } from '@/lib/ownership'
 
-export const POST = withAudit(async (request: Request) => {
+export const POST = withAudit(async (request: Request, { params }: { params: { id: string } }) => {
   const raw = await request.json().catch(() => null)
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(NaixementPostBody, raw)
   if (!parsed.ok) return parsed.response
   const { carros, total_pollets, sexat } = parsed.data
 
-  // carros és un array de { assignacio_id, transferencia_id, ous_fertils_vacunats }
+  // Ownership: les transferències han de pertànyer al full indicat a la URL
+  const fullId = parseInt(params.id, 10)
+  const transferenciaIds = carros.map((c: { transferencia_id: number }) => c.transferencia_id)
+  const ownerErr = await assertTransferenciesOwnership(supabase, transferenciaIds, fullId)
+  if (ownerErr) return ownerErr
+
+  // carros és un array de { transferencia_id, ous_fertils_vacunats }
 
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`

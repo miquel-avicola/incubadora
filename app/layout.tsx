@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import AppLayout from './components/AppLayout'
+import { cookies } from 'next/headers'
+import { verifySession } from '@/lib/auth'
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
@@ -23,11 +25,16 @@ export const metadata: Metadata = {
   viewport: 'width=device-width, initial-scale=1',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('session')?.value
+  const session = token ? await verifySession(token) : null
+  const role = session?.role ?? 'recepcio'
+
   return (
     <html lang="ca" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
       <body>
-        <AppLayout>
+        <AppLayout role={role}>
           {children}
         </AppLayout>
       </body>

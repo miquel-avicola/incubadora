@@ -16,6 +16,18 @@ export const PATCH = withAudit(async (request: Request, { params }: { params: { 
   if (!parsed.ok) return parsed.response
   const { full_carrega_id, data_prevista_naixement, quantitat_pollets, quantitat_ous_maquila, sexat } = parsed.data
 
+  // Ownership: si s'assigna a un full, verificar que existeix
+  if (full_carrega_id != null) {
+    const { data: full } = await supabase
+      .from('fulls_carrega')
+      .select('id')
+      .eq('id', full_carrega_id)
+      .maybeSingle()
+    if (!full) {
+      return NextResponse.json({ error: 'Full de càrrega no trobat' }, { status: 404 })
+    }
+  }
+
   const updates: Record<string, unknown> = {}
   if (full_carrega_id !== undefined) updates.full_carrega_id = full_carrega_id
   if (data_prevista_naixement !== undefined) updates.data_prevista_naixement = data_prevista_naixement

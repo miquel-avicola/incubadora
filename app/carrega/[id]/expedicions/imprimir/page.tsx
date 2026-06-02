@@ -23,7 +23,7 @@ interface Expedicio {
   observacions: string | null
   num_viatge: number | null
   sexe: string | null
-  comandes: { id: number; clients: { id: number; nom: string } }
+  comandes: { id: number; tipus: string; clients: { id: number; nom: string } }
   destinacions: { id: number; nom_granja: string; nau: string | null; poblacio: string | null; sexe: string | null }
   transportistes: { id: number; nom: string } | null
   expedicio_lots: ExpedicioLot[]
@@ -154,7 +154,7 @@ export default function ImprimirExpedicions() {
                         {e.destinacions.nau ? ` ${e.destinacions.nau}` : ''}
                         {e.destinacions.poblacio ? <div style={{ fontSize: '0.75rem', color: '#555' }}>{e.destinacions.poblacio}</div> : ''}
                       </td>
-                      <td>{e.comandes?.clients?.nom}</td>
+                      <td>{e.comandes?.clients?.nom}{e.comandes?.tipus === 'Maquila' ? ' (MAQUILA)' : ''}</td>
                       <td>
                         <strong>{getPolletsRealsOComanda(e) ? getPolletsRealsOComanda(e).toLocaleString() : '-'}</strong>
                         {e.sexe && <span style={{ marginLeft: '4px', fontSize: '0.8rem' }}>({e.sexe})</span>}

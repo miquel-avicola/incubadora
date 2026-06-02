@@ -23,7 +23,7 @@ interface Expedicio {
   pollets_servits: number | null
   hora_prevista_naixement: string | null
   num_viatge: number | null
-  comandes: { clients: { nom: string } }
+  comandes: { tipus: string; clients: { nom: string } }
   destinacions: { nom_granja: string; nau: string | null }
   transportistes: { id: number; nom: string } | null
   expedicio_lots: ExpedicioLot[]
@@ -33,6 +33,7 @@ interface Expedicio {
 }
 
 interface Assignacio {
+  es_maquila: boolean
   carros_estoc: {
     quantitat_ous: number
     lots_reproductores: { id: number; estirp: string | null; granges_reproductores: { granja: string; nom_informal: string | null } }
@@ -221,11 +222,24 @@ export default function ExpedicionsNaixement() {
     })
   })
 
+  // Lots de maquila (ous del client) i expedicions de maquila (granja del client)
+  const maquilaLotIds = new Set<number>()
+  full.assignacions.forEach(a => {
+    if (a.es_maquila) maquilaLotIds.add(a.carros_estoc.lots_reproductores.id)
+  })
+  const esExpMaquila = (e: Expedicio) => e.comandes?.tipus === 'Maquila'
+  // Una cel·la (lot × expedició) ressaltada = pollets d'un lot NOSTRE que van a una granja de maquila
+  const esAportacioNostra = (lotId: number, e: Expedicio) => esExpMaquila(e) && !maquilaLotIds.has(lotId)
+
   const lotsDisponibles = Object.entries(statsPerLot)
   const totalNascuts = Object.values(statsPerLot).reduce((s, l) => s + l.nascuts, 0)
   const totalAssignats = expedicions.reduce((s, e) => s + getPolletsRealsOComanda(e), 0)
 
   const expedicionsOrdenades = [...expedicions].sort((a, b) => {
+    // Maquila sempre al final (columnes a la dreta, abans de Total/Sobrants)
+    const maqA = esExpMaquila(a) ? 1 : 0
+    const maqB = esExpMaquila(b) ? 1 : 0
+    if (maqA !== maqB) return maqA - maqB
     const clientA = a.comandes?.clients?.nom || ''
     const clientB = b.comandes?.clients?.nom || ''
     if (clientA !== clientB) return clientA.localeCompare(clientB)
@@ -301,6 +315,8 @@ export default function ExpedicionsNaixement() {
           .print-table td.lot-nom { text-align: left; font-weight: bold; }
           .print-table tr.total-row td { background: #e8e8e8; font-weight: bold; }
           .print-table tr.dist-row td { background: #f8f4e8; font-size: 9px; }
+          .print-table th.maquila-col { background: #ede4f7 !important; }
+          .print-table td.cel-aportacio { background: #fde7c8 !important; font-weight: bold; }
           .print-table td.dist-label { text-align: left; font-weight: bold; font-size: 9px; }
           .print-header { font-family: Arial, sans-serif; margin-bottom: 12px; }
           .print-header h2 { font-size: 14px; margin: 0 0 4px 0; }
@@ -336,9 +352,9 @@ export default function ExpedicionsNaixement() {
                   const distExp = getDistExp(e)
                   const enCompartit = distExp?.en_carro_compartit ?? false
                   return (
-                    <th key={e.id}>
+                    <th key={e.id} className={esExpMaquila(e) ? 'maquila-col' : undefined}>
                       <div>{nomDestinacio(e.destinacions)}{enCompartit ? ' *' : ''}</div>
-                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}</div>
+                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.comandes?.clients?.nom}{esExpMaquila(e) ? ' · MAQUILA' : ''}</div>
                       {e.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{e.hora_prevista_naixement}</div>}
                       {e.expedicio_vacunes?.length > 0 && (
                         <div style={{ fontWeight: 'normal', fontSize: '8px', color: '#555', marginTop: '2px' }}>
@@ -353,9 +369,9 @@ export default function ExpedicionsNaixement() {
                   const distF = getDistExp(expF)
                   const enCompartit = (distM?.en_carro_compartit ?? false) || (distF?.en_carro_compartit ?? false)
                   return (
-                    <th key={`par_${expM.id}`}>
+                    <th key={`par_${expM.id}`} className={esExpMaquila(expM) ? 'maquila-col' : undefined}>
                       <div>{nomDestinacio(expM.destinacions)}{enCompartit ? ' *' : ''}</div>
-                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{expM.comandes?.clients?.nom}</div>
+                      <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{expM.comandes?.clients?.nom}{esExpMaquila(expM) ? ' · MAQUILA' : ''}</div>
                       {expM.hora_prevista_naixement && <div style={{ fontWeight: 'normal', fontSize: '9px' }}>{expM.hora_prevista_naixement}</div>}
                       <div style={{ fontWeight: 600, fontSize: '9px', color: '#333', marginTop: '2px' }}>
                         ♂ {(expM.pollets_comanda || 0).toLocaleString()} · ♀ {(expF.pollets_comanda || 0).toLocaleString()}
@@ -382,21 +398,23 @@ export default function ExpedicionsNaixement() {
               }, 0)
               return (
                 <tr key={lotId}>
-                  <td className="lot-nom">{stats.nom}</td>
+                  <td className="lot-nom">{stats.nom}{maquilaLotIds.has(lotId) ? ' · maquila' : ''}</td>
                   <td>{stats.ousEntrats.toLocaleString()}</td>
                   <td>{stats.nascuts.toLocaleString()}</td>
                   {cols.map((col) => {
                     if (col.type === 'single') {
                       const el = col.exp.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
-                      return <td key={col.exp.id}>{el ? el.pollets.toLocaleString() : ''}</td>
+                      const aportacio = !!el && el.pollets > 0 && esAportacioNostra(lotId, col.exp)
+                      return <td key={col.exp.id} className={aportacio ? 'cel-aportacio' : undefined}>{el ? el.pollets.toLocaleString() : ''}</td>
                     } else {
                       const elM = col.expM.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
                       const elF = col.expF.expedicio_lots.find(el => el.lots_reproductores.id === lotId)
                       const valM = elM?.pollets || 0
                       const valF = elF?.pollets || 0
                       if (valM === 0 && valF === 0) return <td key={`par_${col.expM.id}`}></td>
+                      const aportacio = esAportacioNostra(lotId, col.expM)
                       return (
-                        <td key={`par_${col.expM.id}`}>
+                        <td key={`par_${col.expM.id}`} className={aportacio ? 'cel-aportacio' : undefined}>
                           {valM > 0 && <span>♂ {valM.toLocaleString()}</span>}
                           {valM > 0 && valF > 0 && <br />}
                           {valF > 0 && <span>♀ {valF.toLocaleString()}</span>}
@@ -484,6 +502,14 @@ export default function ExpedicionsNaixement() {
           </tbody>
         </table>
 
+        {/* Llegenda maquila */}
+        {(maquilaLotIds.size > 0 || expedicions.some(esExpMaquila)) && (
+          <div className="print-llegenda">
+            <h4>Maquila</h4>
+            <div><span style={{ background: '#ede4f7', padding: '0 6px' }}>Columna maquila</span> = granja del client (ous seus). <span style={{ background: '#fde7c8', padding: '0 6px' }}>Cel·la ressaltada</span> = pollets d&apos;un lot nostre afegits a una granja de maquila.</div>
+          </div>
+        )}
+
         {/* Llegenda carros compartits */}
         {carrosCompartitsLlegenda.length > 0 && (
           <div className="print-llegenda">
@@ -530,7 +556,14 @@ export default function ExpedicionsNaixement() {
                 const disponibles = stats.nascuts - stats.assignats
                 return (
                   <div key={lotId} className="flex justify-between items-center py-1.5 border-b border-border text-sm">
-                    <span className="font-semibold text-text">{stats.nom}</span>
+                    <span className="font-semibold text-text flex items-center gap-2">
+                      {stats.nom}
+                      {maquilaLotIds.has(Number(lotId)) && (
+                        <span className="text-[9px] mono font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 uppercase tracking-wider">
+                          Maquila
+                        </span>
+                      )}
+                    </span>
                     <div className="text-right mono text-xs">
                       <span className={disponibles < 0 ? 'text-danger' : disponibles === 0 ? 'text-success' : 'text-accent'}>
                         {disponibles.toLocaleString()} disp.
@@ -565,7 +598,14 @@ export default function ExpedicionsNaixement() {
                 <div key={e.id} className={`bg-surface border rounded-xl overflow-hidden shadow-sm transition-colors ${obert ? 'border-accent' : tePollets ? 'border-success' : 'border-border'}`}>
                   <button onClick={() => obrirExpedicio(e)} className="w-full p-4 bg-transparent border-none cursor-pointer text-left flex justify-between items-center hover:bg-bg transition-colors">
                     <div className="flex-1">
-                      <div className="font-bold text-[15px]">{nomDestinacio(e.destinacions)}</div>
+                      <div className="font-bold text-[15px] flex items-center gap-2">
+                        {nomDestinacio(e.destinacions)}
+                        {esExpMaquila(e) && (
+                          <span className="text-[10px] mono font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 uppercase tracking-wider">
+                            Maquila
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-text-dim mono mt-1">
                         {e.comandes?.clients?.nom}
                         {e.hora_prevista_naixement && ` · ${e.hora_prevista_naixement}`}
