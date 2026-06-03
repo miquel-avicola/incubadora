@@ -69,6 +69,9 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     return idsAssignats.size > 0 ? 'assignacio' : 'seleccio'
   })
 
+  // ── Mode tap mòbil/tablet
+  const [carroSeleccionatTap, setCarroSeleccionatTap] = useState<number | null>(null)
+
   function toggleIncFiltrada(incId: number) {
     setIncsFiltrades(prev => {
       const s = new Set(prev)
@@ -261,6 +264,14 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     return m
   }, [mostrarProjectat, estatInst, estatInstProjectat, full])
 
+  // Índex posició dins la cua de cel·les seleccionades (ordre d'inserció del Set)
+  const cellaQueueIndex = useMemo(() => {
+    const m = new Map<string, number>()
+    let i = 1
+    seleccionades.forEach(k => { m.set(k, i++) })
+    return m
+  }, [seleccionades])
+
   // ── Handlers de cel·la
   const toggleSeleccio = useCallback((incId: number, pos: number, zona: ZonaMS | null) => {
     const k = keyCell(incId, pos, zona)
@@ -304,7 +315,56 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     if (!confirm('Reiniciar tota la planificació? Es perdrà el que has marcat i col·locat.')) return
     setColocats(new Map())
     setSeleccionades(new Set())
+    setCarroSeleccionatTap(null)
   }
+
+  // ── Handlers tap mòbil/tablet
+
+  // Tap un carro de la safata:
+  //   · Si hi ha cel·les en cua → col·loca el carro a la primera i avança la cua
+  //   · Si no → selecciona el carro perquè el proper tap a una cel·la el col·loqui
+  const tapCarroSafata = useCallback((carroId: number) => {
+    if (carroSeleccionatTap === carroId) {
+      setCarroSeleccionatTap(null)
+      return
+    }
+    const queueArr = Array.from(seleccionades)
+    if (queueArr.length > 0) {
+      const firstKey = queueArr[0]
+      const parts = firstKey.split('|')
+      const incId = parseInt(parts[0], 10)
+      const pos = parseInt(parts[1], 10)
+      const zona = parts[2] === '-' ? null : parts[2] as ZonaMS
+      setColocats(prev => { const m = new Map(prev); m.set(carroId, { incId, pos, zona }); return m })
+      setSeleccionades(prev => { const s = new Set(prev); s.delete(firstKey); return s })
+      return
+    }
+    setCarroSeleccionatTap(carroId)
+  }, [carroSeleccionatTap, seleccionades])
+
+  // Tap una cel·la:
+  //   · Si hi ha un carro seleccionat → col·loca'l i auto-avança al pròxim pendent
+  //   · Si no → comportament normal (marca/desmarca cua)
+  const onTapCella = useCallback((incId: number, pos: number, zona: ZonaMS | null) => {
+    if (carroSeleccionatTap === null) {
+      toggleSeleccio(incId, pos, zona)
+      return
+    }
+    const k = keyCell(incId, pos, zona)
+    if (ocupatsAltresFullsPerCella.has(k) && !lliureAviatPerCella.has(k)) return
+    const cellaOcupada = Array.from(colocatsRef.current.values()).some(
+      v => v.incId === incId && v.pos === pos && v.zona === zona
+    )
+    if (cellaOcupada) return
+    const carroQueColoquem = carroSeleccionatTap
+    setColocats(prev => { const m = new Map(prev); m.set(carroQueColoquem, { incId, pos, zona }); return m })
+    setSeleccionades(prev => {
+      if (!prev.has(k)) return prev
+      const s = new Set(prev); s.delete(k); return s
+    })
+    const nextCarro = carrosLotFiltrats.find(c => c.id !== carroQueColoquem && !colocatsRef.current.has(c.id))
+    setCarroSeleccionatTap(nextCarro ? nextCarro.id : null)
+  }, [carroSeleccionatTap, ocupatsAltresFullsPerCella, lliureAviatPerCella, carrosLotFiltrats, toggleSeleccio])
 
   // ── Drag-and-drop
   const onDragStartCarro = useCallback((e: React.DragEvent, carroId: number, origenCella: string | null) => {
@@ -466,6 +526,7 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
     onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat,
     onDropMSPGeneral,
+    carroSeleccionatTap, setCarroSeleccionatTap, cellaQueueIndex, tapCarroSafata, onTapCella,
     guardar
   }
 }

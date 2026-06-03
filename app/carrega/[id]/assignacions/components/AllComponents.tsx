@@ -69,7 +69,13 @@ export function OrdreMSP({ ordre, onChange }: { ordre: number[]; onChange: (o: n
   )
 }
 
-export function Safata({ pendents, onDragStartCarro, full }: { pendents: CarroEstoc[]; onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void; full: Full }) {
+export function Safata({ pendents, onDragStartCarro, full, carroSeleccionatTap, onTapCarro }: {
+  pendents: CarroEstoc[]
+  onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void
+  full: Full
+  carroSeleccionatTap: number | null
+  onTapCarro: (id: number) => void
+}) {
   // Agrupar per lot (granja+estirp+posta)
   const grups: { key: string; nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }[] = []
   const map = new Map<string, { nom: string; estirp: string | null; posta: string; carros: CarroEstoc[] }>()
@@ -88,14 +94,19 @@ export function Safata({ pendents, onDragStartCarro, full }: { pendents: CarroEs
           <div className="text-[11px] text-text-dim mb-1 font-semibold">
             {g.nom}{g.estirp ? ` · ${g.estirp}` : ''} · posta {g.posta} · {g.carros.length} carro{g.carros.length !== 1 ? 's' : ''}
           </div>
-          {g.carros.map(c => (
-            <div key={c.id}
-              draggable
-              onDragStart={(e) => onDragStartCarro(e, c.id, null)}
-              className="bg-accent/10 border border-accent rounded-md px-2 py-1.5 mb-1 cursor-grab text-xs leading-snug select-none text-text">
-              <div className="text-[11px] opacity-80">{c.quantitat_ous.toLocaleString('ca')} ous · estoc {diesEstoc(c.posta, full.carrega)}d</div>
-            </div>
-          ))}
+          {g.carros.map(c => {
+            const seleccionat = carroSeleccionatTap === c.id
+            return (
+              <div key={c.id}
+                draggable
+                onDragStart={(e) => onDragStartCarro(e, c.id, null)}
+                onClick={() => onTapCarro(c.id)}
+                className={`border rounded-md px-2 py-2 mb-1 cursor-pointer text-xs leading-snug select-none text-text min-h-[44px] flex flex-col justify-center touch-manipulation transition-colors ${seleccionat ? 'bg-accent/30 border-accent border-2 shadow-sm' : 'bg-accent/10 border-accent/60 hover:bg-accent/20'}`}>
+                <div className="font-semibold">{g.nom}{g.estirp ? ` · ${g.estirp}` : ''}</div>
+                <div className="text-[11px] opacity-80">{c.quantitat_ous.toLocaleString('ca')} ous · estoc {diesEstoc(c.posta, full.carrega)}d{seleccionat ? ' ← seleccionat' : ''}</div>
+              </div>
+            )
+          })}
         </div>
       ))}
       {pendents.length === 0 && <div className="text-text-dim text-xs text-center p-3">Cap carro pendent</div>}
@@ -128,6 +139,8 @@ interface CellPropsCommon {
   colocats: Map<number, { incId: number; pos: number; zona: ZonaMS | null }>
   seleccionades: Set<string>
   numCarroPerCella: Map<string, number>
+  cellaQueueIndex: Map<string, number>
+  tapModeActive: boolean
   onSelLliures: (inc: Incubadora) => void
   onClicCella: (incId: number, pos: number, zona: ZonaMS | null) => void
   onDropCell: (e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) => void
@@ -180,6 +193,8 @@ export function IncubadoraSS({ inc, filtrada, anyFiltrada, onToggleFiltrada, ...
                   isSeleccionada={p.seleccionades.has(k)}
                   numCarro={p.numCarroPerCella.get(k)}
                   mostrarProjectat={p.mostrarProjectat}
+                  cellaQueueIndex={p.cellaQueueIndex}
+                  tapModeActive={p.tapModeActive}
                   onClicCella={p.onClicCella}
                   onDropCell={p.onDropCell}
                   onDragStartCarro={p.onDragStartCarro}
@@ -240,6 +255,7 @@ export function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada
                 incId={inc.id} pos={pos} zona={z} gridCol={zi + 1} gridRow={2 + (profunditat - pos)} zonaClass={z}
                 carroNouObj={carroNouObj} ocupAltre={p.ocupatsAltresFulls.get(k)} lliureAviat={p.lliureAviatPerCella.get(k)}
                 isSeleccionada={p.seleccionades.has(k)} numCarro={p.numCarroPerCella.get(k)} mostrarProjectat={p.mostrarProjectat}
+                cellaQueueIndex={p.cellaQueueIndex} tapModeActive={p.tapModeActive}
                 onClicCella={p.onClicCella} onDropCell={p.onDropCell} onDragStartCarro={p.onDragStartCarro} onDragOverCell={p.onDragOverCell} onClicCarroColocat={p.onClicCarroColocat}
               />
             );
@@ -257,6 +273,7 @@ export function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada
                   incId={inc.id} pos={pos} zona={z} gridCol={zi + 5} gridRow={2 + (profunditat - posLocal)} zonaClass={z}
                   carroNouObj={carroNouObj} ocupAltre={p.ocupatsAltresFulls.get(k)} lliureAviat={p.lliureAviatPerCella.get(k)}
                   isSeleccionada={p.seleccionades.has(k)} numCarro={p.numCarroPerCella.get(k)} mostrarProjectat={p.mostrarProjectat}
+                  cellaQueueIndex={p.cellaQueueIndex} tapModeActive={p.tapModeActive}
                   onClicCella={p.onClicCella} onDropCell={p.onDropCell} onDragStartCarro={p.onDragStartCarro} onDragOverCell={p.onDragOverCell} onClicCarroColocat={p.onClicCarroColocat}
                 />
               )
@@ -410,6 +427,8 @@ interface CellProps {
   ocupAltre: { num_carro_full: number; num_carrega: number; estirp: string | null; data_transferencia_full: string | null } | undefined;
   lliureAviat: { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string } | undefined;
   isSeleccionada: boolean; numCarro: number | undefined; mostrarProjectat: boolean;
+  cellaQueueIndex: Map<string, number>
+  tapModeActive: boolean
   onClicCella: (incId: number, pos: number, zona: ZonaMS | null) => void;
   onDropCell: (e: React.DragEvent, incId: number, pos: number, zona: ZonaMS | null) => void;
   onDragStartCarro: (e: React.DragEvent, id: number, origen: string | null) => void;
@@ -417,9 +436,10 @@ interface CellProps {
   onClicCarroColocat: (id: number) => void;
 }
 
-export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouObj, ocupAltre, lliureAviat, isSeleccionada: sel, numCarro, mostrarProjectat, onClicCella, onDropCell, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellProps) {
+export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouObj, ocupAltre, lliureAviat, isSeleccionada: sel, numCarro, mostrarProjectat, cellaQueueIndex, tapModeActive, onClicCella, onDropCell, onDragStartCarro, onDragOverCell, onClicCarroColocat }: CellProps) {
   const carroIdNou = carroNouObj ? carroNouObj.id : undefined;
   const k = keyCell(incId, pos, zona)
+  const queueIdx = cellaQueueIndex.get(k)
 
   // lliureAviat té prioritat sobre ocupAltre (és un subconjunt que permet interacció)
   // En mode projectat, les cel·les "lliure aviat" es mostren com a buides
@@ -455,6 +475,9 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
     bgClass = 'bg-accent/30'
     borderClass = 'border-solid border-accent'
     colorClass = 'text-accent'
+    cursor = 'cursor-pointer'
+  } else if (tapModeActive) {
+    borderClass = 'border-dashed border-accent/60 hover:border-accent transition-colors'
     cursor = 'cursor-pointer'
   }
 
@@ -519,7 +542,9 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
       )}
       {!blocat && (tractarComBuit || !lliureAviat) && !carroNouObj && (
         <>
-          {numCarro !== undefined
+          {queueIdx !== undefined
+            ? <span className="text-[11px] font-bold text-accent bg-accent/20 rounded-full w-[18px] h-[18px] flex items-center justify-center leading-none">{queueIdx}</span>
+            : numCarro !== undefined
             ? <span className="text-[9px] font-bold text-text/70">#{numCarro}</span>
             : <span className="text-[9px] font-bold text-text/50">{pos}</span>
           }

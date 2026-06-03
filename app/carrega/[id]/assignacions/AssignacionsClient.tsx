@@ -41,6 +41,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
     ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
     onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat, onDropMSPGeneral,
+    carroSeleccionatTap, cellaQueueIndex, tapCarroSafata, onTapCella,
     guardar
   } = hook
 
@@ -349,10 +350,12 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
                 colocats={colocats}
                 seleccionades={seleccionades}
                 numCarroPerCella={numCarroPerCella}
+                cellaQueueIndex={cellaQueueIndex}
+                tapModeActive={carroSeleccionatTap !== null}
                 filtrada={incsFiltrades.has(inc.id)}
                 anyFiltrada={incsFiltrades.size > 0}
                 onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
-                onClicCella={toggleSeleccio}
+                onClicCella={onTapCella}
                 onSelLliures={seleccionarLliuresInc}
                 onDragStartCarro={onDragStartCarro}
                 onDragOverCell={onDragOverCell}
@@ -373,10 +376,12 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
                 colocats={colocats}
                 seleccionades={seleccionades}
                 numCarroPerCella={numCarroPerCella}
+                cellaQueueIndex={cellaQueueIndex}
+                tapModeActive={carroSeleccionatTap !== null}
                 filtrada={incsFiltrades.has(inc.id)}
                 anyFiltrada={incsFiltrades.size > 0}
                 onToggleFiltrada={() => toggleIncFiltrada(inc.id)}
-                onClicCella={toggleSeleccio}
+                onClicCella={onTapCella}
                 onSelLliures={seleccionarLliuresInc}
                 onDragStartCarro={onDragStartCarro}
                 onDragOverCell={onDragOverCell}
@@ -436,12 +441,15 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
             pendents={carrosPendents}
             onDragStartCarro={onDragStartCarro}
             full={full}
+            carroSeleccionatTap={carroSeleccionatTap}
+            onTapCarro={tapCarroSafata}
           />
           <div className="mt-3 p-2 bg-bg rounded-md text-[11px] text-text-dim leading-snug">
-            <b>Com va:</b><br />
-            1) Arrossega carros a les cel·les.<br />
-            2) Clica una cel·la lliure per marcar-la (groc).<br />
-            3) Click sobre un carro col·locat per treure&apos;l.
+            <b>Ordinador:</b> arrossega carros a les cel·les.<br />
+            <b>Mòbil/Tablet:</b><br />
+            A) Tap carro → tap cel·la (auto-avança)<br />
+            B) Marca cel·les (①②③) → tap carros per omplir per ordre<br />
+            Tap carro col·locat per treure&apos;l.
           </div>
         </aside>
       </div>
