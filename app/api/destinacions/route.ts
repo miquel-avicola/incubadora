@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('destinacions')
-    .select('id, nom_granja, nau, poblacio, codi_rega, client_id')
+    .select('id, nom_granja, nau, poblacio, codi_rega, telefon, client_id')
     .order('nom_granja')
 
   if (client_id !== undefined) {
@@ -31,7 +31,7 @@ export const POST = withAudit(async (request: Request) => {
   if (raw === null) return NextResponse.json({ error: 'Body JSON invàlid' }, { status: 400 })
   const parsed = parseBody(DestinacioPostBody, raw)
   if (!parsed.ok) return parsed.response
-  const { nom_granja, nau, poblacio, codi_rega, client_id } = parsed.data
+  const { nom_granja, nau, poblacio, codi_rega, telefon, client_id } = parsed.data
 
   const { data, error } = await supabase
     .from('destinacions')
@@ -40,6 +40,7 @@ export const POST = withAudit(async (request: Request) => {
       nau: nau || null,
       poblacio: poblacio || null,
       codi_rega: codi_rega || null,
+      telefon: telefon || null,
       client_id: client_id || null,
     })
     .select()

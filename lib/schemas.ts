@@ -88,7 +88,16 @@ export const DestinacioPostBody = z.object({
   nau: z.string().max(100).nullable().optional(),
   poblacio: z.string().max(200).nullable().optional(),
   codi_rega: z.string().max(50).nullable().optional(),
+  telefon: z.string().max(50).nullable().optional(),
   client_id: zId.nullable().optional(),
+})
+
+export const DestinacioIdPatchBody = z.object({
+  nom_granja: z.string().min(1).max(200).optional(),
+  nau: z.string().max(100).nullable().optional(),
+  poblacio: z.string().max(200).nullable().optional(),
+  codi_rega: z.string().max(50).nullable().optional(),
+  telefon: z.string().max(50).nullable().optional(),
 })
 
 // ── Càrregues ─────────────────────────────────────────────────────────────

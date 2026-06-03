@@ -10,6 +10,7 @@ interface Destinacio {
   nau: string | null
   poblacio: string | null
   codi_rega: string | null
+  telefon: string | null
   client_id: number | null
 }
 
@@ -248,8 +249,13 @@ export default function Expedicions() {
   const [novaGranjaNau, setNovaGranjaNau] = useState('')
   const [novaGranjaPoblacio, setNovaGranjaPoblacio] = useState('')
   const [novaGranjaRega, setNovaGranjaRega] = useState('')
+  const [novaGranjaTelefon, setNovaGranjaTelefon] = useState('')
   const [creantGranja, setCreantGranja] = useState(false)
   const [errorGranja, setErrorGranja] = useState('')
+
+  // Edició del telèfon de la destinació ja seleccionada
+  const [editTelefon, setEditTelefon] = useState('')
+  const [guardantTelefon, setGuardantTelefon] = useState(false)
 
   const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
   const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
@@ -293,6 +299,13 @@ export default function Expedicions() {
     }
   }, [comandaId, full])
 
+  // Quan se selecciona una destinació, precarrega el seu telèfon a l'editor
+  useEffect(() => {
+    if (!destinacioId) { setEditTelefon(''); return }
+    const d = destinacions.find(x => x.id === parseInt(destinacioId))
+    setEditTelefon(d?.telefon || '')
+  }, [destinacioId, destinacions])
+
   async function crearNovaGranja() {
     if (!novaGranjaNom.trim()) return
     setCreantGranja(true)
@@ -306,6 +319,7 @@ export default function Expedicions() {
         nau: novaGranjaNau.trim() || null,
         poblacio: novaGranjaPoblacio.trim() || null,
         codi_rega: novaGranjaRega.trim() || null,
+        telefon: novaGranjaTelefon.trim() || null,
         client_id: comanda?.clients.id || null,
       }),
     })
@@ -321,8 +335,25 @@ export default function Expedicions() {
       setNovaGranjaNau('')
       setNovaGranjaPoblacio('')
       setNovaGranjaRega('')
+      setNovaGranjaTelefon('')
     }
     setCreantGranja(false)
+  }
+
+  async function guardarTelefonDestinacio() {
+    if (!destinacioId) return
+    setGuardantTelefon(true)
+    const id = parseInt(destinacioId)
+    const nou = editTelefon.trim() || null
+    const res = await fetch(`/api/destinacions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefon: nou }),
+    })
+    if (res.ok) {
+      setDestinacions(prev => prev.map(d => d.id === id ? { ...d, telefon: nou } : d))
+    }
+    setGuardantTelefon(false)
   }
 
   async function crearExpedicio() {
@@ -375,6 +406,7 @@ export default function Expedicions() {
       setNovaGranjaNau('')
       setNovaGranjaPoblacio('')
       setNovaGranjaRega('')
+      setNovaGranjaTelefon('')
       carregarDades()
     }
     setCreant(false)
@@ -591,6 +623,11 @@ export default function Expedicions() {
                 🏷 Etiquetes
               </button>
             </Link>
+            <Link href={`/carrega/${params.id}/expedicions/imprimir-granges`} target="_blank" className="no-underline flex-1 md:flex-none">
+              <button className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-surface transition-colors shadow-sm">
+                📄 Full granges
+              </button>
+            </Link>
             <button onClick={() => setMostrarForm(!mostrarForm)} className="w-full md:w-auto px-4 py-2.5 bg-accent border-none rounded-lg text-white font-bold text-sm cursor-pointer hover:bg-accent-dim transition-colors shadow-sm">
               + Nova expedició
             </button>
@@ -728,6 +765,16 @@ export default function Expedicions() {
                         />
                       </div>
                     </div>
+                    <div>
+                      <label className={labelClasses}>Telèfon</label>
+                      <input
+                        type="tel"
+                        value={novaGranjaTelefon}
+                        onChange={e => setNovaGranjaTelefon(e.target.value)}
+                        placeholder="Ex: 600 123 456"
+                        className={inputClasses}
+                      />
+                    </div>
                     {errorGranja && (
                       <div style={{ padding: '0.4rem 0.6rem', borderRadius: '5px', background: 'rgba(240,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem' }}>
                         {errorGranja}
@@ -765,6 +812,29 @@ export default function Expedicions() {
                     <option key={d.id} value={d.id}>{nomDestinacio(d)}{d.poblacio ? ` — ${d.poblacio}` : ''}</option>
                   ))}
                 </select>
+
+                {destinacioId && (
+                  <div className="mt-2 flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className={labelClasses}>Telèfon de la granja</label>
+                      <input
+                        type="tel"
+                        value={editTelefon}
+                        onChange={e => setEditTelefon(e.target.value)}
+                        placeholder="Sense telèfon"
+                        className={inputClasses}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={guardarTelefonDestinacio}
+                      disabled={guardantTelefon}
+                      className="px-3 py-2.5 rounded-lg border border-border bg-bg text-text-dim text-sm cursor-pointer hover:text-text hover:border-accent transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {guardantTelefon ? 'Desant...' : 'Desar telèfon'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

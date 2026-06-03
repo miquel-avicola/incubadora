@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       id, ordre, pollets_comanda, pollets_servits, matricula, num_viatge, sexe, grup_sexat_id,
       hora_prevista_naixement, hora_sortida_camio, hora_arribada_camio, observacions,
       comandes (id, tipus, clients (id, nom)),
-      destinacions (id, nom_granja, nau, poblacio, sexe),
+      destinacions (id, nom_granja, nau, poblacio, sexe, codi_rega, telefon),
       transportistes (id, nom),
       expedicio_lots (
         id, pollets,
