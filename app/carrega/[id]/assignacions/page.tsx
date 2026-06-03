@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { AssignacionsClient } from './AssignacionsClient'
-import { calcularPrevisioFinal } from '@/lib/previsio'
+import { calcularPrevisioFinal, llegirParametresPrevisio } from '@/lib/previsio'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -148,12 +148,13 @@ export default async function AssignacionsPage({ params }: { params: { id: strin
   // Calcular la previsió de naixement per a cada carro amb la fórmula completa
   const dataRef = initialFull?.carrega || new Date().toISOString()
   const previsioCache = new Map<string, number>()
+  const previsioParams = await llegirParametresPrevisio()
 
   async function getPrevisio(lotId: number, estirp: string | null, posta: string, dataNaix: string) {
     const setm = Math.floor((new Date(posta).getTime() - new Date(dataNaix).getTime()) / (7 * 24 * 60 * 60 * 1000))
     const key = `${lotId}-${setm}`
     if (previsioCache.has(key)) return previsioCache.get(key)!
-    const res = await calcularPrevisioFinal(lotId, estirp || 'Ross', setm, 'Multistage', dataRef)
+    const res = await calcularPrevisioFinal(lotId, estirp || 'Ross', setm, 'Multistage', dataRef, previsioParams)
     previsioCache.set(key, res.previsio)
     return res.previsio
   }

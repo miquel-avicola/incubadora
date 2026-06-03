@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, optimitzarZonesTermiques, projectarEstatInst, CellaSel, ordreCellesSS, preSuggerit, ECLOSIO_EST, suggerirAssignacioCompleta } from '@/lib/assignacions'
+import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, projectarEstatInst } from '@/lib/assignacions'
 
 export interface UseAssignacionsProps {
   initialFull: Full | null;
@@ -404,84 +404,6 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     })
   }, [ocupatsAltresFullsPerCella, lliureAviatPerCella])
 
-  // ── Pre-suggerit
-  function aplicarPreSuggerit() {
-    if (!full || !estatInst) return
-    // El suggeriment ha de raonar sobre l'estat post-transferència (rotacions
-    // incloses). Si la projecció no es pot calcular, fem fallback a l'estat
-    // real. En passar el projectat, els carros transferits ja no hi són i les
-    // rotacions ja s'han aplicat, així que no cal el mapa lliureAviat.
-    const estatPerSuggerir = estatInstProjectat ?? estatInst
-    const lliureAviatBuit = new Map<string, { diesFins: number; num_carro_full: number; num_carrega: number; data_transferencia_full: string }>()
-    const res = suggerirAssignacioCompleta(
-      carrosPendents,
-      full,
-      incs,
-      estatPerSuggerir,
-      dia,
-      lliureAviatBuit,
-      carroPerCella,
-      incsFiltrades
-    )
-    if (res.assignacions.size === 0) return
-    setColocats(prev => {
-      const m = new Map(prev)
-      res.assignacions.forEach((p, cid) => m.set(cid, p))
-      return m
-    })
-    setSeleccionades(new Set())
-
-    // Avisos del motor (regles toves + comprovació global de pollets)
-    const missatgesAvisos: string[] = [...res.avisos]
-    const comandaPollets = full.comandes
-      .filter(c => c.tipus !== 'maquila' && c.quantitat_pollets !== null && c.quantitat_pollets > 0)
-      .reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
-    if (comandaPollets > 0) {
-      const polletsSug = Array.from(res.assignacions.keys()).reduce((acc, cid) => {
-        const c = carrosPendents.find(x => x.id === cid)
-        if (!c) return acc
-        if (c.client_maquila_id != null) return acc
-        return acc + polletsCarro(c)
-      }, 0)
-      if (polletsSug < comandaPollets - 500) {
-        missatgesAvisos.push(
-          `⚠️ Atenció: els ${res.assignacions.size} carros assignats preveuen ~${Math.round(polletsSug).toLocaleString('ca')} pollets, ` +
-          `per sota de la comanda (${comandaPollets.toLocaleString('ca')}). ` +
-          `Necessites seleccionar més incubadores o afegir carros.`
-        )
-      }
-    }
-    if (missatgesAvisos.length > 0) setErrorMsg(missatgesAvisos.join('\n'))
-  }
-
-  // ── Optimització tèrmica de zones MS
-  function aplicarOptimitzacioTermica() {
-    if (!estatInst || !full) return
-    const msColocats = Array.from(colocats.entries()).filter(([, p]) => {
-      const inc = incsById.get(p.incId)
-      return inc && inc.tipus === 'Multistage'
-    })
-    if (msColocats.length === 0) return
-    if (!confirm(
-      `Redistribuirà les zones (central/paret/pulsator) de ${msColocats.length} carro(s) a les Multistage\nbasat en l'equilibri de calor projectat a 21 dies.\n\nVols continuar?`
-    )) return
-
-    const assignacioIdsDelFull = new Set<number>(
-      full.assignacions.map((a) => a.id)
-    )
-    // L'optimització ha de considerar només els carros que ENCARA hi seran
-    // quan entri el load actual (post-transferències + rotacions).
-    const estatPerOptimitzar = estatInstProjectat ?? estatInst
-    const novaColocats = optimitzarZonesTermiques(
-      colocats,
-      carrosLot,
-      estatPerOptimitzar,
-      incsById,
-      assignacioIdsDelFull
-    )
-    setColocats(novaColocats)
-  }
-
   // ── Guardar
   async function guardar() {
     if (!full) return
@@ -544,6 +466,6 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
     onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat,
     onDropMSPGeneral,
-    aplicarPreSuggerit, aplicarOptimitzacioTermica, guardar
+    guardar
   }
 }

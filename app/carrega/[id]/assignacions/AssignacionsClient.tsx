@@ -7,9 +7,7 @@ import { IndeterminateCheckbox, HeaderPlan, OrdreMSP, Safata, SeccioInc, Incubad
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment, memo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { suggerirZonaMS, indexCalorCarro, fertilitatEstimada, calorFuturaCarro, type CarroTermic } from '@/lib/termico'
-
-import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, optimitzarZonesTermiques, projectarEstatInst, CellaSel, ordreCellesSS, preSuggerit, ECLOSIO_EST, suggerirAssignacioCompleta } from '@/lib/assignacions'
+import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, projectarEstatInst } from '@/lib/assignacions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component principal
@@ -43,7 +41,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
     ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
     onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat, onDropMSPGeneral,
-    aplicarPreSuggerit, aplicarOptimitzacioTermica, guardar
+    guardar
   } = hook
 
   // ── Render
@@ -441,10 +439,9 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
           />
           <div className="mt-3 p-2 bg-bg rounded-md text-[11px] text-text-dim leading-snug">
             <b>Com va:</b><br />
-            1) Clica cel·les lliures per seleccionar-les (groc).<br />
-            2) Prem <i>Pre-suggerit</i> per repartir.<br />
-            3) Arrossega per ajustar a mà.<br />
-            4) Click sobre un carro col·locat per treure'l.
+            1) Arrossega carros a les cel·les.<br />
+            2) Clica una cel·la lliure per marcar-la (groc).<br />
+            3) Click sobre un carro col·locat per treure&apos;l.
           </div>
         </aside>
       </div>
@@ -483,15 +480,6 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
           <Link href={`/carrega/${full.id}`} className="btn-secondary no-underline mr-2 whitespace-nowrap">Tornar al full</Link>
           <button onClick={netejarSeleccio} className="btn-secondary whitespace-nowrap">Netejar selecció</button>
           <button onClick={reiniciar} className="btn-secondary whitespace-nowrap">Reiniciar</button>
-          <button onClick={aplicarPreSuggerit} className="btn-secondary whitespace-nowrap" disabled={carrosPendents.length === 0 || !full || !estatInst}>Suggereix assignació</button>
-          <button
-            onClick={aplicarOptimitzacioTermica}
-            disabled={!hiHaMsColocats}
-            title={hiHaMsColocats ? 'Redistribueix zones MS per equilibrar calor projectada a 21 dies' : 'Necessites carros MS col·locats primer'}
-            className={`whitespace-nowrap px-3.5 py-2 rounded-md font-medium text-sm transition-colors border ${hiHaMsColocats ? 'bg-success/10 border-success text-success hover:bg-success/20 cursor-pointer' : 'bg-surface border-border text-text-dim opacity-50 cursor-not-allowed'}`}
-          >
-            ⚡ Optimitzar zones (calor)
-          </button>
           <button onClick={guardar} className="btn-primary whitespace-nowrap" disabled={guardant}>{guardant ? 'Guardant...' : 'Guardar planificació'}</button>
         </div>
       </footer>

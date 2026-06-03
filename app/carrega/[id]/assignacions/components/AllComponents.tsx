@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, memo } from 'react';
 import Link from 'next/link';
-import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, optimitzarZonesTermiques, projectarEstatInst, CellaSel, ordreCellesSS, preSuggerit, ECLOSIO_EST, suggerirAssignacioCompleta } from '@/lib/assignacions';
+import { ZonaMS, SubTipus, Dia, Fase, CarroEstoc, Incubadora, AssignacioActual, Full, CarroInst, IncInst, EstatInst, ssPosToCell, MS_ZONES_ESQ, MS_ZONES_DRE, subtipus, diaDeFull, nomCarroCurt, keyCell, diesEstoc, setmanesLot, offsetPerDia, polletsCarro, projectarEstatInst } from '@/lib/assignacions';
 
 export const MemoCell = memo(Cell);
 // Subcomponents
@@ -373,14 +373,25 @@ function ColumnaZ({ carros, accent, onClicCarroColocat, onDragStartCarro, classN
   return (
     <div className={`bg-surface rounded p-1 min-h-[50px] flex flex-col gap-1 ${className || ''}`}>
       {carros.map((c: any) => (
-        <div key={c.assignacio_id} 
+        <div key={c.assignacio_id}
            onClick={() => c.isNou && onClicCarroColocat(c.assignacio_id)}
            draggable={c.isNou}
            onDragStart={c.isNou ? (e) => onDragStartCarro(e, c.assignacio_id, null) : undefined}
            className={`p-1 rounded text-[9px] flex flex-col gap-[1px] leading-[1.1] ${c.isNou ? 'bg-accent/20 border border-accent text-accent cursor-pointer' : 'bg-[#2a2c35] border border-[#3a3c45] text-[#e0e0e0] cursor-default'}`}
            title={c.isNou ? "Clic per treure, arrossega per moure" : ""}
         >
-           <div className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">{c.granja || '—'}</div>
+           <div className="flex items-center gap-[3px]">
+             <div className="font-bold whitespace-nowrap overflow-hidden text-ellipsis flex-1">{c.granja || '—'}</div>
+             {(() => {
+               const estirp = c.lots_reproductores?.estirp ?? c.estirp
+               const isCobb = estirp && String(estirp).toLowerCase().includes('cobb')
+               return (
+                 <span className={`text-[7px] font-bold px-[2px] py-[1px] rounded-sm leading-none shrink-0 ${isCobb ? 'bg-orange-900 text-orange-200' : 'bg-blue-900 text-blue-200'}`}>
+                   {isCobb ? 'C' : 'R'}
+                 </span>
+               )
+             })()}
+           </div>
            <div className="flex justify-between opacity-80 text-[8px]">
              <span>{c.num_carrega}/{c.num_carro_full}</span>
              <span>{c.dia_incubacio}d</span>
@@ -488,9 +499,20 @@ export function Cell({ incId, pos, zona, gridCol, gridRow, zonaClass, carroNouOb
       )}
       {carroNouObj && (
         <>
-          {numCarro !== undefined && (
-            <span className="text-[9px] font-bold text-accent bg-bg/50 rounded-sm px-[3px] mb-[1px]">#{numCarro}</span>
-          )}
+          <div className="flex items-center gap-[3px] w-full justify-center">
+            {numCarro !== undefined && (
+              <span className="text-[9px] font-bold text-accent bg-bg/50 rounded-sm px-[3px]">#{numCarro}</span>
+            )}
+            {(() => {
+              const estirp = carroNouObj.lots_reproductores?.estirp
+              const isCobb = estirp && estirp.toLowerCase().includes('cobb')
+              return (
+                <span className={`text-[8px] font-bold px-[3px] py-[1px] rounded-sm leading-none ${isCobb ? 'bg-orange-900 text-orange-200' : 'bg-blue-900 text-blue-200'}`}>
+                  {isCobb ? 'C' : 'R'}
+                </span>
+              )
+            })()}
+          </div>
           <span className="text-[10px] max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{nomCarroCurt(carroNouObj)}</span>
           <span className="text-[9px] opacity-75">{carroNouObj.quantitat_ous.toLocaleString('ca')} ous</span>
         </>
