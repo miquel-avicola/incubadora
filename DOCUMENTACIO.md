@@ -154,7 +154,7 @@ Les **taules principals** (amb una explicació planera del que guarden):
 
 **`eclosio_historic`** — Històric d'eclosió importat d'Excel: `estirp`, `tipus_incubadora`, `setmanes_vida`, `eclosio`.
 
-**`previsio_corba`** — Corba de previsió de naixement per `estirp` + `tipus_incubadora` + `setmanes` (24-66): `naixement_pct` (forma de l'Excel suavitzada) i `font` (excel/extrapolat/+bonusSS). Pilar de la previsió nova (2026-05-31, vegeu REGLES_ASSIGNACIO.md §8). El nivell s'ajusta amb el paràmetre `previsio_offset_nivell` i la planificació conservadora amb `previsio_marge_seguretat`.
+**`previsio_corba`** — Corba de previsió de naixement per `estirp` + `tipus_incubadora` + `setmanes` (24-66): `naixement_pct` (forma de l'Excel suavitzada) i `font` (excel/extrapolat/+bonusSS). Pilar de la previsió nova (2026-05-31, vegeu REGLES_ASSIGNACIO.md §8). El nivell s'ajusta amb el paràmetre `previsio_offset_nivell` i la planificació conservadora amb `previsio_marge_seguretat`. RLS deny-all (activat 2026-06-03, accedida via service_role).
 
 **`login_attempts`** *(afegida 2026-05-25)* — Registre d'intents de login per IP per a la protecció contra força bruta. Camps: `id`, `ip`, `attempted_at`, `success`. RLS deny-all (accedida via service_role). Neteja automàtica amortitzada d'entrades de més de 24 hores.
 
