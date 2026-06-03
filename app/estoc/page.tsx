@@ -52,23 +52,37 @@ export default function Estoc() {
 
   useEffect(() => { carregarCarros() }, [carregarCarros])
 
-  const grups: Grup[] = Object.values(
-    carros.reduce((acc, carro) => {
-      const key = `${carro.lots_reproductores?.id}-${carro.posta}-${carro.quantitat_ous}`
-      if (!acc[key]) {
-        acc[key] = {
-          lot_id: carro.lots_reproductores?.id,
-          posta: carro.posta,
-          quantitat_ous: carro.quantitat_ous,
-          nom: nomCarro(carro),
-          recepcio: carro.recepcio,
-          carros: [],
-        }
+  const grupsMapa = carros.reduce((acc, carro) => {
+    const key = `${carro.lots_reproductores?.id}-${carro.posta}-${carro.quantitat_ous}`
+    if (!acc[key]) {
+      acc[key] = {
+        lot_id: carro.lots_reproductores?.id,
+        posta: carro.posta,
+        quantitat_ous: carro.quantitat_ous,
+        nom: nomCarro(carro),
+        recepcio: carro.recepcio,
+        carros: [],
       }
-      acc[key].carros.push(carro)
-      return acc
-    }, {} as Record<string, Grup>)
-  )
+    }
+    acc[key].carros.push(carro)
+    return acc
+  }, {} as Record<string, Grup>)
+
+  const lotsMap = new Map<number, { nom: string; grups: Grup[] }>()
+  Object.values(grupsMapa).forEach(grup => {
+    if (!lotsMap.has(grup.lot_id)) {
+      lotsMap.set(grup.lot_id, { nom: grup.nom, grups: [] })
+    }
+    lotsMap.get(grup.lot_id)!.grups.push(grup)
+  })
+
+  const lots = Array.from(lotsMap.entries())
+    .map(([lot_id, { nom, grups }]) => ({
+      lot_id,
+      nom,
+      grups: [...grups].sort((a, b) => a.posta.localeCompare(b.posta)),
+    }))
+    .sort((a, b) => a.grups[0].posta.localeCompare(b.grups[0].posta))
 
   async function eliminarUn(grup: Grup) {
     const key = `${grup.lot_id}-${grup.posta}`
@@ -112,57 +126,65 @@ export default function Estoc() {
           <p className="text-text-dim font-mono text-[0.85rem] text-center py-8">No hi ha carros disponibles</p>
         )}
 
-        <div className="flex flex-col gap-3">
-          {grups.map(grup => {
-            const key = `${grup.lot_id}-${grup.posta}`
-            const estaConfirmant = confirmant === key
-            const estaEliminant = eliminant === key
-
-            return (
-              <div key={key} className="bg-surface border border-border rounded-[10px] px-5 py-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-semibold text-[0.95rem]">{grup.nom}</div>
-                    <div className="text-text-dim text-[0.8rem] font-mono mt-[0.2rem]">
-                      posta {grup.posta} · {grup.quantitat_ous} ous/carro
-                    </div>
-                    <div className="text-text-dim text-[0.75rem] font-mono mt-[0.15rem]">
-                      rebut {grup.recepcio}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {!estaConfirmant ? (
-                      <button
-                        onClick={() => setConfirmant(key)}
-                        className="w-9 h-9 border border-border rounded-lg bg-transparent text-text-dim text-[0.85rem] cursor-pointer font-mono"
-                      >
-                        −1
-                      </button>
-                    ) : (
-                      <div className="flex gap-[0.4rem]">
-                        <button
-                          onClick={() => setConfirmant(null)}
-                          className="px-[0.6rem] py-[0.4rem] border border-border rounded-md bg-transparent text-text-dim text-[0.75rem] cursor-pointer font-sans"
-                        >
-                          Cancel·lar
-                        </button>
-                        <button
-                          onClick={() => eliminarUn(grup)}
-                          disabled={!!estaEliminant}
-                          className="px-[0.6rem] py-[0.4rem] border border-danger rounded-md bg-danger/10 text-danger text-[0.75rem] font-bold cursor-pointer font-sans"
-                        >
-                          {estaEliminant ? '...' : 'Eliminar'}
-                        </button>
-                      </div>
-                    )}
-                    <div className="bg-accent/15 border border-accent rounded-[20px] px-[0.875rem] py-[0.35rem] text-accent font-mono text-base font-bold min-w-[2.5rem] text-center">
-                      {grup.carros.length}
-                    </div>
-                  </div>
-                </div>
+        <div className="flex flex-col gap-4">
+          {lots.map(lot => (
+            <div key={lot.lot_id}>
+              <div className="text-text-dim font-mono text-[0.7rem] tracking-[0.12em] uppercase mb-2 px-1">
+                {lot.nom}
               </div>
-            )
-          })}
+              <div className="flex flex-col gap-2">
+                {lot.grups.map(grup => {
+                  const key = `${grup.lot_id}-${grup.posta}`
+                  const estaConfirmant = confirmant === key
+                  const estaEliminant = eliminant === key
+
+                  return (
+                    <div key={key} className="bg-surface border border-border rounded-[10px] px-5 py-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="text-text-dim text-[0.8rem] font-mono">
+                            posta {grup.posta} · {grup.quantitat_ous} ous/carro
+                          </div>
+                          <div className="text-text-dim text-[0.75rem] font-mono mt-[0.15rem]">
+                            rebut {grup.recepcio}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {!estaConfirmant ? (
+                            <button
+                              onClick={() => setConfirmant(key)}
+                              className="w-9 h-9 border border-border rounded-lg bg-transparent text-text-dim text-[0.85rem] cursor-pointer font-mono"
+                            >
+                              −1
+                            </button>
+                          ) : (
+                            <div className="flex gap-[0.4rem]">
+                              <button
+                                onClick={() => setConfirmant(null)}
+                                className="px-[0.6rem] py-[0.4rem] border border-border rounded-md bg-transparent text-text-dim text-[0.75rem] cursor-pointer font-sans"
+                              >
+                                Cancel·lar
+                              </button>
+                              <button
+                                onClick={() => eliminarUn(grup)}
+                                disabled={!!estaEliminant}
+                                className="px-[0.6rem] py-[0.4rem] border border-danger rounded-md bg-danger/10 text-danger text-[0.75rem] font-bold cursor-pointer font-sans"
+                              >
+                                {estaEliminant ? '...' : 'Eliminar'}
+                              </button>
+                            </div>
+                          )}
+                          <div className="bg-accent/15 border border-accent rounded-[20px] px-[0.875rem] py-[0.35rem] text-accent font-mono text-base font-bold min-w-[2.5rem] text-center">
+                            {grup.carros.length}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {!loading && carros.length > 0 && (
