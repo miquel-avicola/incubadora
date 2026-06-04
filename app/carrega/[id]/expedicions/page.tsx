@@ -179,29 +179,29 @@ function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: numb
 
       if (amPico.length > 0) {
         if (total_sencers + amPico.length <= max_carros) {
+          // Hi ha carros de sobres: cada pico va al seu propi carro (sense barrejar clients)
           carros_compartits = amPico.map(r => ({
             alcada_carro: r.pico_caixes,
             items: [{ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes }],
           }))
         } else {
-          const carros_disp = max_carros - total_sencers
-          if (carros_disp <= 0) {
-            carros_compartits = [{
-              alcada_carro: amPico.reduce((s, r) => s + r.pico_caixes, 0),
-              items: amPico.map(r => ({ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes })),
-            }]
-          } else {
-            const grups: CarroCompartit[] = Array.from({ length: carros_disp }, () => ({ alcada_carro: 0, items: [] }))
-            amPico.forEach((r, i) => {
-              const g = grups[i % carros_disp]
-              g.items.push({ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes })
-              g.alcada_carro += r.pico_caixes
-            })
-            carros_compartits = grups.filter(g => g.items.length > 0)
+          // No hi ha prou carros perquè cada pico vagi sol: empaquetem les caixes
+          // sobrants en carros compartits amb first-fit decreixent, respectant SEMPRE
+          // l'alçada del carro (cap carro pot superar 'alcada' caixes). Com que cada
+          // pico individual ja és ≤ alcada, sempre hi cap com a mínim sol.
+          const ordenats = [...amPico].sort((a, b) => b.pico_caixes - a.pico_caixes)
+          const bins: CarroCompartit[] = []
+          for (const r of ordenats) {
+            let bin = bins.find(b => b.alcada_carro + r.pico_caixes <= alcada)
+            if (!bin) { bin = { alcada_carro: 0, items: [] }; bins.push(bin) }
+            bin.items.push({ expedicio_id: r.expedicio_id, client: r.client, caixes: r.pico_caixes })
+            bin.alcada_carro += r.pico_caixes
           }
+          carros_compartits = bins
         }
       }
 
+      // Seguretat: cap carro compartit pot superar l'alçada (el bin-packing ja ho garanteix)
       if (carros_compartits.some(g => g.alcada_carro > alcada)) continue
 
       const total_carros = total_sencers + carros_compartits.length
