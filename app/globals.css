@@ -61,6 +61,11 @@ body {
   /* Fons blanc en imprimir (el tema de pantalla és fosc) */
   body { background: #fff !important; }
 
+  /* Els contenidors de l'app fixen alçada (h-screen) i overflow ocult, cosa que
+     en imprimir retallava tot el contingut que passa de la primera pàgina.
+     Forcem que html/body s'expandeixin i deixin paginar tot el document. */
+  html, body { height: auto !important; overflow: visible !important; }
+
   /* Estadística setmanal Jordi: full blanc, compacte i tot en una sola pàgina A4 */
   main.estad-setmanal { padding: 0 !important; min-height: 0 !important; }
   .estad-setmanal .estad-wrap { max-width: 100% !important; margin: 0 !important; }

@@ -48,6 +48,7 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
+  transferencia: string | null
   distribucio_carros: DistribucioSaved | null
   assignacions: Assignacio[]
 }
@@ -328,9 +329,10 @@ export default function ExpedicionsNaixement() {
         <div className="print-header">
           <h2>Repartiment de pollets — Càrrega #{full.num_carrega}</h2>
           <p>
-            Data càrrega: {formatData(full.carrega)} · 
-            Data naixement: {formatData(calcularNaixement(full.carrega))} · 
-            Total nascuts: {totalNascuts.toLocaleString()} · 
+            Càrrega: {formatData(full.carrega)} ·
+            Transferència: {full.transferencia ? formatData(full.transferencia) : '—'} ·
+            Naixement: {formatData(calcularNaixement(full.carrega))} ·
+            Total nascuts: {totalNascuts.toLocaleString()} ·
             Total assignats: {totalAssignats.toLocaleString()}
           </p>
         </div>

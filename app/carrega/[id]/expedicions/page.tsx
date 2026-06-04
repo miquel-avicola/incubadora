@@ -137,6 +137,11 @@ function etiquetaSexe(sexe: string | null) {
   return null
 }
 
+// Desviació màxima (en pollets) que pot tenir una expedició respecte de la
+// quantitat demanada perquè una combinació es consideri vàlida. Com més alt,
+// més opcions de repartiment apareixen.
+const DELTA_MAX_POLLETS = 300
+
 function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: number, forcaPc?: number): Opcio[] {
   const { alcada_min, alcada_max, pollets_caixa_min, pollets_caixa_max, max_carros } = t
   if (!alcada_min || !alcada_max || !pollets_caixa_min || !pollets_caixa_max || !max_carros) return []
@@ -162,7 +167,7 @@ function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: numb
         return { expedicio_id: e.id, client: e.comandes?.clients?.nom || '', carros_sencers, pico_caixes, pollets_reals, diferencia }
       })
 
-      if (resultats.some(r => r.diferencia >= 100)) continue
+      if (resultats.some(r => r.diferencia >= DELTA_MAX_POLLETS)) continue
 
       const total_sencers = resultats.reduce((s, r) => s + r.carros_sencers, 0)
       const amPico = resultats.filter(r => r.pico_caixes > 0)
@@ -445,6 +450,24 @@ export default function Expedicions() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ num_viatge: val }),
     })
+  }
+
+  // Canviar el xofer d'una expedició ja creada. En fer-ho, es reinicia el viatge
+  // (num_viatge → null) perquè s'hagi de tornar a triar i recalcular la distribució
+  // de carros amb el nou transportista.
+  async function actualitzarTransportista(expId: number, val: number | null) {
+    const transportista = val ? transportistes.find(t => t.id === val) ?? null : null
+    setExpedicions(prev => prev.map(e => e.id === expId
+      ? { ...e, transportistes: transportista ? { id: transportista.id, nom: transportista.nom } : null, num_viatge: null }
+      : e))
+    setOpcionsPerViatge({})
+    setOpcioSeleccionada({})
+    await fetch(`/api/expedicions/${expId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transportista_id: val, num_viatge: null }),
+    })
+    await carregarDades()
   }
 
   async function actualitzarPolletsComanda(expId: number, valor: string) {
@@ -975,17 +998,30 @@ export default function Expedicions() {
                     </div>
                   )}
 
-                  {/* Selector viatge */}
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <span className="text-[11px] mono text-text-dim uppercase tracking-wider">Viatge</span>
-                    <select
-                      value={e.num_viatge ?? ''}
-                      onChange={ev => actualitzarNumViatge(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
-                      className={`bg-surface border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.num_viatge ? 'text-accent font-bold' : 'text-text-dim font-normal'}`}
-                    >
-                      <option value="">—</option>
-                      {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                  {/* Selectors xofer + viatge */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] mono text-text-dim uppercase tracking-wider">Xofer</span>
+                      <select
+                        value={e.transportistes?.id ?? ''}
+                        onChange={ev => actualitzarTransportista(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
+                        className={`bg-surface border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.transportistes ? 'text-text font-bold' : 'text-text-dim font-normal'}`}
+                      >
+                        <option value="">Cap / per definir</option>
+                        {transportistes.map(t => <option key={t.id} value={t.id}>{t.nom}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] mono text-text-dim uppercase tracking-wider">Viatge</span>
+                      <select
+                        value={e.num_viatge ?? ''}
+                        onChange={ev => actualitzarNumViatge(e.id, ev.target.value === '' ? null : parseInt(ev.target.value))}
+                        className={`bg-surface border border-border rounded-lg px-2 py-1 text-[12px] mono outline-none cursor-pointer ${e.num_viatge ? 'text-accent font-bold' : 'text-text-dim font-normal'}`}
+                      >
+                        <option value="">—</option>
+                        {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Vacunes naixement */}

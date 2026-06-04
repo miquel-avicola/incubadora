@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { formatData } from '@/lib/dates'
+import { formatData, diaSemana, calcularNaixement } from '@/lib/dates'
 
 interface Expedicio {
   id: number
@@ -26,6 +26,7 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
+  transferencia: string | null
 }
 
 function etiquetaSexe(sexe: string | null) {
@@ -107,11 +108,21 @@ export default function ImprimirGranges() {
           <div>
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Full d&apos;Expedicions per Granja</h1>
             <p className="subtle" style={{ margin: '0.25rem 0 0 0' }}>
-              Càrrega #{full.num_carrega} — {formatData(full.carrega)}
+              Càrrega #{full.num_carrega}
             </p>
           </div>
-          <div className="meta" style={{ textAlign: 'right', fontSize: '0.8rem' }}>
-            Data impressió: {new Date().toLocaleDateString('ca-ES')}
+          <div style={{ display: 'flex', gap: '1.25rem', textAlign: 'center', fontSize: '0.8rem' }}>
+            {[
+              { label: 'Càrrega', data: full.carrega },
+              { label: 'Transferència', data: full.transferencia },
+              { label: 'Naixement', data: calcularNaixement(full.carrega) },
+            ].map(({ label, data }) => (
+              <div key={label}>
+                <div className="meta" style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>{label}</div>
+                <div style={{ fontWeight: 700 }}>{data ? formatData(data) : '—'}</div>
+                <div className="subtle" style={{ fontSize: '0.7rem' }}>{data ? diaSemana(data) : ''}</div>
+              </div>
+            ))}
           </div>
         </div>
 

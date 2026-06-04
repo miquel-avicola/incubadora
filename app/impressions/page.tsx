@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { formatData } from '@/lib/dates'
+import { formatData, calcularNaixement } from '@/lib/dates'
 
 interface Comanda {
   id: number
@@ -15,6 +15,7 @@ interface Full {
   id: number
   num_carrega: number
   carrega: string
+  transferencia: string | null
   estat: string
   comandes: Comanda[]
 }
@@ -73,7 +74,7 @@ export default function ImpressionsHub() {
               <option value="" className="bg-slate-900 text-slate-50">— Selecciona una càrrega —</option>
               {carregues.map(c => (
                 <option key={c.id} value={c.id} className="bg-slate-900 text-slate-50">
-                  Càrrega #{c.num_carrega} — {formatData(c.carrega)} {c.estat === 'Finalitzat' ? '(Finalitzada)' : ''}
+                  Càrrega #{c.num_carrega} — Càr. {formatData(c.carrega)} · Trans. {c.transferencia ? formatData(c.transferencia) : '—'} · Naix. {formatData(calcularNaixement(c.carrega))} {c.estat === 'Finalitzat' ? '(Finalitzada)' : ''}
                 </option>
               ))}
             </select>
@@ -85,6 +86,14 @@ export default function ImpressionsHub() {
               <div>
                 <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Data Càrrega</span>
                 <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{formatData(selectedCarrega.carrega)}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Transferència</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{selectedCarrega.transferencia ? formatData(selectedCarrega.transferencia) : '—'}</strong>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Naixement</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{formatData(calcularNaixement(selectedCarrega.carrega))}</strong>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Objectiu Pollets</span>

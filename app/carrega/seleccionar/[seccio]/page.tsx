@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { formatData, diaSemana } from '@/lib/dates'
+import { formatData, diaSemana, calcularNaixement } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,11 +75,10 @@ export default async function SelectorCarrega({ params }: { params: { seccio: st
                       <div style={{ fontSize: '0.9rem', color: 'var(--text)', fontWeight: 600 }}>
                         Càrrega {formatData(full.carrega)} ({diaSemana(full.carrega)})
                       </div>
-                      {full.transferencia && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>
-                          Transferència: {formatData(full.transferencia)}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>
+                        Transferència: {full.transferencia ? formatData(full.transferencia) : '—'}
+                        {' · '}Naixement: {formatData(calcularNaixement(full.carrega))}
+                      </div>
                     </div>
                     <span style={{ marginLeft: 'auto', fontSize: '1.2rem', color: 'var(--text-dim)' }}>→</span>
                   </div>

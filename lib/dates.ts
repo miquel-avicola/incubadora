@@ -1,10 +1,17 @@
+// Formata una Date a 'YYYY-MM-DD' fent servir els components LOCALS.
+// (No fem servir toISOString(), que converteix a UTC i, en zones com Espanya
+//  (UTC+1/+2), retorna el dia anterior per a una mitjanit local.)
+function aISOLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 // Calcula la data de naixement (+21 dies des de càrrega)
 export function calcularNaixement(dataCarrega: string): string {
   if (!dataCarrega) return ''
   const d = new Date(dataCarrega + 'T00:00:00')
   if (isNaN(d.getTime())) return ''
   d.setDate(d.getDate() + 21)
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return aISOLocal(d)
 }
 
 // Calcula la data de transferència proposada
@@ -26,7 +33,7 @@ export function calcularTransferencia(dataCarrega: string): string {
   } else {
     trans.setDate(trans.getDate() + 18)
   }
-  return trans.toISOString().split('T')[0]
+  return aISOLocal(trans)
 }
 
 // Formatar data per mostrar

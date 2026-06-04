@@ -228,7 +228,7 @@ export default function AppLayout({ children, role }: { children: React.ReactNod
 
   if (role === 'responsable') {
     return (
-      <div className="flex flex-col h-screen bg-bg overflow-hidden text-text font-sans">
+      <div className="flex flex-col h-screen bg-bg overflow-hidden text-text font-sans print:h-auto print:overflow-visible print:block">
         <div className="h-14 bg-surface border-b border-border z-20 flex items-center justify-between px-6 shadow-sm print:hidden shrink-0">
           <div className="font-bold text-text truncate">
             {isCarrega ? `Càrrega #${numCarrega || carregaId}` : 'Miquel Avícola'}
@@ -249,7 +249,7 @@ export default function AppLayout({ children, role }: { children: React.ReactNod
   const navProps = { isCarrega, numCarrega, carregaId, navLinks, pathname, onLinkClick: () => setMenuOpen(false) }
 
   return (
-    <div className="flex h-screen bg-bg overflow-hidden text-text font-sans">
+    <div className="flex h-screen bg-bg overflow-hidden text-text font-sans print:h-auto print:overflow-visible print:block">
 
       {/* Sidebar Desktop */}
       <aside className="hidden md:block w-64 bg-surface border-r border-border shrink-0 shadow-sm z-10 print:hidden">
