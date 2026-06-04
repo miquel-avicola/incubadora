@@ -437,10 +437,10 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
         const parts = k.split('|');
         if (parseInt(parts[0], 10) === incId) occupied.delete(`${parts[1]}|${parts[2]}`);
       }
-      
+
       let targetPos: number | null = null;
       let targetZona: ZonaMS | null = null;
-      
+
       const zonesPref: ZonaMS[] = ['central', 'paret', 'pulsator'];
       for (const z of zonesPref) {
         for (let p = 1; p <= 4; p++) {
@@ -452,17 +452,64 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
         }
         if (targetPos !== null) break;
       }
-      
+
       if (targetPos === null) {
         alert('Incubadora MSP plena.');
         return prev;
       }
-      
+
       const m = new Map(prev)
       m.set(carroId, { incId, pos: targetPos, zona: targetZona })
       return m
     })
   }, [ocupatsAltresFullsPerCella, lliureAviatPerCella])
+
+  const onTapMSPGeneral = useCallback((incId: number) => {
+    if (carroSeleccionatTap === null) return
+    const carroId = carroSeleccionatTap
+
+    setColocats(prev => {
+      const occupied = new Set<string>();
+      for (const p of Array.from(prev.values())) {
+        if (p.incId === incId && p.pos !== null) occupied.add(`${p.pos}|${p.zona}`);
+      }
+      for (const k of Array.from(ocupatsAltresFullsPerCella.keys())) {
+        const parts = k.split('|');
+        if (parseInt(parts[0], 10) === incId) occupied.add(`${parts[1]}|${parts[2]}`);
+      }
+      for (const k of Array.from(lliureAviatPerCella.keys())) {
+        const parts = k.split('|');
+        if (parseInt(parts[0], 10) === incId) occupied.delete(`${parts[1]}|${parts[2]}`);
+      }
+
+      let targetPos: number | null = null;
+      let targetZona: ZonaMS | null = null;
+
+      const zonesPref: ZonaMS[] = ['central', 'paret', 'pulsator'];
+      for (const z of zonesPref) {
+        for (let p = 1; p <= 4; p++) {
+          if (!occupied.has(`${p}|${z}`)) {
+            targetPos = p;
+            targetZona = z;
+            break;
+          }
+        }
+        if (targetPos !== null) break;
+      }
+
+      if (targetPos === null) {
+        alert('Incubadora MSP plena.');
+        return prev;
+      }
+
+      const m = new Map(prev)
+      m.set(carroId, { incId, pos: targetPos, zona: targetZona })
+      return m
+    })
+
+    const nextCarro = carrosLotFiltrats.find(c => c.id !== carroId && !colocatsRef.current.has(c.id))
+    setCarroSeleccionatTap(nextCarro ? nextCarro.id : null)
+  }, [carroSeleccionatTap, ocupatsAltresFullsPerCella, lliureAviatPerCella, carrosLotFiltrats])
 
   // ── Guardar
   async function guardar() {
@@ -525,7 +572,7 @@ export function useAssignacions({ initialFull, initialDisponibles, initialIncs, 
     ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
     onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat,
-    onDropMSPGeneral,
+    onDropMSPGeneral, onTapMSPGeneral,
     carroSeleccionatTap, setCarroSeleccionatTap, cellaQueueIndex, tapCarroSafata, onTapCella,
     guardar
   }

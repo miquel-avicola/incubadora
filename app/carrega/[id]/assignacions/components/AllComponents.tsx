@@ -288,7 +288,7 @@ export function IncubadoraMS({ inc, sub, filtrada, anyFiltrada, onToggleFiltrada
 
 // ── Incubadora MSP (Informatiu) ──────────────────────────────────────────────
 
-export function IncubadoraMSP({ inc, instInc, carrosLot, colocats, numCarroPerCella, onDropMSPGeneral, onClicCarroColocat, onDragStartCarro, onDragOverCell }: any) {
+export function IncubadoraMSP({ inc, instInc, carrosLot, colocats, numCarroPerCella, tapModeActive, onDropMSPGeneral, onTapMSPGeneral, onClicCarroColocat, onDragStartCarro, onDragOverCell }: any) {
   const carros: any[] = [];
   if (instInc && instInc.carros) {
      carros.push(...instInc.carros);
@@ -331,18 +331,19 @@ export function IncubadoraMSP({ inc, instInc, carrosLot, colocats, numCarroPerCe
   });
 
   return (
-    <div 
-      className="bg-bg border border-border rounded-lg p-2 transition-all"
+    <div
+      className={`bg-bg border rounded-lg p-2 transition-all ${tapModeActive ? 'border-accent border-2 cursor-pointer' : 'border-border'}`}
       onDragOver={onDragOverCell}
       onDrop={(e) => onDropMSPGeneral(e, inc.id)}
+      onClick={() => tapModeActive && onTapMSPGeneral(inc.id)}
     >
       <div className="flex justify-between items-center mb-1 text-sm gap-1">
-        <span className="font-semibold text-text">Inc {inc.numero} (Informativa)</span>
+        <span className={`font-semibold ${tapModeActive ? 'text-accent' : 'text-text'}`}>Inc {inc.numero}</span>
         <span className="text-text-dim text-[11px]">{carros.length}/{inc.capacitat_carros}</span>
       </div>
-      
-      <div className="text-[10px] text-text-dim mb-2 bg-surface p-1 rounded text-center border border-dashed border-border cursor-pointer">
-        Arrossega aquí per assignar a MS petita
+
+      <div className={`text-[10px] mb-2 p-1 rounded text-center border border-dashed cursor-pointer ${tapModeActive ? 'bg-accent/20 border-accent text-accent font-bold' : 'bg-surface border-border text-text-dim'}`}>
+        {tapModeActive ? 'Tap per assignar a MS petita' : 'Arrossega aquí per assignar a MS petita'}
       </div>
 
       <div className="grid grid-cols-[1fr_1fr_1fr_10px_1fr_1fr_1fr] gap-[2px] items-start">

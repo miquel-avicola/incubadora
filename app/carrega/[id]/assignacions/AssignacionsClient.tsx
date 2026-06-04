@@ -40,7 +40,7 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
     estatInstProjectat, estatInstEffectiu,
     ocupatsAltresFullsPerCella, nCanvisProjeccio, lliureAviatPerCella,
     toggleSeleccio, seleccionarLliuresInc, netejarSeleccio, reiniciar,
-    onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat, onDropMSPGeneral,
+    onDragStartCarro, onDragOverCell, onDropCell, onDropSafata, clicarCarroColocat, onDropMSPGeneral, onTapMSPGeneral,
     carroSeleccionatTap, cellaQueueIndex, tapCarroSafata, onTapCella,
     guardar
   } = hook
@@ -402,7 +402,9 @@ export function AssignacionsClient({ initialFull, initialDisponibles, initialInc
               <IncubadoraMSP key={inc.id} inc={inc} instInc={instInc} carrosLot={carrosLot}
                 colocats={colocats}
                 numCarroPerCella={numCarroPerCella}
+                tapModeActive={carroSeleccionatTap !== null}
                 onDropMSPGeneral={onDropMSPGeneral}
+                onTapMSPGeneral={onTapMSPGeneral}
                 onClicCarroColocat={clicarCarroColocat}
                 onDragStartCarro={onDragStartCarro}
                 onDragOverCell={onDragOverCell}
