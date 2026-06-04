@@ -92,6 +92,9 @@ interface ResultatExpedicio {
   pico_caixes: number
   pollets_reals: number
   diferencia: number
+  // Mode "carros forçats": alçada (caixes) de cada carro d'aquesta expedició.
+  // Permet que un mateix viatge barregi carros de diferent alçada.
+  alcades?: number[]
 }
 
 interface CarroCompartit {
@@ -106,6 +109,9 @@ interface Opcio {
   carros_compartits: CarroCompartit[]
   total_carros: number
   score: { num_compartits: number; num_multiples_5: number; suma_diferencies: number }
+  // Mode "carros forçats": l'opció barreja alçades. resum_alcades = {alçada: nombre de carros}
+  mixed?: boolean
+  resum_alcades?: Record<number, number>
 }
 
 export type DistribucioSaved = Record<string, {
@@ -114,12 +120,16 @@ export type DistribucioSaved = Record<string, {
   nom_transportista: string
   num_viatge: number
   transportista_id: number
+  // Mode "carros forçats": el viatge barreja alçades; alcada deixa de ser únic.
+  alcades_barrejades?: boolean
+  resum_alcades?: Record<number, number>
   per_expedicio: Record<string, {
     carros_sencers: number
     pico_caixes: number
     pollets_reals: number
     diferencia: number
     en_carro_compartit: boolean
+    alcades?: number[]
   }>
   carros_compartits: Array<{
     alcada_carro: number
@@ -135,6 +145,24 @@ function etiquetaSexe(sexe: string | null) {
   if (sexe === 'F') return '♀ Femelles'
   if (sexe === 'M') return '♂ Mascles'
   return null
+}
+
+// Formata un resum d'alçades {11:4, 12:13} → "4×11 + 13×12" (ordenat per alçada)
+function formatResumAlcades(resum: Record<number, number> | undefined): string {
+  if (!resum) return ''
+  return Object.entries(resum)
+    .map(([a, n]) => [parseInt(a), n] as [number, number])
+    .sort((x, y) => x[0] - y[0])
+    .map(([a, n]) => `${n}×${a}`)
+    .join(' + ')
+}
+
+// Formata les alçades d'una expedició [12,12,11] → "2×12 + 1×11"
+function formatAlcadesExp(alcades: number[] | undefined): string {
+  if (!alcades || alcades.length === 0) return ''
+  const resum: Record<number, number> = {}
+  alcades.forEach(a => { resum[a] = (resum[a] || 0) + 1 })
+  return formatResumAlcades(resum)
 }
 
 // Desviació màxima (en pollets) que pot tenir una expedició respecte de la
@@ -226,6 +254,104 @@ function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: numb
   return opcions.slice(0, 5)
 }
 
+// Reparteix b caixes en k carros el més uniformement possible, retornant les
+// alçades de cada carro (p. ex. 25 caixes en 2 carros → [13, 12]).
+function repartirAlcades(b: number, k: number): number[] {
+  if (k <= 0) return []
+  const base = Math.floor(b / k)
+  const resta = b % k
+  // 'resta' carros tenen una caixa de més; els posem primer (més alts al davant)
+  return Array.from({ length: k }, (_, i) => base + (i < resta ? 1 : 0))
+}
+
+// Càlcul d'opcions quan es força un nombre EXACTE de carros (forcaCarros).
+// A diferència del càlcul normal (una sola alçada per viatge), aquí cada carro
+// pot tenir una alçada diferent: així es pot quadrar el total a exactament N
+// carros. Cada carro pertany a una sola expedició (no es comparteixen carros).
+function calcularOpcionsCarros(exps: Expedicio[], t: Transportista, forcaCarros: number, forcaPc?: number): Opcio[] {
+  const { alcada_min, alcada_max, pollets_caixa_min, pollets_caixa_max, max_carros } = t
+  if (!alcada_min || !alcada_max || !pollets_caixa_min || !pollets_caixa_max || !max_carros) return []
+  if (forcaCarros < 1 || forcaCarros > max_carros) return []
+
+  const hmin = alcada_min, hmax = alcada_max
+  const minPc = forcaPc || pollets_caixa_min
+  const maxPc = forcaPc || pollets_caixa_max
+
+  const opcions: Opcio[] = []
+
+  for (let pc = minPc; pc <= maxPc; pc++) {
+    // Caixes necessàries per expedició per acostar-se a la demanda
+    const infos = exps.map(e => {
+      const pollets = e.pollets_comanda || 0
+      const caixes = Math.round(pollets / pc)
+      const lo = caixes > 0 ? Math.max(1, Math.ceil(caixes / hmax)) : 0
+      const hi = caixes > 0 ? Math.max(lo, Math.floor(caixes / hmin)) : 0
+      return { e, pollets, caixes, lo, hi, k: lo }
+    })
+
+    const sumLo = infos.reduce((s, i) => s + i.lo, 0)
+    const sumHi = infos.reduce((s, i) => s + i.hi, 0)
+    // Només és possible quadrar exactament N carros si N és dins del rang assolible
+    if (forcaCarros < sumLo || forcaCarros > sumHi) continue
+
+    // Repartim els carros extra (per sobre del mínim) a les expedicions amb els
+    // carros més plens (alçada mitjana més alta), per anivellar les alçades.
+    let extra = forcaCarros - sumLo
+    while (extra > 0) {
+      let millor = -1
+      let millorAlcadaMitjana = -1
+      infos.forEach((info, idx) => {
+        if (info.k >= info.hi) return
+        const mitjana = info.caixes / info.k
+        if (mitjana > millorAlcadaMitjana) { millorAlcadaMitjana = mitjana; millor = idx }
+      })
+      if (millor === -1) break
+      infos[millor].k++
+      extra--
+    }
+
+    const resultats: ResultatExpedicio[] = infos.map(info => {
+      const alcades = repartirAlcades(info.caixes, info.k)
+      const pollets_reals = info.caixes * pc
+      return {
+        expedicio_id: info.e.id,
+        client: info.e.comandes?.clients?.nom || '',
+        carros_sencers: info.k,
+        pico_caixes: 0,
+        pollets_reals,
+        diferencia: Math.abs(info.pollets - pollets_reals),
+        alcades,
+      }
+    })
+
+    if (resultats.some(r => r.diferencia >= DELTA_MAX_POLLETS)) continue
+
+    const resum_alcades: Record<number, number> = {}
+    resultats.forEach(r => (r.alcades || []).forEach(a => { resum_alcades[a] = (resum_alcades[a] || 0) + 1 }))
+    const num_alcades_diferents = Object.keys(resum_alcades).length
+    const suma_dif = resultats.reduce((s, r) => s + r.diferencia, 0)
+
+    opcions.push({
+      alcada: 0,
+      pollets_caixa: pc,
+      resultats,
+      carros_compartits: [],
+      total_carros: forcaCarros,
+      mixed: true,
+      resum_alcades,
+      // Reaprofitem 'score': menys alçades diferents primer, després menys desviació
+      score: { num_compartits: num_alcades_diferents, num_multiples_5: 0, suma_diferencies: suma_dif },
+    })
+  }
+
+  opcions.sort((a, b) => {
+    if (a.score.num_compartits !== b.score.num_compartits) return a.score.num_compartits - b.score.num_compartits
+    return a.score.suma_diferencies - b.score.suma_diferencies
+  })
+
+  return opcions.slice(0, 5)
+}
+
 export default function Expedicions() {
   const params = useParams()
   const [full, setFull] = useState<Full | null>(null)
@@ -264,7 +390,7 @@ export default function Expedicions() {
 
   const [opcionsPerViatge, setOpcionsPerViatge] = useState<Record<string, Opcio[]>>({})
   const [opcioSeleccionada, setOpcioSeleccionada] = useState<Record<string, number>>({})
-  const [filtresGrup, setFiltresGrup] = useState<Record<string, { alcada: string, pc: string }>>({})
+  const [filtresGrup, setFiltresGrup] = useState<Record<string, { alcada: string, pc: string, carros: string }>>({})
   const [aplicantDist, setAplicantDist] = useState<string | null>(null)
 
   const carregarDades = useCallback(async () => {
@@ -483,9 +609,17 @@ export default function Expedicions() {
 
   function calcularGrup(grupKey: string, exps: Expedicio[], transportista: Transportista) {
     const f = filtresGrup[grupKey] || {}
-    const forcaAlcada = f.alcada ? parseInt(f.alcada) : undefined
     const forcaPc = f.pc ? parseInt(f.pc) : undefined
-    const opcions = calcularOpcions(exps, transportista, forcaAlcada, forcaPc)
+    const forcaCarros = f.carros ? parseInt(f.carros) : undefined
+    let opcions: Opcio[]
+    if (forcaCarros) {
+      // Mode carros forçats: alçades barrejades per quadrar N carros exactes
+      // (el camp Alçada s'ignora; les alçades es calculen automàticament).
+      opcions = calcularOpcionsCarros(exps, transportista, forcaCarros, forcaPc)
+    } else {
+      const forcaAlcada = f.alcada ? parseInt(f.alcada) : undefined
+      opcions = calcularOpcions(exps, transportista, forcaAlcada, forcaPc)
+    }
     setOpcionsPerViatge(prev => ({ ...prev, [grupKey]: opcions }))
   }
 
@@ -506,6 +640,7 @@ export default function Expedicions() {
         pollets_reals: r.pollets_reals,
         diferencia: r.diferencia,
         en_carro_compartit: expIdsEnCompartit.has(r.expedicio_id),
+        ...(r.alcades ? { alcades: r.alcades } : {}),
       }
     })
 
@@ -519,6 +654,7 @@ export default function Expedicions() {
       transportista_id: transportista.id,
       per_expedicio,
       carros_compartits: opcio.carros_compartits,
+      ...(opcio.mixed ? { alcades_barrejades: true, resum_alcades: opcio.resum_alcades } : {}),
     }
 
     await fetch(`/api/carrega/${params.id}`, {
@@ -1077,23 +1213,37 @@ export default function Expedicions() {
                           <span className="ml-2 mono text-[11px] text-text-dim">(màx. {g.transportista.max_carros} carros)</span>
                         )}
                         {full.distribucio_carros?.[g.key] && (
-                          <span className="ml-2 mono text-[11px] text-success">✓ aplicada: {full.distribucio_carros[g.key].alcada} cx · {full.distribucio_carros[g.key].pollets_caixa} p/cx</span>
+                          <span className="ml-2 mono text-[11px] text-success">
+                            ✓ aplicada: {full.distribucio_carros[g.key].alcades_barrejades
+                              ? `${formatResumAlcades(full.distribucio_carros[g.key].resum_alcades)} cx`
+                              : `${full.distribucio_carros[g.key].alcada} cx`} · {full.distribucio_carros[g.key].pollets_caixa} p/cx
+                          </span>
                         )}
                       </div>
                       <div className="flex flex-wrap md:flex-nowrap gap-2 items-center">
                         <div className="flex gap-1 items-center flex-1 md:flex-none">
                           <span className="text-xs mono text-text-dim">Alçada:</span>
-                          <input type="number" placeholder="Auto" min="1"
-                            value={filtresGrup[g.key]?.alcada || ''} 
-                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { ...(prev[g.key] || {pc: ''}), alcada: e.target.value } }))} 
-                            className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent"
+                          <input type="number" placeholder={filtresGrup[g.key]?.carros ? 'Auto*' : 'Auto'} min="1"
+                            disabled={!!filtresGrup[g.key]?.carros}
+                            title={filtresGrup[g.key]?.carros ? 'En forçar carros, les alçades es calculen automàticament' : undefined}
+                            value={filtresGrup[g.key]?.alcada || ''}
+                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { alcada: e.target.value, pc: prev[g.key]?.pc || '', carros: prev[g.key]?.carros || '' } }))}
+                            className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="flex gap-1 items-center flex-1 md:flex-none">
                           <span className="text-xs mono text-text-dim">Pollets/cx:</span>
                           <input type="number" placeholder="Auto" min="1"
-                            value={filtresGrup[g.key]?.pc || ''} 
-                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { ...(prev[g.key] || {alcada: ''}), pc: e.target.value } }))} 
+                            value={filtresGrup[g.key]?.pc || ''}
+                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { alcada: prev[g.key]?.alcada || '', pc: e.target.value, carros: prev[g.key]?.carros || '' } }))}
+                            className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent"
+                          />
+                        </div>
+                        <div className="flex gap-1 items-center flex-1 md:flex-none">
+                          <span className="text-xs mono text-text-dim">Carros:</span>
+                          <input type="number" placeholder="Auto" min="1"
+                            value={filtresGrup[g.key]?.carros || ''}
+                            onChange={e => setFiltresGrup(prev => ({ ...prev, [g.key]: { alcada: prev[g.key]?.alcada || '', pc: prev[g.key]?.pc || '', carros: e.target.value } }))}
                             className="bg-bg border border-border rounded-lg px-2 py-1 text-xs w-full md:w-16 outline-none focus:border-accent"
                           />
                         </div>
@@ -1134,9 +1284,14 @@ export default function Expedicions() {
                             <div key={idx} className={`border rounded-lg p-3 md:p-4 transition-colors ${sel ? 'border-success bg-success/5' : 'border-border bg-bg'}`}>
                               <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 mb-2 md:mb-3">
                                 <div className="mono text-xs">
-                                  <span className="font-bold">Alçada: {opcio.alcada} cx · Pollets/caixa: {opcio.pollets_caixa}</span>
+                                  <span className="font-bold">
+                                    {opcio.mixed
+                                      ? `Alçades: ${formatResumAlcades(opcio.resum_alcades)} cx · Pollets/caixa: ${opcio.pollets_caixa}`
+                                      : `Alçada: ${opcio.alcada} cx · Pollets/caixa: ${opcio.pollets_caixa}`}
+                                  </span>
                                   <span className="block md:inline md:ml-2.5 text-text-dim mt-1 md:mt-0 font-normal">
                                     {opcio.total_carros} carros
+                                    {opcio.mixed && <span className="text-accent">{' '}(alçades barrejades)</span>}
                                     {opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 0 && (
                                       <span className="text-accent">{' '}({opcio.carros_compartits.filter(cc => cc.items.length > 1).length} compartit{opcio.carros_compartits.filter(cc => cc.items.length > 1).length > 1 ? 's' : ''})</span>
                                     )}
@@ -1158,6 +1313,7 @@ export default function Expedicions() {
                                     <span className="text-text">{r.client}</span>
                                     <span className="text-right">
                                       <span className="text-text">{r.carros_sencers}c</span>
+                                      {r.alcades && r.alcades.length > 0 && <span className="text-accent"> ({formatAlcadesExp(r.alcades)} cx)</span>}
                                       {r.pico_caixes > 0 && <span className="text-accent"> + {r.pico_caixes} cx pico</span>}
                                       <span className="text-text-dim"> · {r.pollets_reals.toLocaleString()} pollets</span>
                                       {r.diferencia > 0 && <span className={r.diferencia >= 50 ? 'text-danger' : 'text-text-dim'}> (Δ{r.diferencia})</span>}

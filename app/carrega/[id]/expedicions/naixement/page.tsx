@@ -59,18 +59,33 @@ type DistribucioSaved = Record<string, {
   nom_transportista: string
   num_viatge: number
   transportista_id: number
+  alcades_barrejades?: boolean
+  resum_alcades?: Record<number, number>
   per_expedicio: Record<string, {
     carros_sencers: number
     pico_caixes: number
     pollets_reals: number
     diferencia: number
     en_carro_compartit: boolean
+    alcades?: number[]
   }>
   carros_compartits: Array<{
     alcada_carro: number
     items: Array<{ expedicio_id: number; client: string; caixes: number }>
   }>
 }>
+
+// Formata alçades d'una expedició [12,12,11] → "2×12 + 1×11"
+function formatAlcadesExp(alcades: number[] | undefined): string {
+  if (!alcades || alcades.length === 0) return ''
+  const resum: Record<number, number> = {}
+  alcades.forEach(a => { resum[a] = (resum[a] || 0) + 1 })
+  return Object.entries(resum)
+    .map(([a, n]) => [parseInt(a), n] as [number, number])
+    .sort((x, y) => x[0] - y[0])
+    .map(([a, n]) => `${n}×${a}`)
+    .join(' + ')
+}
 
 type ColEntry =
   | { type: 'single'; exp: Expedicio }
@@ -465,7 +480,16 @@ export default function ExpedicionsNaixement() {
               {cols.map((col) => {
                 const grup = col.type === 'single' ? getDistGrup(col.exp) : getDistGrup(col.expM)
                 const key = col.type === 'single' ? col.exp.id : `par_${col.expM.id}`
-                return <td key={key}>{grup ? grup.alcada : '—'}</td>
+                if (!grup) return <td key={key}>—</td>
+                if (grup.alcades_barrejades) {
+                  if (col.type === 'single') {
+                    return <td key={key}>{formatAlcadesExp(getDistExp(col.exp)?.alcades) || '—'}</td>
+                  }
+                  const m = formatAlcadesExp(getDistExp(col.expM)?.alcades)
+                  const f = formatAlcadesExp(getDistExp(col.expF)?.alcades)
+                  return <td key={key}><span>♂ {m || '—'}</span><br /><span>♀ {f || '—'}</span></td>
+                }
+                return <td key={key}>{grup.alcada}</td>
               })}
               <td></td>
               <td></td>
@@ -476,20 +500,16 @@ export default function ExpedicionsNaixement() {
               <td></td>
               <td></td>
               {cols.map((col) => {
+                const fmt = (d: ReturnType<typeof getDistExp>) => {
+                  if (!d) return '—'
+                  if (d.pico_caixes === 0) return `${d.carros_sencers}c${d.en_carro_compartit ? ' *' : ''}`
+                  return `${d.carros_sencers}c + ${d.pico_caixes}${d.en_carro_compartit ? ' *' : ''}`
+                }
                 if (col.type === 'single') {
-                  const distExp = getDistExp(col.exp)
-                  const enCompartit = distExp?.en_carro_compartit ?? false
-                  const val = distExp
-                    ? `${distExp.carros_sencers}c + ${distExp.pico_caixes}${enCompartit ? ' *' : ''}`
-                    : '—'
-                  return <td key={col.exp.id}>{val}</td>
+                  return <td key={col.exp.id}>{fmt(getDistExp(col.exp))}</td>
                 } else {
                   const { expM, expF } = col
-                  const distM = getDistExp(expM)
-                  const distF = getDistExp(expF)
-                  const fmtM = distM ? `♂ ${distM.carros_sencers}c+${distM.pico_caixes}${distM.en_carro_compartit ? '*' : ''}` : '♂ —'
-                  const fmtF = distF ? `♀ ${distF.carros_sencers}c+${distF.pico_caixes}${distF.en_carro_compartit ? '*' : ''}` : '♀ —'
-                  return <td key={`par_${expM.id}`}><span>{fmtM}</span><br /><span>{fmtF}</span></td>
+                  return <td key={`par_${expM.id}`}><span>♂ {fmt(getDistExp(expM))}</span><br /><span>♀ {fmt(getDistExp(expF))}</span></td>
                 }
               })}
               <td></td>
@@ -611,9 +631,11 @@ export default function ExpedicionsNaixement() {
                       </div>
                       {distExp && distGrup && (
                         <div className="text-[11px] text-text-dim mono mt-1.5">
-                          {distExp.carros_sencers}c + {distExp.pico_caixes} cx pico
+                          {distGrup.alcades_barrejades
+                            ? `${distExp.carros_sencers}c`
+                            : `${distExp.carros_sencers}c + ${distExp.pico_caixes} cx pico`}
                           <span className="ml-2 text-text-dim opacity-70">
-                            · {distGrup.alcada} cx · {distGrup.pollets_caixa} p/cx
+                            · {distGrup.alcades_barrejades ? `${formatAlcadesExp(distExp.alcades)} cx` : `${distGrup.alcada} cx`} · {distGrup.pollets_caixa} p/cx
                           </span>
                         </div>
                       )}
