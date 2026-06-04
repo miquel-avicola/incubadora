@@ -211,7 +211,7 @@ export default async function EstadistiquesAnualPage({ searchParams }: { searchP
             <section style={card}>
               <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 1rem' }}>Per mesos</h2>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 360 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr><th style={thL}>Mes</th><th style={th}>Ous entrats</th><th style={th}>Pollets nascuts</th></tr>
                   </thead>
@@ -280,7 +280,7 @@ export default async function EstadistiquesAnualPage({ searchParams }: { searchP
                       </div>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 300 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr><th style={thL}>Mes</th><th style={th}>Ous</th><th style={th}>Pollets</th></tr>
                         </thead>
