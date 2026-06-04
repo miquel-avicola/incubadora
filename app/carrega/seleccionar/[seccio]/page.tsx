@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 const SECCIONS: Record<string, { nom: string; href: (id: number) => string }> = {
   assignacions:  { nom: 'Assignacions',       href: id => `/carrega/${id}/assignacions` },
+  vacunes:       { nom: 'Pla vacunal',         href: id => `/carrega/${id}/vacunes` },
   transferencia: { nom: 'Transferència',       href: id => `/carrega/${id}/transferencia` },
   naixement:     { nom: 'Naixement',           href: id => `/carrega/${id}/naixement` },
   expedicions:   { nom: 'Expedicions',         href: id => `/carrega/${id}/expedicions` },

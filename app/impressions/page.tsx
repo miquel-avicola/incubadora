@@ -50,7 +50,7 @@ export default function ImpressionsHub() {
           <Link href="/" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono', display: 'inline-block', marginBottom: '1rem' }}>← Inici</Link>
           <p style={{ color: 'var(--accent)', fontFamily: 'IBM Plex Mono', fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem', margin: 0 }}>Documents</p>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
-            Centre d'Impressions
+            Documents
           </h1>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.95rem', marginTop: '0.5rem' }}>
             Selecciona una càrrega per generar i imprimir la documentació corresponent.
@@ -106,44 +106,44 @@ export default function ImpressionsHub() {
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
             
-            {/* Targeta 1: Full de treball */}
-            <PrintCard 
+            {/* 1: Fulla de càrrega (abans "Full de treball") */}
+            <PrintCard
               href={`/carrega/${selectedId}/imprimir`}
-              icon="🖨️"
-              title="Full de treball"
+              icon="📋"
+              title="Fulla de càrrega"
               description="Document principal amb assignacions, carros de la granja i previsions per la incubadora."
             />
 
-            {/* Targeta 2: Etiquetes de càrrega */}
-            <PrintCard 
+            {/* 2: Full granges (full Yolima) */}
+            <PrintCard
+              href={`/carrega/${selectedId}/expedicions/imprimir-granges`}
+              icon="🏡"
+              title="Full granges"
+              description="Llistat per client i granja amb naus, pollets, codi REGA i telèfon. (Full Yolima)"
+            />
+
+            {/* 3: Full repartiment de Pollets (matriu lots × destins) */}
+            <PrintCard
+              href={`/carrega/${selectedId}/expedicions/naixement?print=true`}
+              icon="🚚"
+              title="Full repartiment de Pollets"
+              description="Graella de repartiment: quants pollets de cada lot van a cada destí, amb totals i sobrants."
+            />
+
+            {/* 4: Etiquetes de càrrega */}
+            <PrintCard
               href={`/carrega/${selectedId}/etiquetes`}
               icon="🏷️"
               title="Etiquetes càrrega"
-              description="Etiquetes petites per enganxar als carros amb el lot, edat i incubadora de destí."
+              description="Etiquetes 90×70 mm per enganxar als carros amb el lot, edat i incubadora de destí."
             />
 
-            {/* Targeta 3: Etiquetes de pollets */}
-            <PrintCard 
+            {/* 5: Etiquetes de pollets / destí */}
+            <PrintCard
               href={`/carrega/${selectedId}/expedicions/etiquetes-pollets`}
               icon="🐣"
-              title="Etiquetes pollets"
-              description="Etiquetes per a les caixes de pollets (format 105x148mm) per a l'expedició."
-            />
-
-            {/* Targeta 4: Full de repartiment */}
-            <PrintCard 
-              href={`/carrega/${selectedId}/expedicions/naixement?print=true`}
-              icon="🚚"
-              title="Full de repartiment"
-              description="La pàgina d'expedicions amb el detall de tots els enviaments, destinacions i lots."
-            />
-
-            {/* Targeta 5: Estadístiques */}
-            <PrintCard 
-              href={`/carrega/${selectedId}/estadistiques`}
-              icon="📊"
-              title="Estadístiques"
-              description="Resultats d'incubació de la càrrega, percentatges de naixement per lots i granges."
+              title="Etiquetes pollets/destí"
+              description="Etiquetes 90×70 mm per a les caixes de pollets, per destí i client."
             />
 
           </div>
