@@ -105,6 +105,8 @@ export function canAccess(role: string, path: string): boolean {
     // APIs permeses (llista blanca explícita)
     // Carros: veure, afegir i eliminar
     if (/^\/api\/carros($|\/)/.test(path)) return true
+    // Lots: només el llistat (necessari per al selector de recepció)
+    if (path === '/api/lots') return true
     // Previsió comercial: només consulta (no /cell que és el PUT de modificar)
     if (/^\/api\/previsio-comercial$/.test(path)) return true
 
