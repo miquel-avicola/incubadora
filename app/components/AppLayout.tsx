@@ -37,7 +37,7 @@ const GLOBAL_GROUPS: NavGroup[] = [
       { name: 'Naixement',     href: '/carrega/seleccionar/naixement' },
       {
         name: 'Expedicions', href: '/carrega/seleccionar/expedicions',
-        children: [{ name: 'Dia del naixement', href: '/carrega/seleccionar/dia-naixement' }],
+        children: [{ name: 'Repartiment de pollets', href: '/carrega/seleccionar/dia-naixement' }],
       },
     ],
   },
@@ -63,7 +63,7 @@ const CARREGA_LINKS_BASE: Omit<NavLink, 'href'>[] = [
   { name: 'Transferència',   icon: '🥚' },
   { name: 'Naixement',       icon: '🐣' },
   { name: 'Expedicions',     icon: '🚚' },
-  { name: 'Dia de Naixement',icon: '📝' },
+  { name: 'Repartiment de pollets',icon: '📝' },
   { name: 'Estadístiques',   icon: '📊' },
 ]
 

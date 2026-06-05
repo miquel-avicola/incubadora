@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
@@ -393,6 +393,10 @@ export default function Expedicions() {
   const [filtresGrup, setFiltresGrup] = useState<Record<string, { alcada: string, pc: string, carros: string }>>({})
   const [aplicantDist, setAplicantDist] = useState<string | null>(null)
 
+  const [draggingId, setDraggingId] = useState<number | null>(null)
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const [reordering, setReordering] = useState(false)
+
   const carregarDades = useCallback(async () => {
     if (!params.id) return
     const [fullRes, expRes] = await Promise.all([
@@ -607,6 +611,60 @@ export default function Expedicions() {
     })
   }
 
+  async function reordarExpedicions(nouOrdre: Expedicio[]) {
+    setReordering(true)
+    const amb = nouOrdre.map((e, i) => ({ ...e, ordre: i + 1 }))
+    setExpedicions(amb)
+    await Promise.all(amb.map(e =>
+      fetch(`/api/expedicions/${e.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordre: e.ordre }),
+      })
+    ))
+    setReordering(false)
+  }
+
+  function moureAmunt(id: number) {
+    const idx = expedicions.findIndex(e => e.id === id)
+    if (idx <= 0) return
+    const nou = [...expedicions]
+    ;[nou[idx - 1], nou[idx]] = [nou[idx], nou[idx - 1]]
+    reordarExpedicions(nou)
+  }
+
+  function mourAvall(id: number) {
+    const idx = expedicions.findIndex(e => e.id === id)
+    if (idx < 0 || idx >= expedicions.length - 1) return
+    const nou = [...expedicions]
+    ;[nou[idx], nou[idx + 1]] = [nou[idx + 1], nou[idx]]
+    reordarExpedicions(nou)
+  }
+
+  function handleDragStart(ev: React.DragEvent, id: number) {
+    setDraggingId(id)
+    ev.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(ev: React.DragEvent, id: number) {
+    ev.preventDefault()
+    ev.dataTransfer.dropEffect = 'move'
+    if (id !== draggingId) setDragOverId(id)
+  }
+
+  function handleDrop(ev: React.DragEvent, targetId: number) {
+    ev.preventDefault()
+    if (!draggingId || draggingId === targetId) { setDraggingId(null); setDragOverId(null); return }
+    const from = expedicions.findIndex(e => e.id === draggingId)
+    const to = expedicions.findIndex(e => e.id === targetId)
+    if (from < 0 || to < 0) return
+    const nou = [...expedicions]
+    nou.splice(to, 0, nou.splice(from, 1)[0])
+    setDraggingId(null)
+    setDragOverId(null)
+    reordarExpedicions(nou)
+  }
+
   function calcularGrup(grupKey: string, exps: Expedicio[], transportista: Transportista) {
     const f = filtresGrup[grupKey] || {}
     const forcaPc = f.pc ? parseInt(f.pc) : undefined
@@ -774,7 +832,7 @@ export default function Expedicions() {
           <div className="flex flex-wrap gap-2">
             <Link href={`/carrega/${params.id}/expedicions/naixement`} className="no-underline flex-1 md:flex-none">
               <button className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-surface transition-colors shadow-sm">
-                Dia del naixement
+                Repartiment de pollets
               </button>
             </Link>
             <Link href={`/carrega/${params.id}/expedicions/etiquetes-pollets`} className="no-underline flex-1 md:flex-none">
@@ -1090,10 +1148,41 @@ export default function Expedicions() {
           {expedicions.length === 0 && (
             <p className="text-text-dim text-sm text-center p-8 mono">Sense expedicions</p>
           )}
-          {expedicions.map(e => (
-            <div key={e.id} className="bg-surface border border-border rounded-xl p-4 md:p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
+          {expedicions.map((e, idx) => (
+            <div
+              key={e.id}
+              draggable
+              onDragStart={ev => handleDragStart(ev, e.id)}
+              onDragOver={ev => handleDragOver(ev, e.id)}
+              onDragLeave={() => setDragOverId(null)}
+              onDrop={ev => handleDrop(ev, e.id)}
+              onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+              className={`bg-surface border rounded-xl p-4 md:p-5 shadow-sm transition-all ${
+                dragOverId === e.id ? 'border-accent bg-accent/5 shadow-md' : 'border-border hover:shadow-md'
+              } ${draggingId === e.id ? 'opacity-40' : ''}`}
+            >
+              <div className="flex items-start gap-2">
+                {/* Reordenar: botons mòbil (amunt/avall) + maneta desktop (drag) */}
+                <div className="flex-shrink-0 flex flex-col items-center gap-0.5 pt-0.5">
+                  <div className="flex flex-col md:hidden">
+                    <button
+                      onClick={() => moureAmunt(e.id)}
+                      disabled={idx === 0 || reordering}
+                      className="p-1 text-text-dim hover:text-accent disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
+                      aria-label="Pujar"
+                    >▲</button>
+                    <button
+                      onClick={() => mourAvall(e.id)}
+                      disabled={idx === expedicions.length - 1 || reordering}
+                      className="p-1 text-text-dim hover:text-accent disabled:opacity-20 disabled:cursor-not-allowed transition-colors leading-none"
+                      aria-label="Baixar"
+                    >▼</button>
+                  </div>
+                  <div className="hidden md:flex items-center justify-center cursor-grab active:cursor-grabbing text-text-dim hover:text-accent select-none text-lg px-1" title="Arrossega per reordenar">
+                    ⠿
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     {e.ordre && <span className="mono text-[11px] text-text-dim min-w-[1.5rem]">#{e.ordre}</span>}
                     <span className="font-bold text-[15px]">{nomDestinacio(e.destinacions)}</span>

@@ -41,7 +41,7 @@ export default function MenuResponsable({ full }: Props) {
           <Link href={`/carrega/${full.id}/expedicions/naixement`} className="no-underline">
             <div className="bg-surface hover:bg-surface-hover border border-border hover:border-accent transition-all rounded-xl p-8 cursor-pointer flex flex-col items-center justify-center gap-3 text-center shadow-sm">
               <span className="text-4xl">📝</span>
-              <span className="text-text font-bold text-xl">Dia de naixement</span>
+              <span className="text-text font-bold text-xl">Repartiment de pollets</span>
             </div>
           </Link>
         </div>

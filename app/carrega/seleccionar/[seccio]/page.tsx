@@ -11,7 +11,7 @@ const SECCIONS: Record<string, { nom: string; href: (id: number) => string }> = 
   transferencia: { nom: 'Transferència',       href: id => `/carrega/${id}/transferencia` },
   naixement:     { nom: 'Naixement',           href: id => `/carrega/${id}/naixement` },
   expedicions:   { nom: 'Expedicions',         href: id => `/carrega/${id}/expedicions` },
-  'dia-naixement': { nom: 'Dia de Naixement',  href: id => `/carrega/${id}/expedicions/naixement` },
+  'dia-naixement': { nom: 'Repartiment de pollets',  href: id => `/carrega/${id}/expedicions/naixement` },
   estadistiques: { nom: 'Estadístiques',       href: id => `/carrega/${id}/estadistiques` },
   impressions:   { nom: 'Impressions',         href: id => `/carrega/${id}/imprimir` },
 }

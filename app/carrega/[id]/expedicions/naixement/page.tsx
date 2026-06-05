@@ -246,16 +246,9 @@ export default function ExpedicionsNaixement() {
   const totalAssignats = expedicions.reduce((s, e) => s + getPolletsRealsOComanda(e), 0)
 
   const expedicionsOrdenades = [...expedicions].sort((a, b) => {
-    // Maquila sempre al final (columnes a la dreta, abans de Total/Sobrants)
-    const maqA = esExpMaquila(a) ? 1 : 0
-    const maqB = esExpMaquila(b) ? 1 : 0
-    if (maqA !== maqB) return maqA - maqB
-    const clientA = a.comandes?.clients?.nom || ''
-    const clientB = b.comandes?.clients?.nom || ''
-    if (clientA !== clientB) return clientA.localeCompare(clientB)
-    const horaA = a.hora_prevista_naixement || '99:99'
-    const horaB = b.hora_prevista_naixement || '99:99'
-    return horaA.localeCompare(horaB)
+    const oA = a.ordre ?? 999
+    const oB = b.ordre ?? 999
+    return oA - oB
   })
 
   // Construir columnes: agrupar expedicions de la mateixa parella sexada
@@ -553,8 +546,8 @@ export default function ExpedicionsNaixement() {
             <div className="flex items-center gap-4">
               <Link href={`/carrega/${params.id}/expedicions`} className="hidden md:block text-text-dim no-underline text-sm mono hover:text-accent transition-colors">← Expedicions</Link>
               <div>
-                <p className="text-accent mono text-[11px] tracking-wider uppercase m-0">Dia del naixement</p>
-                <h1 className="text-xl md:text-2xl font-bold m-0">Repartiment final</h1>
+                <p className="text-accent mono text-[11px] tracking-wider uppercase m-0">Expedicions</p>
+                <h1 className="text-xl md:text-2xl font-bold m-0">Repartiment de pollets</h1>
               </div>
             </div>
             <button onClick={() => window.print()} className="w-full md:w-auto px-4 py-2.5 bg-surface border border-border rounded-lg text-text font-bold text-sm cursor-pointer hover:bg-bg transition-colors shadow-sm">
