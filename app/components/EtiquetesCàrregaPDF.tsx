@@ -4,11 +4,10 @@ const MM = 2.835
 const s = StyleSheet.create({
   page: {
     width: 90 * MM, height: 70 * MM,
-    // Marge esquerre gros (10 mm) per esquivar la zona morta del capçal del B-FV4
-    paddingTop: 4 * MM,
-    paddingBottom: 4 * MM,
-    paddingLeft: 10 * MM,
-    paddingRight: 4 * MM,
+    paddingTop: 2 * MM,
+    paddingBottom: 2 * MM,
+    paddingLeft: 2 * MM,
+    paddingRight: 2 * MM,
     fontFamily: 'Helvetica',
     backgroundColor: 'white',
   },
@@ -20,8 +19,8 @@ const s = StyleSheet.create({
     paddingBottom: 3 * MM,
     marginBottom: 3 * MM,
   },
-  numCarrega: { fontSize: 28, fontFamily: 'Helvetica-Bold' },
-  numCarro: { fontSize: 20, fontFamily: 'Helvetica-Bold' },
+  numCarrega: { fontSize: 32, fontFamily: 'Helvetica-Bold' },
+  numCarro: { fontSize: 23, fontFamily: 'Helvetica-Bold' },
   fila2: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -30,15 +29,15 @@ const s = StyleSheet.create({
     paddingBottom: 3 * MM,
     marginBottom: 3 * MM,
   },
-  granja: { fontSize: 11, fontFamily: 'Helvetica-Bold' },
-  posta: { fontSize: 11 },
+  granja: { fontSize: 13, fontFamily: 'Helvetica-Bold' },
+  posta: { fontSize: 13 },
   fila3: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 2,
   },
-  data: { fontSize: 13, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
+  data: { fontSize: 15, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
 })
 
 function formatData(dateStr: string) {

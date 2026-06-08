@@ -13,16 +13,13 @@ export interface LabelPollet {
 }
 
 const styles = StyleSheet.create({
-  // Etiqueta 90 × 70 mm (apaïsat).
-  // Marge esquerre gros (10 mm) per esquivar la zona morta del capçal del B-FV4,
-  // i marges petits a la resta. La vora del contingut NO toca la vora física.
   page: {
     width: 90 * MM,
     height: 70 * MM,
-    paddingLeft: 10 * MM,
-    paddingRight: 3 * MM,
-    paddingTop: 2.5 * MM,
-    paddingBottom: 2.5 * MM,
+    paddingLeft: 2 * MM,
+    paddingRight: 2 * MM,
+    paddingTop: 2 * MM,
+    paddingBottom: 2 * MM,
     backgroundColor: '#ffffff',
     flexDirection: 'column',
     fontFamily: 'Helvetica',
@@ -44,14 +41,14 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   textGranja: {
-    fontSize: 23,
+    fontSize: 26,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
     color: '#000000',
     lineHeight: 1.1,
   },
   textPoblacio: {
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
     color: '#000000',
     marginTop: 2 * MM,
@@ -60,7 +57,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 1.5 * MM,
     right: 1.5 * MM,
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     color: '#000000',
     border: '1pt solid #000000',
@@ -85,14 +82,14 @@ const styles = StyleSheet.create({
     borderRight: '1pt solid #000000',
   },
   colLabel: {
-    fontSize: 7,
+    fontSize: 8,
     color: '#555555',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 1 * MM,
   },
   colValor: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
     color: '#000000',
