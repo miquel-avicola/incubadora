@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { formatData } from '@/lib/dates'
+import { formatData, calcularNaixement } from '@/lib/dates'
 
 interface ExpedicioLot {
   pollets: number
@@ -75,6 +75,14 @@ export default function ImprimirExpedicions() {
   }, [params.id])
 
   useEffect(() => { carregarDades() }, [carregarDades])
+
+  // Canvia el títol del document (= nom per defecte al guardar com a PDF)
+  useEffect(() => {
+    if (!full) return
+    const prevTitle = document.title
+    document.title = `Repartiment pollets - ${calcularNaixement(full.carrega)}`
+    return () => { document.title = prevTitle }
+  }, [full])
 
   // Llença la impressió un cop carregat
   useEffect(() => {
