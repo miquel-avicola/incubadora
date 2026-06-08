@@ -16,10 +16,10 @@ const styles = StyleSheet.create({
   page: {
     width: 90 * MM,
     height: 70 * MM,
-    paddingLeft: 2 * MM,
-    paddingRight: 2 * MM,
-    paddingTop: 2 * MM,
-    paddingBottom: 2 * MM,
+    paddingLeft: 3 * MM,
+    paddingRight: 3 * MM,
+    paddingTop: 3 * MM,
+    paddingBottom: 3 * MM,
     backgroundColor: '#ffffff',
     flexDirection: 'column',
     fontFamily: 'Helvetica',
@@ -27,7 +27,6 @@ const styles = StyleSheet.create({
   // Marc visible del contingut (dins de la zona imprimible)
   frame: {
     flex: 1,
-    border: '1pt solid #000000',
     flexDirection: 'column',
   },
   // Secció principal (dalt): Granja + població ben grans
