@@ -149,6 +149,20 @@ export default function ExpedicionsNaixement() {
 
   useEffect(() => { carregarDades() }, [carregarDades])
 
+  // Canvia el títol del document just durant la impressió (= nom per defecte al guardar PDF)
+  useEffect(() => {
+    if (!full) return
+    const nasciment = calcularNaixement(full.carrega)
+    const handleBefore = () => { document.title = `Repartiment pollets - ${nasciment}` }
+    const handleAfter = () => { document.title = 'Miquel Avícola — Incubadora' }
+    window.addEventListener('beforeprint', handleBefore)
+    window.addEventListener('afterprint', handleAfter)
+    return () => {
+      window.removeEventListener('beforeprint', handleBefore)
+      window.removeEventListener('afterprint', handleAfter)
+    }
+  }, [full])
+
   useEffect(() => {
     if (!loading && searchParams.get('print') === 'true') {
       // Donem temps a que el navegador renderitzi la taula completament
