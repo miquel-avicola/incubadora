@@ -1,7 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 // IMPORTANT: Next.js intercepta el `fetch` global i, en producció (`next build`),
 // emmagatzema les respostes al seu Data Cache (persistit a .next/cache). Això feia
@@ -12,7 +9,26 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const noStoreFetch: typeof fetch = (input, init) =>
   fetch(input, { ...init, cache: 'no-store' })
 
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false },
-  global: { fetch: noStoreFetch },
+let _client: SupabaseClient | undefined
+
+function getClient(): SupabaseClient {
+  if (!_client) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    _client = createClient(url, key, {
+      auth: { persistSession: false },
+      global: { fetch: noStoreFetch },
+    })
+  }
+  return _client
+}
+
+// Proxy lazy: el client no es crea fins que s'usa per primer cop,
+// evitant errors durant el build si les variables d'entorn no estan disponibles.
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    const client = getClient()
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop]
+    return typeof value === 'function' ? value.bind(client) : value
+  },
 })

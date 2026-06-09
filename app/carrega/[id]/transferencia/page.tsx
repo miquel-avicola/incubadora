@@ -29,6 +29,7 @@ interface Assignacio {
   id: number
   num_carro_full: number
   previsio_naixement: number | null
+  es_maquila: boolean | null
   carros_estoc: {
     id: number
     posta: string
@@ -43,12 +44,23 @@ interface Assignacio {
   transferencies: Transferencia[]
 }
 
+interface Comanda {
+  id: number
+  tipus: string
+  quantitat_pollets: number | null
+  quantitat_ous_maquila: number | null
+  sexat: boolean | null
+  observacions: string | null
+  clients: { id: number; nom: string }
+}
+
 interface Full {
   id: number
   num_carrega: number
   carrega: string
   transferencia: string | null
   assignacions: Assignacio[]
+  comandes: Comanda[]
 }
 
 interface Previsio {
@@ -191,6 +203,39 @@ export default function Transferencia() {
     : null
   const ousFertilsExcedits = ousFertils !== '' && parseInt(ousFertils) > 4800
 
+  const previsionsArr = Object.values(previsions)
+  const teMaquila = assignacionsOrdenades.some(a => a.es_maquila)
+
+  const calcGrup = (esMaquila: boolean) => {
+    let pollets = 0, ous = 0
+    for (const a of assignacionsOrdenades) {
+      if (!!a.es_maquila !== esMaquila) continue
+      if (!a.transferencies[0]) continue
+      const p = previsions[a.transferencies[0].id]
+      if (!p) continue
+      pollets += p.pollets_previstos
+      ous += a.carros_estoc.quantitat_ous
+    }
+    return { pollets, pct: ous > 0 ? (pollets / ous) * 100 : 0 }
+  }
+  const previsioPropia = calcGrup(false)
+  const previsioMaquila = calcGrup(true)
+
+  const comandesRegulars = full.comandes.filter(c => c.tipus !== 'Maquila')
+  const comandesMaquila = full.comandes.filter(c => c.tipus === 'Maquila')
+  const totalOrdenat = comandesRegulars.reduce((s, c) => s + (c.quantitat_pollets ?? 0), 0)
+
+  const previsioPerComanda = (c: Comanda) => {
+    if (totalOrdenat === 0 || previsionsArr.length === 0) return null
+    return Math.round(previsioPropia.pollets * (c.quantitat_pollets ?? 0) / totalOrdenat)
+  }
+
+  const colorDiff = (diff: number) => {
+    if (diff > 0) return 'var(--success)'
+    if (diff >= -1000) return '#f97316'
+    return 'var(--danger)'
+  }
+
   const inputStyle = {
     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
     padding: '0.6rem 0.75rem', color: 'var(--text)', fontSize: '0.9rem',
@@ -225,28 +270,111 @@ export default function Transferencia() {
           </div>
         </div>
 
-        {/* Resum de previsió global */}
-        {(() => {
-          const previsionsArr = Object.values(previsions)
-          if (previsionsArr.length === 0) return null
-          const polletsTotals = previsionsArr.reduce((s, p) => s + p.pollets_previstos, 0)
-          const ousTotals = assignacionsOrdenades.reduce((s, a) => s + (a.transferencies[0] ? a.carros_estoc.quantitat_ous : 0), 0)
-          const pctMitja = ousTotals > 0 ? (polletsTotals / ousTotals) * 100 : 0
-          return (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.4rem' }}>
+        {/* Zona resum: previsió + comandes */}
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: '1rem' }}>
+
+          {/* Previsió */}
+          {previsionsArr.length > 0 && (
+            <div style={{ flex: '1 1 220px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem' }}>
+              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
                 Previsió actualitzada
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{polletsTotals.toLocaleString()} pollets</span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono' }}>{pctMitja.toFixed(1)}% naixement</span>
-              </div>
+              {teMaquila ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
+                    <span style={{ fontSize: '0.88rem', color: 'var(--text-dim)' }}>Propis</span>
+                    <div>
+                      <span style={{ fontSize: '1rem', fontWeight: 600 }}>{previsioPropia.pollets.toLocaleString()}</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', marginLeft: '0.5rem' }}>{previsioPropia.pct.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: '0.88rem', color: 'var(--text-dim)' }}>Maquila</span>
+                    <div>
+                      <span style={{ fontSize: '1rem', fontWeight: 600 }}>{previsioMaquila.pollets.toLocaleString()}</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono', marginLeft: '0.5rem' }}>{previsioMaquila.pct.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '0.4rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'IBM Plex Mono' }}>Total</span>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>{(previsioPropia.pollets + previsioMaquila.pollets).toLocaleString()}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{previsioPropia.pollets.toLocaleString()} pollets</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontFamily: 'IBM Plex Mono' }}>{previsioPropia.pct.toFixed(1)}%</span>
+                </div>
+              )}
               <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
                 Basat en {previsionsArr.length} de {total} carros transferits
               </div>
             </div>
-          )
-        })()}
+          )}
+
+          {/* Comandes */}
+          {full.comandes.length > 0 && (
+            <div style={{ flex: '1 1 220px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem 1.25rem' }}>
+              <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
+                Comandes
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+
+                {comandesRegulars.map((c, i) => {
+                  const prevClient = previsioPerComanda(c)
+                  const diff = prevClient !== null ? prevClient - (c.quantitat_pollets ?? 0) : null
+                  return (
+                    <div key={c.id} style={{ paddingBottom: '0.35rem', borderBottom: (i < comandesRegulars.length - 1 || comandesMaquila.length > 0) ? '1px solid var(--border)' : undefined }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.clients.nom}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                          {c.sexat && (
+                            <span style={{ fontSize: '0.6rem', fontFamily: 'IBM Plex Mono', color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: '3px', padding: '0 0.25rem', lineHeight: '1.5' }}>sexat</span>
+                          )}
+                          <span style={{ fontSize: '0.88rem', fontFamily: 'IBM Plex Mono', fontWeight: 600 }}>{(c.quantitat_pollets ?? 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {prevClient !== null && diff !== null && (
+                        <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', marginTop: '0.1rem' }}>
+                          Prev: <span style={{ color: 'var(--text)' }}>{prevClient.toLocaleString()}</span>
+                          <span style={{ color: colorDiff(diff), marginLeft: '0.3rem' }}>({diff >= 0 ? '+' : ''}{diff.toLocaleString()})</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {comandesMaquila.map(c => (
+                  <div key={c.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.clients.nom}</div>
+                        <div style={{ fontSize: '0.65rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>maquila · {(c.quantitat_ous_maquila ?? 0).toLocaleString()} ous</div>
+                      </div>
+                      {previsionsArr.length > 0 && previsioMaquila.pollets > 0 && (
+                        <span style={{ fontSize: '0.88rem', fontFamily: 'IBM Plex Mono', fontWeight: 600, flexShrink: 0 }}>{previsioMaquila.pollets.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {previsionsArr.length > 0 && comandesRegulars.length > 1 && totalOrdenat > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: '0.72rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)' }}>Total propis</span>
+                    <div>
+                      <span style={{ fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>{totalOrdenat.toLocaleString()} → {previsioPropia.pollets.toLocaleString()}</span>
+                      <span style={{ fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: colorDiff(previsioPropia.pollets - totalOrdenat), marginLeft: '0.35rem' }}>
+                        ({previsioPropia.pollets - totalOrdenat >= 0 ? '+' : ''}{(previsioPropia.pollets - totalOrdenat).toLocaleString()})
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          )}
+
+        </div>
 
         {/* Llista de carros */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

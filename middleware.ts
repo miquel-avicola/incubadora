@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession, canAccess, roleHome } from '@/lib/auth'
+import { verifySession, canAccess, roleHome } from '@/lib/auth-edge'
 
 /**
  * Construeix el header Content-Security-Policy amb el nonce generat per la petició.
