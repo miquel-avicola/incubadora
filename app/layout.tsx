@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import './globals.css'
 import AppLayout from './components/AppLayout'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { verifySession } from '@/lib/auth'
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -31,8 +31,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const session = token ? await verifySession(token) : null
   const role = session?.role ?? 'recepcio'
 
+  const headersList = headers()
+  const nonce = headersList.get('x-nonce') ?? undefined
+
   return (
-    <html lang="ca" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
+    <html lang="ca" className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`} nonce={nonce}>
       <body>
         <AppLayout role={role}>
           {children}

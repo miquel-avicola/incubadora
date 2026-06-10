@@ -3,16 +3,16 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  --bg: transparent; 
-  --surface: rgba(15, 23, 42, 0.65); /* slate-900 */
-  --border: rgba(255, 255, 255, 0.08);
-  --accent: #f59e0b; /* amber-500 */
-  --accent-dim: #d97706; /* amber-600 */
-  --text: #f8fafc; /* slate-50 */
-  --text-dim: #94a3b8; /* slate-400 */
-  --success: #10b981; /* emerald-500 */
-  --danger: #ef4444; /* red-500 */
+  color-scheme: light;
+  --bg: #f8fafc; 
+  --surface: rgba(255, 255, 255, 0.85); /* Blanc translúcid per a glassmorphism */
+  --border: rgba(15, 23, 42, 0.08); /* Gris suau amb transparència */
+  --accent: #0f766e; /* Verd sàlvia profund de clínica */
+  --accent-dim: #0d9488; /* Verd sàlvia mitjà per a hovers */
+  --text: #0f172a; /* Slate 900 per a text principal */
+  --text-dim: #475569; /* Slate 600 per a text secundari */
+  --success: #10b981; /* Esmeralda */
+  --danger: #ef4444; /* Vermell */
 }
 
 * {
@@ -21,7 +21,11 @@
 }
 
 body {
-  background: #020617 radial-gradient(circle at top right, #0f172a, #020617 100%);
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(209, 250, 229, 0.4) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(254, 243, 199, 0.45) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(240, 253, 244, 0.5) 0px, transparent 50%);
   background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-ibm-plex-sans), sans-serif;
@@ -30,15 +34,157 @@ body {
   min-height: 100vh;
 }
 
+h1, h2 {
+  color: var(--accent) !important;
+}
+
 .bg-surface {
   background-color: var(--surface);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 12px -1px rgba(15, 118, 110, 0.04), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border);
 }
 
 .mono {
   font-family: var(--font-ibm-plex-mono), monospace;
 }
+
+/* ==========================================
+   POLISHING STYLES (CLINIC/VETERINARY THEME)
+   ========================================== */
+
+/* Theme Sidebar (aside) and Mobile Overlay */
+aside, 
+.md\:hidden.fixed.inset-0.top-14 {
+  background-color: #0d5c56 !important; /* Verd pi profund mèdic */
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+aside h2, aside p, aside span, aside a,
+.md\:hidden.fixed.inset-0.top-14 h2,
+.md\:hidden.fixed.inset-0.top-14 p,
+.md\:hidden.fixed.inset-0.top-14 span,
+.md\:hidden.fixed.inset-0.top-14 a {
+  color: #e6f4ea !important; /* Text verd/blanc molt suau i clar */
+}
+
+/* Sidebar active item and hover indicator */
+aside a[class*="text-accent"],
+.md\:hidden.fixed.inset-0.top-14 a[class*="text-accent"] {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-left: 4px solid var(--secondary, #f59e0b) !important; /* Barra d'estat groga/or */
+  border-radius: 0 8px 8px 0 !important;
+  padding-left: 0.75rem !important;
+}
+
+aside a:hover,
+.md\:hidden.fixed.inset-0.top-14 a:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+}
+
+/* Mobile Header Bar theme */
+.md\:hidden.fixed.top-0 {
+  background-color: #0d5c56 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+.md\:hidden.fixed.top-0 div,
+.md\:hidden.fixed.top-0 button {
+  color: #ffffff !important;
+}
+
+/* Fix button text readability on accent backgrounds */
+.bg-accent, 
+[style*="background: var(--accent)"], 
+[style*="background:var(--accent)"] {
+  color: #ffffff !important;
+}
+
+/* Specific button shadows and styling */
+button[style*="background: var(--accent)"],
+.bg-accent {
+  font-weight: 600 !important;
+  box-shadow: 0 4px 6px -1px rgba(15, 118, 110, 0.15), 0 2px 4px -1px rgba(15, 118, 110, 0.05) !important;
+}
+
+/* Hover and active states for buttons */
+button, .btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+button:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  filter: brightness(1.08) !important;
+  box-shadow: 0 6px 12px -1px rgba(15, 118, 110, 0.2) !important;
+}
+button:active:not(:disabled) {
+  transform: translateY(1px) !important;
+}
+
+/* Beautiful card polishing with soft sage shadows and smooth lift-on-hover */
+div[style*="var(--surface)"], 
+.bg-surface-card {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-top: 4px solid var(--accent) !important; /* Línia superior de color corporatiu */
+  box-shadow: 0 4px 10px -1px rgba(15, 118, 110, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+  border-radius: 12px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+a div[style*="var(--surface)"]:hover,
+div[style*="var(--surface)"][style*="cursor: pointer"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -3px rgba(15, 118, 110, 0.08), 0 4px 6px -2px rgba(15, 118, 110, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(15, 118, 110, 0.25) !important;
+  border-top-color: var(--accent-dim, #0d9488) !important;
+}
+
+/* Soft sage-green pill tags for clients/lots */
+span[style*="var(--bg)"] {
+  background-color: #e6f4ea !important; /* Fons verd clar */
+  color: #0f766e !important;            /* Text verd sàlvia profund */
+  border: 1px solid rgba(15, 118, 110, 0.15) !important;
+  border-radius: 9999px !important;      /* Forma de píndola */
+  padding: 0.15rem 0.65rem !important;
+  font-weight: 600 !important;
+  font-size: 0.72rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* Modern inputs, selects and textareas */
+input, select, textarea {
+  transition: all 0.2s ease !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1) !important;
+}
+
+/* Clean status indicators as beautiful capsules */
+span[style*="success"] {
+  background-color: #d1fae5 !important; /* Verd suau */
+  color: #065f46 !important;            /* Verd fosc */
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  font-size: 0.7rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+span[style*="text-dim"]:not([style*="background"]):not([style*="bg"]) {
+  background-color: #fef3c7 !important; /* Groc/Amber suau de Planificat */
+  color: #b45309 !important;            /* Amber text */
+  padding: 0.2rem 0.6rem !important;
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  font-size: 0.7rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
 
 /* Utilitats d'impressió (visibilitat segons mitjà) */
 .print-only { display: none; }

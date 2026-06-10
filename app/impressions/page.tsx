@@ -71,9 +71,9 @@ export default function ImpressionsHub() {
               onChange={e => setSelectedId(e.target.value ? parseInt(e.target.value) : null)}
               className="w-full px-4 py-3 text-base font-sans bg-surface border border-accent rounded-lg text-text outline-none cursor-pointer"
             >
-              <option value="" className="bg-slate-900 text-slate-50">— Selecciona una càrrega —</option>
+              <option value="">— Selecciona una càrrega —</option>
               {carregues.map(c => (
-                <option key={c.id} value={c.id} className="bg-slate-900 text-slate-50">
+                <option key={c.id} value={c.id}>
                   Càrrega #{c.num_carrega} — Càr. {formatData(c.carrega)} · Trans. {c.transferencia ? formatData(c.transferencia) : '—'} · Naix. {formatData(calcularNaixement(c.carrega))} {c.estat === 'Finalitzat' ? '(Finalitzada)' : ''}
                 </option>
               ))}
