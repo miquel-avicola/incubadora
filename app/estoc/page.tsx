@@ -102,7 +102,7 @@ export default function Estoc() {
 
   return (
     <main className="bg-bg min-h-screen p-6">
-      <div className="max-w-[640px] mx-auto">
+      <div className="max-w-[1200px] mx-auto">
 
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -126,7 +126,7 @@ export default function Estoc() {
           <p className="text-text-dim font-mono text-[0.85rem] text-center py-8">No hi ha carros disponibles</p>
         )}
 
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {lots.map(lot => (
             <div key={lot.lot_id}>
               <div className="text-text-dim font-mono text-[0.7rem] tracking-[0.12em] uppercase mb-2 px-1">

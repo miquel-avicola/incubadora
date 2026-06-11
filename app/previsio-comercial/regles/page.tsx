@@ -108,7 +108,7 @@ export default function ReglesRecurrents() {
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1rem' }}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
           <Link href="/previsio-comercial" style={{ color: 'var(--text-dim)', textDecoration: 'none', fontSize: '0.85rem', fontFamily: 'IBM Plex Mono' }}>← Previsió comercial</Link>

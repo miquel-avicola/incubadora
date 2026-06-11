@@ -290,7 +290,7 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
 
   return (
     <main className="bg-bg min-h-screen p-6">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -399,8 +399,10 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
           </div>
         </div>
 
-        {/* Info dates */}
-        <div className="bg-surface border border-border rounded-xl p-5 mb-4 grid grid-cols-3 gap-3 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            {/* Info dates */}
+            <div className="bg-surface border border-border rounded-xl p-5 grid grid-cols-3 gap-3 shadow-sm">
           <div>
             <div style={{ fontSize: '0.7rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.2rem' }}>Càrrega</div>
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{formatData(full.carrega)}</div>
@@ -418,8 +420,8 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
           </div>
         </div>
 
-        {/* Resum pollets */}
-        <div className="bg-surface border border-border rounded-xl p-5 mb-4 shadow-sm">
+            {/* Resum pollets */}
+            <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
           <div className="text-xs font-mono text-text-dim uppercase tracking-widest mb-3">Resum</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             <div style={{ textAlign: 'center' }}>
@@ -450,8 +452,8 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
           )}
         </div>
 
-        {/* Comandes */}
-        <div className="bg-surface border border-border rounded-xl p-5 mb-4 shadow-sm">
+            {/* Comandes */}
+            <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
           <div className="flex justify-between items-center mb-3">
             <div className="text-xs font-mono text-text-dim uppercase tracking-widest">Comandes</div>
             {role !== 'responsable' && (
@@ -554,9 +556,12 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
           )}
         </div>
 
-        {/* Assignacions per incubadora */}
-        {full.assignacions.length > 0 && (
-          <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
+          </div>
+
+          <div className="lg:col-span-7">
+            {/* Assignacions per incubadora */}
+            {full.assignacions.length > 0 && (
+              <div className="bg-surface border border-border rounded-xl p-5 shadow-sm">
             <div className="text-xs font-mono text-text-dim uppercase tracking-widest mb-3">Assignacions ({full.assignacions.length} carros)</div>
             <div className="flex flex-col gap-3">
               {Object.entries(perIncubadora).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([num, assigs]) => {
@@ -733,8 +738,10 @@ export default function DetallCarregaClient({ initialFull, clients, role }: Prop
                 )
               })}
             </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
       </div>
     </main>

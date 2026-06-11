@@ -44,7 +44,7 @@ export default function ImpressionsHub() {
 
   return (
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '2rem 1.5rem', fontFamily: 'IBM Plex Sans' }}>
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         
         {/* Header */}
         <div style={{ marginBottom: '2.5rem' }}>
@@ -58,9 +58,11 @@ export default function ImpressionsHub() {
           </p>
         </div>
 
-        {/* Càrrega Selector */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem', marginBottom: '2.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-          <label style={{ display: 'block', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5">
+            {/* Càrrega Selector */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontFamily: 'IBM Plex Mono', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>
             Número de Càrrega
           </label>
           {loading ? (
@@ -82,7 +84,7 @@ export default function ImpressionsHub() {
 
           {/* Info Summary about selected load */}
           {selectedCarrega && (
-            <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px', border: '1px dashed var(--border)', display: 'flex', gap: '2rem' }}>
+            <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg)', borderRadius: '8px', border: '1px dashed var(--border)', display: 'flex', flexWrap: 'wrap', gap: '1rem 2rem' }}>
               <div>
                 <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>Data Càrrega</span>
                 <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{formatData(selectedCarrega.carrega)}</strong>
@@ -105,10 +107,11 @@ export default function ImpressionsHub() {
               </div>
             </div>
           )}
-        </div>
+            </div>
+          </div>
 
-        {/* Opcions d'Impressió */}
-        <div style={{ opacity: selectedId ? 1 : 0.5, transition: 'opacity 0.3s ease', pointerEvents: selectedId ? 'auto' : 'none' }}>
+          {/* Opcions d'Impressió */}
+          <div className="lg:col-span-7" style={{ opacity: selectedId ? 1 : 0.5, transition: 'opacity 0.3s ease', pointerEvents: selectedId ? 'auto' : 'none' }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1.25rem' }}>
             Documents disponibles
           </h2>
@@ -158,7 +161,8 @@ export default function ImpressionsHub() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
+  </main>
   )
 }
 

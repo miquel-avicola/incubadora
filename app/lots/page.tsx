@@ -102,7 +102,7 @@ export default function Lots() {
 
   return (
     <main className="bg-bg min-h-screen p-6">
-      <div className="max-w-[640px] mx-auto">
+      <div className="max-w-[1200px] mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -145,7 +145,7 @@ export default function Lots() {
 
         {/* Formulari nova granja */}
         {mostrarFormGranja && (
-          <form onSubmit={crearGranja} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4">
+          <form onSubmit={crearGranja} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4 max-w-xl mx-auto w-full">
             <p className="font-bold m-0 text-[0.95rem]">Nova granja reproductora</p>
             <div>
               <label className={labelCls}>Nom oficial *</label>
@@ -174,7 +174,7 @@ export default function Lots() {
 
         {/* Formulari nou lot */}
         {mostrarForm && (
-          <form onSubmit={crearLot} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4">
+          <form onSubmit={crearLot} className="bg-surface border border-border rounded-xl p-5 mb-6 flex flex-col gap-4 max-w-xl mx-auto w-full">
             <p className="font-bold m-0 text-[0.95rem]">Nou lot de reproductores</p>
             <div>
               <label className={labelCls}>Granja reproductora *</label>
@@ -210,7 +210,7 @@ export default function Lots() {
         )}
 
         {/* Llista de lots */}
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {lots.length === 0 && (
             <p className="text-text-dim text-center py-8 font-mono text-[0.85rem]">
               No hi ha lots registrats

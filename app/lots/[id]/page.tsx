@@ -335,7 +335,7 @@ export default function LotHistoric() {
       }
     `}</style>
     <main style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1rem' }}>
-      <div className="print-container" style={{ maxWidth: 780, margin: '0 auto' }}>
+      <div className="print-container" style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         {/* Capçalera */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>

@@ -94,7 +94,7 @@ export function LlistaCarregues({
           <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.7rem' }}>
             Tots els carros tenen el naixement registrat i fa {'>='}{llindarDies} dies sense activitat.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.5rem' }}>
             {candidats.map(c => (
               <div key={c.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -152,7 +152,7 @@ export function LlistaCarregues({
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '0.75rem' }}>
         {fullsVisibles.map(full => {
           const totalPollets = full.comandes.filter(c => c.tipus === 'Pollets').reduce((s, c) => s + (c.quantitat_pollets || 0), 0)
           const totalMaquila = full.comandes.filter(c => c.tipus === 'Maquila').reduce((s, c) => s + (c.quantitat_ous_maquila || 0), 0)

@@ -14,7 +14,7 @@ export default async function Home() {
 
   return (
     <main className="bg-bg min-h-screen py-8 px-6">
-      <div className="max-w-[480px] mx-auto">
+      <div className="max-w-[1200px] mx-auto">
 
         <div className="mb-12">
           <p className="text-accent font-mono text-[0.75rem] tracking-[0.15em] uppercase mb-2">
@@ -25,7 +25,7 @@ export default async function Home() {
           </h1>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
           <Link href="/estoc" className="no-underline">
             <div className="bg-accent rounded-xl p-6 cursor-pointer">
