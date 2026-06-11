@@ -22,6 +22,19 @@ export const POST = withAudit(async (request: Request, { params }: { params: { i
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
 
+  // Validar que no hi hagi ja resultats de naixement per a aquestes transferències
+  const existingResults = await supabase
+    .from('resultats_naix')
+    .select('transferencia_id')
+    .in('transferencia_id', carros.map((c: { transferencia_id: number }) => c.transferencia_id))
+
+  if (existingResults.data && existingResults.data.length > 0) {
+    const duplicatIds = existingResults.data.map((r: { transferencia_id: number }) => r.transferencia_id)
+    return NextResponse.json({
+      error: `Els carros amb transferencies ${duplicatIds.join(', ')} ja té un resultat de naixement registrat. No es permeten múltiples entrades per al mateix carro.`,
+    }, { status: 400 })
+  }
+
   // Calcular total d'ous fèrtils del grup per fer el repartiment proporcional
   const totalOusFertils = carros.reduce((s: number, c: { ous_fertils_vacunats: number }) => s + c.ous_fertils_vacunats, 0)
 

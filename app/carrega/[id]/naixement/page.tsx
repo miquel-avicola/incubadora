@@ -411,6 +411,7 @@ export default function Naixement() {
                     value={totalPollets} 
                     onChange={e => setTotalPollets(e.target.value)}
                     min="0" 
+                    step="1"
                     max={totalOusFertilsSeleccionats || undefined} 
                     placeholder="Ex: 35000"
                     className={`${inputClasses} ${totalPollets !== '' && parseInt(totalPollets) > totalOusFertilsSeleccionats ? 'border-danger' : ''}`} 

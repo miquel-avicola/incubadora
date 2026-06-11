@@ -454,13 +454,13 @@ export default function Transferencia() {
                       <div>
                         <label style={labelStyle}>Ous explosius</label>
                         <input type="number" value={ousExplosius} onChange={e => setOusExplosius(e.target.value)}
-                          min="0" placeholder="0"
+                          min="0" step="1" placeholder="0"
                           style={inputStyle} />
                       </div>
                       <div>
                         <label style={labelStyle}>Ous fèrtils vacunats</label>
                         <input type="number" value={ousFertils} onChange={e => setOusFertils(e.target.value)}
-                          min="0"
+                          min="0" step="1"
                           max={4800}
                           style={{ ...inputStyle, borderColor: ousFertilsExcedits ? 'var(--danger)' : undefined }}
                         />

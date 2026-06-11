@@ -24,6 +24,18 @@ export const POST = withAudit(async (request: Request, { params }: { params: { i
     return NextResponse.json({ error: 'Assignació no trobada' }, { status: 404 })
   }
 
+  // Validar que no hi hagi ja una transferència per aquest carro
+  const { data: transferenciasExistents } = await supabase
+    .from('transferencies')
+    .select('id')
+    .eq('carro_id', assignacio.carro_id)
+  
+  if (transferenciasExistents && transferenciasExistents.length > 0) {
+    return NextResponse.json({
+      error: 'Aquest carro ja té una transferència registrada. No es permeten múltiples entrades per al mateix carro.',
+    }, { status: 400 })
+  }
+
   // Validar capacitat de la naixedora (només carros actius, sense resultats de naixement)
   const { data: naixedora } = await supabase
     .from('naixedores')
