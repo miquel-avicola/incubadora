@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  --bg: #f8fafc; 
-  --surface: rgba(255, 255, 255, 0.85); /* Blanc translúcid per a glassmorphism */
-  --border: rgba(15, 23, 42, 0.08); /* Gris suau amb transparència */
-  --accent: #0f766e; /* Verd sàlvia profund de clínica */
-  --accent-dim: #0d9488; /* Verd sàlvia mitjà per a hovers */
-  --text: #0f172a; /* Slate 900 per a text principal */
-  --text-dim: #475569; /* Slate 600 per a text secundari */
+  color-scheme: dark;
+  --bg: #090d16; /* Fons molt fosc, gairebé negre per relaxar la vista */
+  --surface: rgba(17, 24, 39, 0.85); /* Superfície fosca translúcida per a glassmorphism */
+  --border: rgba(255, 255, 255, 0.08); /* Bordes molt suaus i foscos */
+  --accent: #14b8a6; /* Verd sàlvia brillant per a dark mode */
+  --accent-dim: #0d9488; /* Teal mitjà per a hovers */
+  --text: #f8fafc; /* Text principal clar */
+  --text-dim: #94a3b8; /* Text secundari clar */
   --success: #10b981; /* Esmeralda */
   --danger: #ef4444; /* Vermell */
 }
@@ -21,11 +21,11 @@
 }
 
 body {
-  background-color: #f8fafc;
+  background-color: var(--bg);
   background-image: 
-    radial-gradient(at 0% 0%, rgba(209, 250, 229, 0.4) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(254, 243, 199, 0.45) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(240, 253, 244, 0.5) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(20, 184, 166, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(17, 24, 39, 0.4) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(15, 118, 110, 0.06) 0px, transparent 50%);
   background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-ibm-plex-sans), sans-serif;
@@ -143,9 +143,9 @@ div[style*="var(--surface)"][style*="cursor: pointer"]:hover {
 
 /* Soft sage-green pill tags for clients/lots */
 span[style*="var(--bg)"] {
-  background-color: #e6f4ea !important; /* Fons verd clar */
-  color: #0f766e !important;            /* Text verd sàlvia profund */
-  border: 1px solid rgba(15, 118, 110, 0.15) !important;
+  background-color: rgba(20, 184, 166, 0.15) !important; /* Fons verd translúcid */
+  color: #14b8a6 !important;            /* Text verd sàlvia brillant */
+  border: 1px solid rgba(20, 184, 166, 0.25) !important;
   border-radius: 9999px !important;      /* Forma de píndola */
   padding: 0.15rem 0.65rem !important;
   font-weight: 600 !important;
@@ -156,17 +156,21 @@ span[style*="var(--bg)"] {
 
 /* Modern inputs, selects and textareas */
 input, select, textarea {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
   transition: all 0.2s ease !important;
 }
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1) !important;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15) !important;
+  outline: none !important;
 }
 
 /* Clean status indicators as beautiful capsules */
 span[style*="success"] {
-  background-color: #d1fae5 !important; /* Verd suau */
-  color: #065f46 !important;            /* Verd fosc */
+  background-color: rgba(16, 185, 129, 0.15) !important; /* Verd suau translúcid */
+  color: #34d399 !important;            /* Verd clar */
   padding: 0.2rem 0.6rem !important;
   border-radius: 9999px !important;
   font-weight: 600 !important;
@@ -175,8 +179,8 @@ span[style*="success"] {
   align-items: center !important;
 }
 span[style*="text-dim"]:not([style*="background"]):not([style*="bg"]) {
-  background-color: #fef3c7 !important; /* Groc/Amber suau de Planificat */
-  color: #b45309 !important;            /* Amber text */
+  background-color: rgba(245, 158, 11, 0.15) !important; /* Groc/Amber suau translúcid */
+  color: #fbbf24 !important;            /* Amber clar */
   padding: 0.2rem 0.6rem !important;
   border-radius: 9999px !important;
   font-weight: 600 !important;
