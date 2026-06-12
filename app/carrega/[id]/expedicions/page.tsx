@@ -226,6 +226,30 @@ function calcularOpcions(exps: Expedicio[], t: Transportista, forcaAlcada?: numb
             bin.alcada_carro += r.pico_caixes
           }
           carros_compartits = bins
+
+          // Últim recurs: si ni compartint hi cabem, permetem PARTIR un pico entre
+          // dos carros compartits. Omplim seqüencialment en l'ordre de descàrrega
+          // (les caixes d'un mateix client queden en carros consecutius), cosa que
+          // garanteix el mínim teòric de carros: ceil(caixes_sobrants / alcada).
+          if (total_sencers + bins.length > max_carros) {
+            const seq: CarroCompartit[] = []
+            let actual: CarroCompartit = { alcada_carro: 0, items: [] }
+            for (const r of amPico) {
+              let pendents = r.pico_caixes
+              while (pendents > 0) {
+                const posa = Math.min(alcada - actual.alcada_carro, pendents)
+                actual.items.push({ expedicio_id: r.expedicio_id, client: r.client, caixes: posa })
+                actual.alcada_carro += posa
+                pendents -= posa
+                if (actual.alcada_carro === alcada) {
+                  seq.push(actual)
+                  actual = { alcada_carro: 0, items: [] }
+                }
+              }
+            }
+            if (actual.alcada_carro > 0) seq.push(actual)
+            carros_compartits = seq
+          }
         }
       }
 
